@@ -1,0 +1,118 @@
+package com.asthoonlite.mixin
+
+import com.asthoonlite.config.Config
+import com.asthoonlite.pet.PetTracker
+import com.asthoonlite.dungeon.TerminalSolver
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
+import net.minecraft.world.inventory.Slot
+import net.minecraft.world.inventory.ContainerInput
+import org.spongepowered.asm.mixin.Mixin
+import org.spongepowered.asm.mixin.injection.At
+import org.spongepowered.asm.mixin.injection.Inject
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo
+
+// Confirmed against real 26.1.2 Mojang-mapped sources via javap:
+// protected void slotClicked(Slot, int, int, ContainerInput)
+// ClickType no longer exists; it was replaced by ContainerInput.
+@Mixin(AbstractContainerScreen::class)
+abstract class MixinHandledScreen {
+
+    @Inject(
+        method = ["slotClicked(Lnet/minecraft/world/inventory/Slot;IILnet/minecraft/world/inventory/ContainerInput;)V"],
+        at = [At("HEAD")]
+    )
+    private fun asthoonlite_onSlotClick(
+        slot: Slot?,
+        slotId: Int,
+        button: Int,
+        actionType: ContainerInput,
+        ci: CallbackInfo
+    ) {
+        val self = this as AbstractContainerScreen<*>
+        if (!self.title.string.startsWith("Pets")) return
+        if (slot == null) return
+        PetTracker.handleSlotClick(self, slot, slotId)
+    }
+
+    // Draws the pet-menu slot highlight right after each slot's item/overlay
+    // is rendered. Piggybacks on the per-slot render call (Mojang's
+    // `extractSlot`) instead of `ScreenEvents.afterRender`, which — despite
+    // being documented in older Fabric API versions — doesn't resolve
+    // against this 26.1.2 fabric-screen-api-v1 build. NoammAddons hits the
+    // same wall and also mixes into AbstractContainerScreen directly for
+    // its per-slot/per-screen render hooks (see its MixinAbstractContainerScreen).
+    private companion object {
+        private const val HIGHLIGHT_COLOR = 0x881E90FF.toInt() // translucent blue fill
+        private const val BORDER_COLOR    = 0xFF1E90FF.toInt() // solid blue border
+    }
+
+    @Inject(
+        method = ["extractSlot"],
+        at = [At("TAIL")]
+    )
+    private fun asthoonlite_onSlotRendered(
+        graphics: GuiGraphicsExtractor,
+        slot: Slot,
+        mouseX: Int,
+        mouseY: Int,
+        ci: CallbackInfo
+    ) {
+        if (!Config.petMenuHighlightEnabled) return
+        val self = this as AbstractContainerScreen<*>
+        if (!self.title.string.startsWith("Pets")) return
+
+        val stack = slot.item
+        if (stack.isEmpty || !PetTracker.isPetItem(stack)) return
+        if (!PetTracker.hasDesawnLore(stack)) return
+
+        // extractSlot fires with the container's pose translation already
+        // applied (Mojang pushes the leftPos/topPos translation once before
+        // iterating slots, same as vanilla's own per-slot rendering), so
+        // slot.x/slot.y alone are already in the right space here. Confirmed
+        // against NoammAddons' own extractSlot-tail hook (ProtectItem.kt
+        // draws at plain `slot.x + 1` / `slot.y + 1`, no leftPos/topPos
+        // addition). Adding leftPos/topPos again double-offsets the
+        // highlight off the actual slot — that was the bug.
+        val sx = slot.x
+        val sy = slot.y
+
+        graphics.fill(sx, sy, sx + 16, sy + 16, HIGHLIGHT_COLOR)
+        graphics.fill(sx, sy, sx + 16, sy + 1, BORDER_COLOR)
+        graphics.fill(sx, sy + 15, sx + 16, sy + 16, BORDER_COLOR)
+        graphics.fill(sx, sy, sx + 1, sy + 16, BORDER_COLOR)
+        graphics.fill(sx + 15, sy, sx + 16, sy + 16, BORDER_COLOR)
+    }
+
+    @Inject(
+        method = ["extractSlot"],
+        at = [At("TAIL")]
+    )
+    private fun asthoonlite_terminalSolver(
+        graphics: GuiGraphicsExtractor,
+        slot: Slot,
+        mouseX: Int,
+        mouseY: Int,
+        ci: CallbackInfo
+    ) {
+        if (!Config.terminalSolverEnabled) return
+        val self = this as AbstractContainerScreen<*>
+        val title = self.title.string
+        if (!title.startsWith("Correct all the panes!") &&
+            !title.startsWith("Change all to same color!") &&
+            !title.startsWith("Click in order!") &&
+            !title.startsWith("What starts with:") &&
+            !title.startsWith("Select all the") &&
+            !title.startsWith("Click the button on time!")) return
+
+        val all = self.menu.slots.map { it.item }
+        val color = TerminalSolver.colorFor(title, slot.containerSlot, slot.item, all) ?: return
+        val sx = slot.x
+        val sy = slot.y
+        graphics.fill(sx, sy, sx + 16, sy + 16, color)
+        graphics.fill(sx, sy, sx + 16, sy + 1, 0xFFFFFFFF.toInt())
+        graphics.fill(sx, sy + 15, sx + 16, sy + 16, 0xFFFFFFFF.toInt())
+        graphics.fill(sx, sy, sx + 1, sy + 16, 0xFFFFFFFF.toInt())
+        graphics.fill(sx + 15, sy, sx + 16, sy + 16, 0xFFFFFFFF.toInt())
+    }
+}

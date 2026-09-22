@@ -1,0 +1,24 @@
+# Gradle
+.gradle/
+build/
+.kotlin/
+
+# Fabric Loom
+run/
+.fabric/
+
+# Archives & Temporary
+*.zip
+*.tar.gz
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+.vscode/
+bin/
+
+# Local Reference Examples
+Examples/

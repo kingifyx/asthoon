@@ -1,0 +1,80 @@
+package com.asthoonlite.gui
+
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.components.AbstractSliderButton
+import net.minecraft.network.chat.Component
+
+/**
+ * Modern integer-range slider (min..max) with dark card styling,
+ * cyan progress fill, and dynamic value badge.
+ */
+class IntSlider(
+    x: Int, y: Int, w: Int, h: Int,
+    private val min: Int,
+    private val max: Int,
+    initial: Int,
+    private val labelPrefix: String,
+    private val labelSuffix: String = "",
+    private val onChange: (Int) -> Unit
+) : AbstractSliderButton(
+    x, y, w, h,
+    Component.literal("$labelPrefix$initial$labelSuffix"),
+    ((initial - min).toDouble() / (max - min).toDouble()).coerceIn(0.0, 1.0)
+) {
+
+    var intValue: Int = initial
+        private set
+
+    override fun updateMessage() {
+        message = Component.literal("$labelPrefix$intValue$labelSuffix")
+    }
+
+    override fun applyValue() {
+        intValue = (min + value * (max - min)).toInt().coerceIn(min, max)
+        onChange(intValue)
+    }
+
+    override fun extractWidgetRenderState(context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, delta: Float) {
+        if (!visible) return
+        val font = Minecraft.getInstance().font
+        val hovered = isHoveredOrFocused
+
+        val bgCol = if (hovered) 0xFF182638.toInt() else 0xFF111B29.toInt()
+        val borderCol = if (hovered) 0xFF38BDF8.toInt() else 0xFF22344A.toInt()
+
+        // Background card
+        context.fill(x, y, x + width, y + height, bgCol)
+        // 1px border
+        context.fill(x, y, x + width, y + 1, borderCol)
+        context.fill(x, y + height - 1, x + width, y + height, borderCol)
+        context.fill(x, y, x + 1, y + height, borderCol)
+        context.fill(x + width - 1, y, x + width, y + height, borderCol)
+
+        // Label on left
+        val cleanLabel = labelPrefix.trimEnd(':', ' ')
+        context.text(font, cleanLabel, x + 8, y + 4, 0xFFE2E8F0.toInt())
+
+        // Value badge on right
+        val valStr = "$intValue$labelSuffix"
+        val valW = font.width(valStr)
+        context.text(font, valStr, x + width - valW - 8, y + 4, 0xFF38BDF8.toInt())
+
+        // Track bar
+        val trackX = x + 8
+        val trackY = y + height - 6
+        val trackW = width - 16
+        val trackH = 3
+
+        // Unfilled track
+        context.fill(trackX, trackY, trackX + trackW, trackY + trackH, 0xFF1E293B.toInt())
+        // Filled track
+        val filledW = (trackW * value.coerceIn(0.0, 1.0)).toInt()
+        context.fill(trackX, trackY, trackX + filledW, trackY + trackH, 0xFF0284C7.toInt())
+
+        // Thumb
+        val thumbX = (trackX + filledW).coerceIn(trackX, trackX + trackW)
+        val thumbCol = if (hovered) 0xFF38BDF8.toInt() else 0xFFFFFFFF.toInt()
+        context.fill(thumbX - 2, trackY - 2, thumbX + 2, trackY + trackH + 2, thumbCol)
+    }
+}

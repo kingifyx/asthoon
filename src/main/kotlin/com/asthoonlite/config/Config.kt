@@ -1,0 +1,747 @@
+package com.asthoonlite.config
+
+import com.asthoonlite.AsthoonLite
+import com.google.gson.GsonBuilder
+import net.fabricmc.loader.api.FabricLoader
+import java.io.File
+
+/**
+ * All runtime toggles are read LIVE off `data` through the properties below
+ * (`Config.xEnabled` always reflects `data.xEnabled` — there is no separate
+ * cached/mirrored boolean anywhere else in the mod anymore). This used to
+ * be the source of the "have to toggle it off and back on before it works"
+ * bug: a couple of modules (etherwarp, the hitbox fix) kept their own
+ * mirrored `var enabled` field that only got synced from `data` inside
+ * `load()` — and `load()` returned early on a fresh install (no config file
+ * yet) *before* that sync line ran, so the mirror stayed at its class
+ * default until the first time you touched the toggle in the GUI. Now every
+ * feature module reads `Config.xEnabled` directly at the point of use, so
+ * there's nothing to fall out of sync in the first place.
+ */
+object Config {
+
+    private val gson = GsonBuilder().setPrettyPrinting().create()
+
+    private val configDir = FabricLoader.getInstance().configDir
+        .resolve(AsthoonLite.MOD_ID).toFile()
+
+    private val configFile = File(configDir, "asthoonLite.json")
+
+    data class Data(
+        // ── QOL ───────────────────────────────────────────────────────────
+        // Everything below defaults to OFF: a fresh install of the mod does
+        // nothing until you turn features on yourself via /asl.
+        var etherwarpEnabled        : Boolean = false,
+        var petDisplayEnabled       : Boolean = false,
+        var petMenuHighlightEnabled : Boolean = false,
+        var petDisplayX             : Int     = 4,
+        var petDisplayY             : Int     = 4,
+        var petDisplayScale         : Float   = 1.0f,
+
+        // ── Dungeon ───────────────────────────────────────────────────────
+        var roomClearAlertEnabled   : Boolean = false,
+        var roomClearNoBlood        : Boolean = false,
+        var roomClearOnlyKey        : Boolean = false,
+        var roomSecretAlertEnabled  : Boolean = false,
+        var secretItemPickupSoundEnabled : Boolean = false,
+        var quizSolverEnabled       : Boolean = false,
+        var weirdosSolverEnabled    : Boolean = false,
+        var higherLowerSolverEnabled: Boolean = false,
+        var starMobEspEnabled       : Boolean = false,
+        var starMobEspThroughWalls : Boolean = false,
+        // false = one flat color for every starred/miniboss mob (starMobColor).
+        // true  = color-coded by mob category, like devonian's BoxStarMob.
+        var starMobEspByType        : Boolean = false,
+        var starMobSa               : Boolean = false,
+        var starMobMiniboss         : Boolean = false,
+        var starMobChonk            : Boolean = false,
+        var starMobSm               : Boolean = false,
+        var starMobFel              : Boolean = false,
+        var starMobRegular          : Boolean = false,
+        var starMobLineWidth        : Double  = 3.0,
+        var starMobFillAlpha        : Double  = 0.25,
+        var starMobShowFullShadow   : Boolean = true,
+        var starMobColor            : Int     = 0xFF00FFFF.toInt(), // cyan
+        var starMobChonkColor       : Int     = 0xFFFF0080.toInt(), // withermancer/lord/commander/super archer
+        var starMobFelColor         : Int     = 0xFF00FF80.toInt(),
+        var starMobMinibossColor    : Int     = 0xFFEB01A5.toInt(), // lost adventurer/diamond guy/king midas
+        var starMobShadowAssassinColor : Int  = 0xFFFF0000.toInt(),
+        var starMobSmColor          : Int     = 0xFFFF8000.toInt(), // skeleton master
+
+        var dungeonMapEnabled       : Boolean = false,
+        var dungeonMapAlwaysShow    : Boolean = false,
+        var dungeonMapFullGrid      : Boolean = false,
+        var dungeonMapX             : Int     = 12,
+        var dungeonMapY             : Int     = 42,
+        var dungeonMapScale         : Float   = 1.66f,
+        var dungeonMapShowNames     : Boolean = false,
+        var dungeonMapShowSecrets   : Boolean = false,
+        var dungeonMapShowCheckmarks: Boolean = false,
+        var dungeonMapDontRenderCommonNames : Boolean = false,
+        var dungeonMapDontRenderYellowName : Boolean = false,
+        var dungeonMapDontRenderFairyCheckmark : Boolean = false,
+        var dungeonMapHideInBoss    : Boolean = false,
+        var dungeonMapPlayerHeads   : Boolean = true,
+        var dungeonMapMarkerSelf    : Boolean = true,
+        var dungeonMapPlayerNames   : Boolean = true,
+        var dungeonMapNamesOnlyLeap : Boolean = false,
+        var dungeonMapPlayerHeadScale : Float = 1.0f,
+        var dungeonMapMarkerScale   : Float   = 1.0f,
+
+        // ── Dungeon: F7/M7 ──────────────────────────────────────────────
+        var dungeonTickTimersEnabled : Boolean = false,
+        var dungeonTimerX            : Int     = 4,
+        var dungeonTimerY            : Int     = 170,
+        var bloodRoomSolverEnabled   : Boolean = false,
+        var campHelperShowTimer      : Boolean = false,
+        var campHelperPlaySound      : Boolean = false,
+        var campHelperSoundThreshold : Double  = 1.3,
+        var campHelperLineWidth      : Double  = 3.0,
+        var dragonPhaseEnabled       : Boolean = false,
+        var dragonPowerPriority      : Boolean = false,
+        var dragonHudX               : Int     = 4,
+        var dragonHudY               : Int     = 170,
+        var terminalSolverEnabled    : Boolean = false,
+        var autoTerminalEnabled     : Boolean = false,
+        var autoTerminalRandomDelay : Boolean = false,
+        var autoTerminalFirstClickDelayMs : Int = 430,
+        var autoTerminalClickDelayMs : Int = 180,
+        var autoTerminalBreakThresholdMs : Int = 500,
+        var autoTerminalMinRandomDelayMs : Int = 160,
+        var autoTerminalMaxRandomDelayMs : Int = 200,
+        var autoTerminalMelodySkip  : Boolean = false,
+        var autoTerminalNoBreak     : Boolean = false,
+        var autoTerminalDontSkipFirst : Boolean = false,
+        var autoTerminalAnnounceMelody : Boolean = false,
+        var autoTerminalMelodyMessage : String = "melody",
+        var autoTermColors          : Boolean = false,
+        var autoTermMelody          : Boolean = false,
+        var autoTermNumbers         : Boolean = false,
+        var autoTermRedGreen        : Boolean = false,
+        var autoTermRubix           : Boolean = false,
+        var autoTermStartsWith      : Boolean = false,
+        var autoI4Enabled           : Boolean = false,
+        var autoSimonSaysEnabled    : Boolean = false,
+        var autoSimonSaysStart      : Boolean = false,
+        var blockWrongDeviceClicks : Boolean = false,
+        var instantSimonSaysEnabled : Boolean = false,
+        var secretHitboxesEnabled   : Boolean = false,
+        var leverHitboxEnabled      : Boolean = false,
+        var buttonHitboxEnabled     : Boolean = false,
+        var skullHitboxEnabled      : Boolean = false,
+        var mushroomHitboxEnabled   : Boolean = false,
+        var secretHitboxVanillaOutline : Boolean = true,
+        var secretHitboxHideOutline : Boolean = false,
+        var secretHitboxSize        : Int     = 100,
+        var moddedHitboxDisplayEnabled : Boolean = false,
+        var pressedHitboxEnabled    : Boolean = false,
+        var pressedHitboxDuration   : Int     = 500,
+        var relicAuraEnabled        : Boolean = false,
+        var secretAuraEnabled       : Boolean = false,
+        var secretAuraRange         : Int     = 6,
+        var secretAuraFov            : Int     = 90,
+        var secretAuraBreakBlocks    : Boolean = false,
+        var autoCloseSecretChest    : Boolean = false,
+        var secretSoundEnabled      : Boolean = false,
+        var maskDisplayEnabled       : Boolean = false,
+        var maskHudX                 : Int     = 4,
+        var maskHudY                 : Int     = 240,
+
+        // ── Mining ────────────────────────────────────────────────────────
+        var pickaxeAbilityTimerEnabled : Boolean = false,
+        var pickaxeTimerX            : Int   = 4,
+        var pickaxeTimerY            : Int   = 40,
+        var pickaxeTimerScale        : Float = 1.0f,
+
+        // ── Fishing ───────────────────────────────────────────────────────
+        var fishBiteAlertEnabled    : Boolean = false,
+
+        // ── Nucleus ───────────────────────────────────────────────────────
+        var autoNucleusWarpEnabled  : Boolean = false,
+        var autoNucleusWarpMinSec   : Double  = 0.3,
+        var autoNucleusWarpMaxSec   : Double  = 0.7,
+
+        // ── Funny ─────────────────────────────────────────────────────────
+        var autoClickerEnabled      : Boolean = false,
+        var autoClickerCps          : Int     = 10,
+        var autoClickerKey           : Int     = -1,
+    )
+
+    var data = Data()
+        private set
+
+    var etherwarpEnabled: Boolean
+        get() = data.etherwarpEnabled
+        set(v) { data.etherwarpEnabled = v; save() }
+
+    // ── Pet display ───────────────────────────────────────────────────────
+
+    var petDisplayEnabled: Boolean
+        get() = data.petDisplayEnabled
+        set(v) { data.petDisplayEnabled = v; save() }
+
+    var petMenuHighlightEnabled: Boolean
+        get() = data.petMenuHighlightEnabled
+        set(v) { data.petMenuHighlightEnabled = v; save() }
+
+    var petDisplayX: Int
+        get() = data.petDisplayX
+        set(v) { data.petDisplayX = v }
+
+    var petDisplayY: Int
+        get() = data.petDisplayY
+        set(v) { data.petDisplayY = v }
+
+    var petDisplayScale: Float
+        get() = data.petDisplayScale
+        set(v) { data.petDisplayScale = v }
+
+    // ── Dungeon ───────────────────────────────────────────────────────────
+
+    var roomClearAlertEnabled: Boolean
+        get() = data.roomClearAlertEnabled
+        set(v) { data.roomClearAlertEnabled = v; save() }
+
+    var roomClearNoBlood: Boolean
+        get() = data.roomClearNoBlood
+        set(v) { data.roomClearNoBlood = v; save() }
+
+    var roomClearOnlyKey: Boolean
+        get() = data.roomClearOnlyKey
+        set(v) { data.roomClearOnlyKey = v; save() }
+
+    var roomSecretAlertEnabled: Boolean
+        get() = data.roomSecretAlertEnabled
+        set(v) { data.roomSecretAlertEnabled = v; save() }
+
+    var secretItemPickupSoundEnabled: Boolean
+        get() = data.secretItemPickupSoundEnabled
+        set(v) { data.secretItemPickupSoundEnabled = v; save() }
+
+    var quizSolverEnabled: Boolean
+        get() = data.quizSolverEnabled
+        set(v) { data.quizSolverEnabled = v; save() }
+
+    var weirdosSolverEnabled: Boolean
+        get() = data.weirdosSolverEnabled
+        set(v) { data.weirdosSolverEnabled = v; save() }
+
+    var higherLowerSolverEnabled: Boolean
+        get() = data.higherLowerSolverEnabled
+        set(v) { data.higherLowerSolverEnabled = v; save() }
+
+    var starMobEspEnabled: Boolean
+        get() = data.starMobEspEnabled
+        set(v) { data.starMobEspEnabled = v; save() }
+
+    var starMobEspThroughWalls: Boolean
+        get() = data.starMobEspThroughWalls
+        set(v) { data.starMobEspThroughWalls = v; save() }
+
+    /** Off = flat starMobColor for everything. On = per-category colors. */
+    var starMobEspByType: Boolean
+        get() = data.starMobEspByType
+        set(v) { data.starMobEspByType = v; save() }
+
+    var starMobSa: Boolean
+        get() = data.starMobSa
+        set(v) { data.starMobSa = v; save() }
+
+    var starMobMiniboss: Boolean
+        get() = data.starMobMiniboss
+        set(v) { data.starMobMiniboss = v; save() }
+
+    var starMobChonk: Boolean
+        get() = data.starMobChonk
+        set(v) { data.starMobChonk = v; save() }
+
+    var starMobSm: Boolean
+        get() = data.starMobSm
+        set(v) { data.starMobSm = v; save() }
+
+    var starMobFel: Boolean
+        get() = data.starMobFel
+        set(v) { data.starMobFel = v; save() }
+
+    var starMobRegular: Boolean
+        get() = data.starMobRegular
+        set(v) { data.starMobRegular = v; save() }
+
+    var starMobLineWidth: Double
+        get() = data.starMobLineWidth
+        set(v) { data.starMobLineWidth = v.coerceIn(0.5, 10.0); save() }
+
+    var starMobFillAlpha: Double
+        get() = data.starMobFillAlpha
+        set(v) { data.starMobFillAlpha = v.coerceIn(0.0, 1.0); save() }
+
+    var starMobShowFullShadow: Boolean
+        get() = data.starMobShowFullShadow
+        set(v) { data.starMobShowFullShadow = v; save() }
+
+    var starMobColor: Int
+        get() = data.starMobColor
+        set(v) { data.starMobColor = v; save() }
+
+    var starMobChonkColor: Int
+        get() = data.starMobChonkColor
+        set(v) { data.starMobChonkColor = v; save() }
+
+    var starMobFelColor: Int
+        get() = data.starMobFelColor
+        set(v) { data.starMobFelColor = v; save() }
+
+    var starMobMinibossColor: Int
+        get() = data.starMobMinibossColor
+        set(v) { data.starMobMinibossColor = v; save() }
+
+    var starMobShadowAssassinColor: Int
+        get() = data.starMobShadowAssassinColor
+        set(v) { data.starMobShadowAssassinColor = v; save() }
+
+    var starMobSmColor: Int
+        get() = data.starMobSmColor
+        set(v) { data.starMobSmColor = v; save() }
+
+    var dungeonMapEnabled: Boolean
+        get() = data.dungeonMapEnabled
+        set(v) { data.dungeonMapEnabled = v; save() }
+
+    /** Keep the map on screen even when it's not the held item. */
+    var dungeonMapAlwaysShow: Boolean
+        get() = data.dungeonMapAlwaysShow
+        set(v) { data.dungeonMapAlwaysShow = v; save() }
+
+    /** Off = normal map. On = full/cheater room layout, including unopened rooms. */
+    var dungeonMapFullGrid: Boolean
+        get() = data.dungeonMapFullGrid
+        set(v) { data.dungeonMapFullGrid = v; save() }
+
+    var dungeonMapX: Int
+        get() = data.dungeonMapX
+        set(v) { data.dungeonMapX = v }
+
+    var dungeonMapY: Int
+        get() = data.dungeonMapY
+        set(v) { data.dungeonMapY = v }
+
+    var dungeonMapScale: Float
+        get() = data.dungeonMapScale
+        set(v) { data.dungeonMapScale = v }
+
+    var dungeonMapShowNames: Boolean
+        get() = data.dungeonMapShowNames
+        set(v) { data.dungeonMapShowNames = v; save() }
+
+    var dungeonMapShowSecrets: Boolean
+        get() = data.dungeonMapShowSecrets
+        set(v) { data.dungeonMapShowSecrets = v; save() }
+
+    var dungeonMapShowCheckmarks: Boolean
+        get() = data.dungeonMapShowCheckmarks
+        set(v) { data.dungeonMapShowCheckmarks = v; save() }
+
+    var dungeonMapDontRenderCommonNames: Boolean
+        get() = data.dungeonMapDontRenderCommonNames
+        set(v) { data.dungeonMapDontRenderCommonNames = v; save() }
+
+    var dungeonMapDontRenderYellowName: Boolean
+        get() = data.dungeonMapDontRenderYellowName
+        set(v) { data.dungeonMapDontRenderYellowName = v; save() }
+
+    var dungeonMapDontRenderFairyCheckmark: Boolean
+        get() = data.dungeonMapDontRenderFairyCheckmark
+        set(v) { data.dungeonMapDontRenderFairyCheckmark = v; save() }
+
+    var dungeonMapHideInBoss: Boolean
+        get() = data.dungeonMapHideInBoss
+        set(v) { data.dungeonMapHideInBoss = v; save() }
+
+    var dungeonMapPlayerHeads: Boolean
+        get() = data.dungeonMapPlayerHeads
+        set(v) { data.dungeonMapPlayerHeads = v; save() }
+
+    var dungeonMapMarkerSelf: Boolean
+        get() = data.dungeonMapMarkerSelf
+        set(v) { data.dungeonMapMarkerSelf = v; save() }
+
+    var dungeonMapPlayerNames: Boolean
+        get() = data.dungeonMapPlayerNames
+        set(v) { data.dungeonMapPlayerNames = v; save() }
+
+    var dungeonMapNamesOnlyLeap: Boolean
+        get() = data.dungeonMapNamesOnlyLeap
+        set(v) { data.dungeonMapNamesOnlyLeap = v; save() }
+
+    var dungeonMapPlayerHeadScale: Float
+        get() = data.dungeonMapPlayerHeadScale
+        set(v) { data.dungeonMapPlayerHeadScale = v.coerceIn(0.5f, 3.0f); save() }
+
+    var dungeonMapMarkerScale: Float
+        get() = data.dungeonMapMarkerScale
+        set(v) { data.dungeonMapMarkerScale = v.coerceIn(0.5f, 3.0f); save() }
+
+    var dungeonTickTimersEnabled: Boolean
+        get() = data.dungeonTickTimersEnabled
+        set(v) { data.dungeonTickTimersEnabled = v; save() }
+
+    var dungeonTimerX: Int
+        get() = data.dungeonTimerX
+        set(v) { data.dungeonTimerX = v }
+
+    var dungeonTimerY: Int
+        get() = data.dungeonTimerY
+        set(v) { data.dungeonTimerY = v }
+
+    var bloodRoomSolverEnabled: Boolean
+        get() = data.bloodRoomSolverEnabled
+        set(v) { data.bloodRoomSolverEnabled = v; save() }
+
+    var campHelperShowTimer: Boolean
+        get() = data.campHelperShowTimer
+        set(v) { data.campHelperShowTimer = v; save() }
+
+    var campHelperPlaySound: Boolean
+        get() = data.campHelperPlaySound
+        set(v) { data.campHelperPlaySound = v; save() }
+
+    var campHelperSoundThreshold: Double
+        get() = data.campHelperSoundThreshold
+        set(v) { data.campHelperSoundThreshold = v; save() }
+
+    var campHelperLineWidth: Double
+        get() = data.campHelperLineWidth
+        set(v) { data.campHelperLineWidth = v; save() }
+
+    var dragonPhaseEnabled: Boolean
+        get() = data.dragonPhaseEnabled
+        set(v) { data.dragonPhaseEnabled = v; save() }
+
+    var dragonPowerPriority: Boolean
+        get() = data.dragonPowerPriority
+        set(v) { data.dragonPowerPriority = v; save() }
+
+    var dragonHudX: Int
+        get() = data.dragonHudX
+        set(v) { data.dragonHudX = v }
+
+    var dragonHudY: Int
+        get() = data.dragonHudY
+        set(v) { data.dragonHudY = v }
+
+    var terminalSolverEnabled: Boolean
+        get() = data.terminalSolverEnabled
+        set(v) { data.terminalSolverEnabled = v; save() }
+
+    var autoTerminalEnabled: Boolean
+        get() = data.autoTerminalEnabled
+        set(v) { data.autoTerminalEnabled = v; save() }
+
+    var autoTerminalRandomDelay: Boolean
+        get() = data.autoTerminalRandomDelay
+        set(v) { data.autoTerminalRandomDelay = v; save() }
+
+    var autoTerminalFirstClickDelayMs: Int
+        get() = data.autoTerminalFirstClickDelayMs
+        set(v) { data.autoTerminalFirstClickDelayMs = v.coerceIn(0, 1000); save() }
+
+    var autoTerminalClickDelayMs: Int
+        get() = data.autoTerminalClickDelayMs
+        set(v) { data.autoTerminalClickDelayMs = v.coerceIn(0, 1000); save() }
+
+    var autoTerminalBreakThresholdMs: Int
+        get() = data.autoTerminalBreakThresholdMs
+        set(v) { data.autoTerminalBreakThresholdMs = v.coerceIn(0, 2000); save() }
+
+    var autoTerminalMinRandomDelayMs: Int
+        get() = data.autoTerminalMinRandomDelayMs
+        set(v) { data.autoTerminalMinRandomDelayMs = v.coerceIn(0, 1000); save() }
+
+    var autoTerminalMaxRandomDelayMs: Int
+        get() = data.autoTerminalMaxRandomDelayMs
+        set(v) { data.autoTerminalMaxRandomDelayMs = v.coerceIn(0, 1000); save() }
+
+    var autoTerminalMelodySkip: Boolean
+        get() = data.autoTerminalMelodySkip
+        set(v) { data.autoTerminalMelodySkip = v; save() }
+
+    var autoTerminalNoBreak: Boolean
+        get() = data.autoTerminalNoBreak
+        set(v) { data.autoTerminalNoBreak = v; save() }
+
+    var autoTerminalDontSkipFirst: Boolean
+        get() = data.autoTerminalDontSkipFirst
+        set(v) { data.autoTerminalDontSkipFirst = v; save() }
+
+    var autoTerminalAnnounceMelody: Boolean
+        get() = data.autoTerminalAnnounceMelody
+        set(v) { data.autoTerminalAnnounceMelody = v; save() }
+
+    var autoTerminalMelodyMessage: String
+        get() = data.autoTerminalMelodyMessage
+        set(v) { data.autoTerminalMelodyMessage = v; save() }
+
+    var autoTermColors: Boolean
+        get() = data.autoTermColors
+        set(v) { data.autoTermColors = v; save() }
+
+    var autoTermMelody: Boolean
+        get() = data.autoTermMelody
+        set(v) { data.autoTermMelody = v; save() }
+
+    var autoTermNumbers: Boolean
+        get() = data.autoTermNumbers
+        set(v) { data.autoTermNumbers = v; save() }
+
+    var autoTermRedGreen: Boolean
+        get() = data.autoTermRedGreen
+        set(v) { data.autoTermRedGreen = v; save() }
+
+    var autoTermRubix: Boolean
+        get() = data.autoTermRubix
+        set(v) { data.autoTermRubix = v; save() }
+
+    var autoTermStartsWith: Boolean
+        get() = data.autoTermStartsWith
+        set(v) { data.autoTermStartsWith = v; save() }
+
+    fun applyRsmAutoPreset() {
+        data.autoTerminalEnabled = true
+        data.terminalSolverEnabled = true
+        data.autoTerminalRandomDelay = true
+        data.autoTerminalFirstClickDelayMs = 430
+        data.autoTerminalClickDelayMs = 135
+        data.autoTerminalBreakThresholdMs = 500
+        data.autoTerminalMinRandomDelayMs = 120
+        data.autoTerminalMaxRandomDelayMs = 150
+        data.autoTerminalMelodySkip = true
+        data.autoTerminalNoBreak = false
+        data.autoTerminalDontSkipFirst = true
+        data.autoTerminalAnnounceMelody = true
+        data.autoTerminalMelodyMessage = "melody"
+        data.autoTermColors = true
+        data.autoTermMelody = true
+        data.autoTermNumbers = true
+        data.autoTermRedGreen = true
+        data.autoTermRubix = true
+        data.autoTermStartsWith = true
+        save()
+    }
+
+    fun applyDevonianMapPreset() {
+        data.dungeonMapEnabled = true
+        data.dungeonMapAlwaysShow = true
+        data.dungeonMapFullGrid = true
+        data.dungeonMapShowNames = true
+        data.dungeonMapShowSecrets = true
+        data.dungeonMapShowCheckmarks = true
+        data.dungeonMapDontRenderCommonNames = true
+        data.dungeonMapDontRenderYellowName = true
+        data.dungeonMapDontRenderFairyCheckmark = true
+        data.dungeonMapHideInBoss = true
+        data.dungeonMapPlayerHeads = true
+        data.dungeonMapMarkerSelf = true
+        data.dungeonMapPlayerNames = true
+        data.dungeonMapNamesOnlyLeap = false
+        data.dungeonMapScale = 1.66f
+        data.dungeonMapX = 12
+        data.dungeonMapY = 42
+        save()
+    }
+
+    fun applyDevonianWatcherPreset() {
+        data.bloodRoomSolverEnabled = true
+        data.campHelperShowTimer = true
+        data.campHelperPlaySound = false
+        data.campHelperSoundThreshold = 1.3
+        data.campHelperLineWidth = 3.0
+        save()
+    }
+
+    var autoI4Enabled: Boolean
+        get() = data.autoI4Enabled
+        set(v) { data.autoI4Enabled = v; save() }
+
+    var autoSimonSaysEnabled: Boolean
+        get() = data.autoSimonSaysEnabled
+        set(v) { data.autoSimonSaysEnabled = v; save() }
+
+    var autoSimonSaysStart: Boolean
+        get() = data.autoSimonSaysStart
+        set(v) { data.autoSimonSaysStart = v; save() }
+
+    var blockWrongDeviceClicks: Boolean
+        get() = data.blockWrongDeviceClicks
+        set(v) { data.blockWrongDeviceClicks = v; save() }
+
+    var instantSimonSaysEnabled: Boolean
+        get() = data.instantSimonSaysEnabled
+        set(v) { data.instantSimonSaysEnabled = v; save() }
+
+    var secretHitboxesEnabled: Boolean
+        get() = data.secretHitboxesEnabled
+        set(v) { data.secretHitboxesEnabled = v; save() }
+
+    var leverHitboxEnabled: Boolean
+        get() = data.leverHitboxEnabled
+        set(v) { data.leverHitboxEnabled = v; save() }
+
+    var buttonHitboxEnabled: Boolean
+        get() = data.buttonHitboxEnabled
+        set(v) { data.buttonHitboxEnabled = v; save() }
+
+    var skullHitboxEnabled: Boolean
+        get() = data.skullHitboxEnabled
+        set(v) { data.skullHitboxEnabled = v; save() }
+
+    var mushroomHitboxEnabled: Boolean
+        get() = data.mushroomHitboxEnabled
+        set(v) { data.mushroomHitboxEnabled = v; save() }
+
+    var secretHitboxVanillaOutline: Boolean
+        get() = data.secretHitboxVanillaOutline
+        set(v) { data.secretHitboxVanillaOutline = v; save() }
+
+    var secretHitboxHideOutline: Boolean
+        get() = data.secretHitboxHideOutline
+        set(v) { data.secretHitboxHideOutline = v; save() }
+
+    var secretSoundEnabled: Boolean
+        get() = data.secretSoundEnabled
+        set(v) { data.secretSoundEnabled = v; save() }
+
+    var secretHitboxSize: Int
+        get() = data.secretHitboxSize
+        set(v) { data.secretHitboxSize = v.coerceIn(10, 100); save() }
+
+    var moddedHitboxDisplayEnabled: Boolean
+        get() = data.moddedHitboxDisplayEnabled
+        set(v) { data.moddedHitboxDisplayEnabled = v; save() }
+
+    var pressedHitboxEnabled: Boolean
+        get() = data.pressedHitboxEnabled
+        set(v) { data.pressedHitboxEnabled = v; save() }
+
+    var pressedHitboxDuration: Int
+        get() = data.pressedHitboxDuration
+        set(v) { data.pressedHitboxDuration = v.coerceIn(100, 2000); save() }
+
+    var relicAuraEnabled: Boolean
+        get() = data.relicAuraEnabled
+        set(v) { data.relicAuraEnabled = v; save() }
+
+    var secretAuraEnabled: Boolean
+        get() = data.secretAuraEnabled
+        set(v) { data.secretAuraEnabled = v; save() }
+
+    var secretAuraRange: Int
+        get() = data.secretAuraRange
+        set(v) { data.secretAuraRange = v.coerceIn(1, 20); save() }
+
+    var secretAuraFov: Int
+        get() = data.secretAuraFov
+        set(v) { data.secretAuraFov = v.coerceIn(5, 180); save() }
+
+    var secretAuraBreakBlocks: Boolean
+        get() = data.secretAuraBreakBlocks
+        set(v) { data.secretAuraBreakBlocks = v; save() }
+
+    var autoCloseSecretChest: Boolean
+        get() = data.autoCloseSecretChest
+        set(v) { data.autoCloseSecretChest = v; save() }
+
+    var maskDisplayEnabled: Boolean
+        get() = data.maskDisplayEnabled
+        set(v) { data.maskDisplayEnabled = v; save() }
+
+    var maskHudX: Int
+        get() = data.maskHudX
+        set(v) { data.maskHudX = v }
+
+    var maskHudY: Int
+        get() = data.maskHudY
+        set(v) { data.maskHudY = v }
+
+    // ── Mining ────────────────────────────────────────────────────────────
+
+    var pickaxeAbilityTimerEnabled: Boolean
+        get() = data.pickaxeAbilityTimerEnabled
+        set(v) { data.pickaxeAbilityTimerEnabled = v; save() }
+
+    var pickaxeTimerX: Int
+        get() = data.pickaxeTimerX
+        set(v) { data.pickaxeTimerX = v }
+
+    var pickaxeTimerY: Int
+        get() = data.pickaxeTimerY
+        set(v) { data.pickaxeTimerY = v }
+
+    var pickaxeTimerScale: Float
+        get() = data.pickaxeTimerScale
+        set(v) { data.pickaxeTimerScale = v }
+
+    // ── Fishing ───────────────────────────────────────────────────────────
+
+    var fishBiteAlertEnabled: Boolean
+        get() = data.fishBiteAlertEnabled
+        set(v) { data.fishBiteAlertEnabled = v; save() }
+
+    // ── Nucleus ───────────────────────────────────────────────────────────
+
+    var autoNucleusWarpEnabled: Boolean
+        get() = data.autoNucleusWarpEnabled
+        set(v) { data.autoNucleusWarpEnabled = v; save() }
+
+    var autoNucleusWarpMinSec: Double
+        get() = data.autoNucleusWarpMinSec
+        set(v) { data.autoNucleusWarpMinSec = v; save() }
+
+    var autoNucleusWarpMaxSec: Double
+        get() = data.autoNucleusWarpMaxSec
+        set(v) { data.autoNucleusWarpMaxSec = v; save() }
+
+    // ── Funny ─────────────────────────────────────────────────────────────
+
+    var autoClickerEnabled: Boolean
+        get() = data.autoClickerEnabled
+        set(v) { data.autoClickerEnabled = v; save() }
+
+    // Up to 500 clicks/sec. Above 20 (1 per client tick) this fires more
+    // than once per tick to actually reach the requested rate — see
+    // AutoClicker.tick()'s fractional accumulator.
+    var autoClickerCps: Int
+        get() = data.autoClickerCps
+        set(v) { data.autoClickerCps = v.coerceIn(1, 500); save() }
+
+    var autoClickerKey: Int
+        get() = data.autoClickerKey
+        set(v) { data.autoClickerKey = v; save() }
+
+    fun load() {
+        if (!configDir.exists()) configDir.mkdirs()
+
+        if (configFile.exists()) {
+            runCatching {
+                val text = configFile.readText().takeUnless(String::isBlank)
+                if (text != null) data = gson.fromJson(text, Data::class.java) ?: Data()
+            }.onFailure {
+                AsthoonLite.LOGGER.warn("[AsthoonLite] Failed to load config, using defaults", it)
+                data = Data()
+            }
+        }
+
+        // Always persist current state (creates the file with defaults on
+        // first launch). No other module needs to be told about this —
+        // everything reads Config.xEnabled live.
+        save()
+    }
+
+    fun save() {
+        runCatching {
+            if (!configDir.exists()) configDir.mkdirs()
+            configFile.writeText(gson.toJson(data))
+        }.onFailure {
+            AsthoonLite.LOGGER.warn("[AsthoonLite] Failed to save config", it)
+        }
+    }
+}
