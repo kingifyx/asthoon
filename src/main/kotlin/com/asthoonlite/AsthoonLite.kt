@@ -52,6 +52,7 @@ object AsthoonLite : ClientModInitializer {
         // renderer/one draw call instead of each running their own GPU
         // pipeline). Must register before anything that queues boxes.
         WorldBoxRenderer.register()
+        com.asthoonlite.render.WorldTextRenderer.register()
 
         EtherwarpOverlay.register()
         AlertHud.register()
@@ -82,6 +83,14 @@ object AsthoonLite : ClientModInitializer {
         SecretHitboxes.register()
         SecretAura.register()
         RelicAura.register()
+        com.asthoonlite.dungeon.solvers.TicTacToeSolver.register()
+        com.asthoonlite.dungeon.solvers.IceFillSolver.register()
+        com.asthoonlite.dungeon.solvers.IcePathSolver.register()
+        com.asthoonlite.dungeon.solvers.WaterBoardSolver.register()
+        com.asthoonlite.dungeon.solvers.BoulderSolver.register()
+        com.asthoonlite.dungeon.solvers.CreeperBeamSolver.register()
+        com.asthoonlite.dungeon.solvers.TeleportMazeSolver.register()
+        com.asthoonlite.dungeon.solvers.LividSolver.register()
 
         // ── Mining ────────────────────────────────────────────────────────────
         PickaxeAbilityTimer.register()

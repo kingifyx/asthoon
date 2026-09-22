@@ -1,25 +1,38 @@
 package com.asthoonlite.dungeon
 
+import com.asthoonlite.AsthoonLite
 import com.asthoonlite.config.Config
 import com.asthoonlite.render.WorldBoxRenderer
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents
 import net.minecraft.ChatFormatting
 import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.Component
+import net.minecraft.network.protocol.game.ClientboundAddEntityPacket
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket
+import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket
 import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.entity.decoration.ArmorStand
 import net.minecraft.world.entity.monster.EnderMan
 import net.minecraft.world.entity.player.Player
+import java.util.Optional
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Starred-mob ESP implementing Devonian's BoxStarMob styling, categorization,
  * and hitbox calculations:
+ * - Packet-level and tick-level detection:
+ *   - ClientboundSetEntityDataPacket: instant custom name tag checking for '✯'
+ *   - ClientboundAddEntityPacket & ClientboundPlayerInfoUpdatePacket: miniboss tracking
  * - Armor stand mapping: nametag -> entity id - 1 (-3 for Withermancer)
  * - Fake player detection: Shadow Assassin, Lost Adventurer, Diamond Guy, King Midas
  * - Fels detection: Enderman named Dinnerbone or stand named Fels
- * - Individual category toggles and Devonian color presets
- * - Customizable line width and fill alpha
+ * - Bats detection
+ * - Customizable line width, fill alpha, and colors
  */
 object StarMobESP {
 
@@ -33,23 +46,74 @@ object StarMobESP {
     }
 
     private val starMobs = LinkedHashMap<Int, MobCategory>()
+    private val playerMobMap = ConcurrentHashMap<UUID, MobCategory>()
+    private var lastStandId: Int = 0
+    private var lastRenderedCount = -1
+    private var renderLogTicks = 0
 
     fun register() {
         ClientTickEvents.END_CLIENT_TICK.register { tick() }
         LevelRenderEvents.END_EXTRACTION.register { queueBoxes() }
+        ClientPlayConnectionEvents.JOIN.register { _, _, _ -> resetRun("ClientPlayConnectionEvents.JOIN") }
+        ClientPlayConnectionEvents.DISCONNECT.register { _, _ -> resetRun("ClientPlayConnectionEvents.DISCONNECT") }
+    }
+
+    fun onPlayerInfoUpdate(packet: ClientboundPlayerInfoUpdatePacket) {
+        if (!packet.actions().contains(ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER)) return
+        for (entry in packet.entries()) {
+            val name = entry.profile?.name ?: continue
+            val cat = categorizePlayer(name) ?: continue
+            playerMobMap[entry.profileId] = cat
+            AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP: Tab ADD_PLAYER miniboss cached: name='$name', uuid=${entry.profileId}, category=$cat")
+        }
+    }
+
+    fun onAddEntity(packet: ClientboundAddEntityPacket) {
+        if (packet.type == EntityType.ARMOR_STAND) {
+            lastStandId = packet.id
+        } else if (packet.type == EntityType.PLAYER) {
+            val uuid = packet.uuid
+            val cat = playerMobMap[uuid]
+            if (cat != null) {
+                starMobs[packet.id] = cat
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP: Player spawned matching miniboss uuid=$uuid, id=${packet.id}, cat=$cat")
+            }
+        }
+    }
+
+    fun onEntityData(packet: ClientboundSetEntityDataPacket) {
+        val items = packet.packedItems ?: return
+        val nameItem = items.firstOrNull { it.id == 2 } ?: return
+        val opt = nameItem.value as? Optional<*> ?: return
+        val comp = opt.orElse(null) as? Component ?: return
+        val raw = comp.string
+        val name = ChatFormatting.stripFormatting(raw) ?: raw
+        if (!name.contains("✯")) return
+
+        val normalized = name.uppercase()
+        val offset = if (normalized.contains("WITHERMANCER")) 3 else 1
+        val targetId = packet.id - offset
+        val cat = categorize(normalized)
+        if (!starMobs.containsKey(targetId)) {
+            starMobs[targetId] = cat
+            AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP: onEntityData armor stand id=${packet.id} with '✯' ('$name') -> targetMobId=$targetId, cat=$cat")
+        }
     }
 
     private fun tick() {
         val mc = Minecraft.getInstance()
         val level = mc.level
         if (!Config.starMobEspEnabled || !DungeonContext.inDungeon || level == null) {
-            starMobs.clear()
+            if (starMobs.isNotEmpty()) {
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP.tick(): clearing ${starMobs.size} star mobs (enabled=${Config.starMobEspEnabled}, inDungeon=${DungeonContext.inDungeon}, levelIsNull=${level == null})")
+                starMobs.clear()
+            }
             return
         }
 
         val localPlayer = mc.player ?: return
 
-        // Scan loaded armor stands continuously
+        // Scan loaded armor stands continuously as a robust fallback
         for (stand in level.getEntitiesOfClass(ArmorStand::class.java, localPlayer.boundingBox.inflate(96.0))) {
             val raw = stand.customName?.string ?: continue
             val name = ChatFormatting.stripFormatting(raw) ?: continue
@@ -57,29 +121,43 @@ object StarMobESP {
             val normalized = name.uppercase()
             val offset = if (normalized.contains("WITHERMANCER")) 3 else 1
             val direct = level.getEntity(stand.id - offset)
-            // Marker stands have zero-sized bounds. Include the mob below the nameplate.
-            val bounds = stand.boundingBox.move(0.0, -1.0, 0.0).inflate(0.5, 1.0, 0.5)
-            val mob = if (isCandidateMob(direct, localPlayer) && direct!!.boundingBox.intersects(bounds)) direct else {
+            val mob = if (isCandidateMob(direct, localPlayer)) direct else {
+                val bounds = stand.boundingBox.move(0.0, -1.0, 0.0).inflate(1.2, 1.5, 1.2)
                 level.getEntities(stand, bounds) { entity ->
                     isCandidateMob(entity, localPlayer)
                 }.minByOrNull { it.distanceToSqr(stand) }
             }
-            if (mob != null) {
-                starMobs[mob.id] = categorize(normalized)
+            if (mob != null && !starMobs.containsKey(mob.id)) {
+                val cat = categorize(normalized)
+                starMobs[mob.id] = cat
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP: Tick scan detected mob id=${mob.id} near stand id=${stand.id} ('$name'), cat=$cat")
             }
         }
 
         // Fake-player minibosses (Shadow Assassin, Lost Adventurer, Diamond Guy, King Midas)
         for (fake in level.getEntitiesOfClass(Player::class.java, localPlayer.boundingBox.inflate(128.0))) {
             if (fake == localPlayer) continue
-            categorizePlayer(fake.gameProfile.name)?.let { starMobs[fake.id] = it }
+            val cat = categorizePlayer(fake.gameProfile.name)
+            if (cat != null && !starMobs.containsKey(fake.id)) {
+                starMobs[fake.id] = cat
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP: Tick scan found miniboss player id=${fake.id}, name='${fake.gameProfile.name}', cat=$cat")
+            }
         }
 
         // Fels (Enderman with name "Dinnerbone")
         for (enderman in level.getEntitiesOfClass(EnderMan::class.java, localPlayer.boundingBox.inflate(96.0))) {
             val name = enderman.customName?.string
-            if (name == "Dinnerbone") {
+            if (name == "Dinnerbone" && !starMobs.containsKey(enderman.id)) {
                 starMobs[enderman.id] = MobCategory.FEL
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP: Found Fel id=${enderman.id}")
+            }
+        }
+
+        // Bats (Starred / secret bats)
+        for (bat in level.getEntitiesOfClass(net.minecraft.world.entity.ambient.Bat::class.java, localPlayer.boundingBox.inflate(64.0))) {
+            if (!bat.isInvisible && !bat.isPassenger && bat.health > 0f && !starMobs.containsKey(bat.id)) {
+                starMobs[bat.id] = MobCategory.REGULAR
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP: Found Bat id=${bat.id}")
             }
         }
 
@@ -88,7 +166,8 @@ object StarMobESP {
         while (iterator.hasNext()) {
             val (id, _) = iterator.next()
             val entity = level.getEntity(id)
-            if (entity == null || entity.isRemoved || (entity is LivingEntity && entity.health <= 0f)) {
+            if (entity != null && (entity.isRemoved || (entity is LivingEntity && (entity.isDeadOrDying || entity.health <= 0f)))) {
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP: Purging dead/removed mob id=$id")
                 iterator.remove()
             }
         }
@@ -97,9 +176,10 @@ object StarMobESP {
     private fun isCandidateMob(entity: Entity?, local: Player?): Boolean = when {
         entity == null || entity is ArmorStand || entity.isRemoved -> false
         entity is net.minecraft.world.entity.ExperienceOrb -> false
+        entity is net.minecraft.world.entity.projectile.arrow.AbstractArrow -> false
         entity is Player -> entity != local && entity.health > 0f &&
             (entity.uuid.version() == 2 || categorizePlayer(entity.gameProfile.name) != null)
-        entity is LivingEntity -> entity.health > 0f
+        entity is LivingEntity -> entity.health > 0f && !entity.isDeadOrDying
         else -> false
     }
 
@@ -119,22 +199,6 @@ object StarMobESP {
         else -> null
     }
 
-    fun isCategoryEnabled(category: MobCategory): Boolean {
-        if (!Config.starMobEspEnabled) return false
-        val anySpecific = Config.starMobSa || Config.starMobMiniboss || Config.starMobChonk ||
-            Config.starMobSm || Config.starMobFel || Config.starMobRegular
-        if (!anySpecific) return true
-
-        return when (category) {
-            MobCategory.SHADOW_ASSASSIN -> Config.starMobSa
-            MobCategory.MINIBOSS -> Config.starMobMiniboss
-            MobCategory.CHONK -> Config.starMobChonk
-            MobCategory.SKELETON_MASTER -> Config.starMobSm
-            MobCategory.FEL -> Config.starMobFel
-            MobCategory.REGULAR -> Config.starMobRegular
-        }
-    }
-
     fun colorFor(category: MobCategory): Int = when {
         !Config.starMobEspByType -> Config.starMobColor
         category == MobCategory.SHADOW_ASSASSIN -> Config.starMobShadowAssassinColor
@@ -152,22 +216,59 @@ object StarMobESP {
         else -> 2.0
     }
 
-    fun shouldForceGlow(entity: Entity): Boolean =
-        Config.starMobEspEnabled && DungeonContext.inDungeon && starMobs.containsKey(entity.id) &&
-            isCategoryEnabled(starMobs[entity.id] ?: MobCategory.REGULAR)
+    fun shouldForceGlow(entity: Entity): Boolean {
+        if (!Config.starMobEspEnabled || !DungeonContext.inDungeon || !starMobs.containsKey(entity.id)) return false
+        val player = Minecraft.getInstance().player ?: return false
+        return isInSameRoom(entity.position(), player.position())
+    }
 
     fun glowColorFor(entity: Entity): Int {
         if (!shouldForceGlow(entity)) return Int.MIN_VALUE
         return colorFor(starMobs[entity.id] ?: MobCategory.REGULAR)
     }
 
+    private fun isInSameRoom(mobPos: net.minecraft.world.phys.Vec3, playerPos: net.minecraft.world.phys.Vec3): Boolean {
+        val playerComp = com.asthoonlite.dungeon.api.WorldPosition(playerPos.x.toInt(), playerPos.z.toInt()).toComponent()
+        val mobComp = com.asthoonlite.dungeon.api.WorldPosition(mobPos.x.toInt(), mobPos.z.toInt()).toComponent()
+
+        val playerRoom = com.asthoonlite.dungeon.map.DungeonScanner.currentRoom
+            ?: (if (playerComp.isInBounds()) com.asthoonlite.dungeon.map.DungeonScanner.rooms.getOrNull(playerComp.getRoomIdx()) else null)
+
+        val mobRoom = if (mobComp.isInBounds()) com.asthoonlite.dungeon.map.DungeonScanner.rooms.getOrNull(mobComp.getRoomIdx()) else null
+
+        if (playerRoom != null && mobRoom != null) {
+            return playerRoom === mobRoom
+        }
+        if (playerRoom != null) {
+            return playerRoom.comps.any { it.cx / 2 == mobComp.x / 2 && it.cz / 2 == mobComp.z / 2 }
+        }
+        if (mobRoom != null) {
+            return mobRoom.comps.any { it.cx / 2 == playerComp.x / 2 && it.cz / 2 == playerComp.z / 2 }
+        }
+        return playerComp.x / 2 == mobComp.x / 2 && playerComp.z / 2 == mobComp.z / 2
+    }
+
     private fun queueBoxes() {
         if (!Config.starMobEspEnabled || !DungeonContext.inDungeon) return
-        val level = Minecraft.getInstance().level ?: return
+        val mc = Minecraft.getInstance()
+        val level = mc.level ?: return
+        val player = mc.player ?: return
+
+        renderLogTicks++
+        if (renderLogTicks % 40 == 0 || starMobs.size != lastRenderedCount) {
+            lastRenderedCount = starMobs.size
+            if (starMobs.isNotEmpty()) {
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP rendering ${starMobs.size} mobs: ${starMobs.entries.joinToString { "${it.key}:${it.value}" }}")
+            }
+        }
+
         for ((id, category) in starMobs) {
-            if (!isCategoryEnabled(category)) continue
             val entity = level.getEntity(id) ?: continue
+            if (entity.isRemoved || (entity is LivingEntity && (entity.isDeadOrDying || entity.health <= 0f))) continue
             val pos = entity.position()
+            // Restrict ESP to only mobs in the current room as the player
+            if (!isInSameRoom(pos, player.position())) continue
+
             val height = getHeight(entity, category)
             val color = colorFor(category)
             val r = ((color shr 16) and 0xFF) / 255f
@@ -192,7 +293,13 @@ object StarMobESP {
         }
     }
 
-    fun resetRun() {
+    fun resetRun(reason: String = "manual") {
+        if (starMobs.isNotEmpty() || playerMobMap.isNotEmpty()) {
+            AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP.resetRun() called! Reason: $reason, cleared ${starMobs.size} star mobs and ${playerMobMap.size} cached players")
+        }
         starMobs.clear()
+        playerMobMap.clear()
+        lastStandId = 0
+        lastRenderedCount = -1
     }
 }

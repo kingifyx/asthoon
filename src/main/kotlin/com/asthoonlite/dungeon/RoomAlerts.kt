@@ -85,9 +85,10 @@ object RoomAlerts {
             if (lastRoom === room && !wasCleared && isCleared && room.type !== RoomTypes.FAIRY && shouldTrigger) {
                 if (!Config.roomClearOnlyKey || room.doors.any { it.type === DoorTypes.WITHER || it.type === DoorTypes.BLOOD }) {
                     if (Config.roomClearAlertEnabled) {
+                        val msg = (if (room.totalSecrets == 0) "§a" else "") + "Cleared"
                         AlertHud.show(
-                            "Room Cleared!",
-                            0xFF00FF00.toInt(),
+                            msg,
+                            0xFFFFFFFF.toInt(),
                             SoundEvents.NOTE_BLOCK_PLING,
                             1.0f
                         )
@@ -95,16 +96,16 @@ object RoomAlerts {
                 }
             }
 
-            // Secrets Done alert: when current room transitions from WHITE to GREEN checkmark
+            // Secrets Done alert: when current room transitions from WHITE to GREEN checkmark (Noamm style)
             if (Config.roomSecretAlertEnabled && lastRoom === room &&
                 lastCheckmark === CheckmarkTypes.WHITE &&
                 room.checkmark === CheckmarkTypes.GREEN &&
                 room.totalSecrets > 0) {
                 AlertHud.show(
-                    "Secrets Done!",
-                    0xFF00C853.toInt(),
+                    "§aSecrets Done!",
+                    0xFF55FF55.toInt(),
                     SoundEvents.NOTE_BLOCK_PLING,
-                    1.35f
+                    1.0f
                 )
             }
 

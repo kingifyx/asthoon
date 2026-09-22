@@ -149,8 +149,9 @@ object DungeonScanner {
 
     private fun checkRoomState() {
         for (room in rooms) {
-            if (room == null || room.rotation != -1) continue
-            room.findRotation()
+            if (room == null) continue
+            if (room.name == null) room.scan()
+            if (room.rotation == -1) room.findRotation()
         }
     }
 

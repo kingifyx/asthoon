@@ -1,14 +1,23 @@
 package com.asthoonlite.mixin
 
+import com.asthoonlite.AsthoonLite
 import com.asthoonlite.dungeon.DragonPhase
+import com.asthoonlite.dungeon.DungeonContext
 import com.asthoonlite.dungeon.DungeonTimers
+import com.asthoonlite.dungeon.StarMobESP
 import com.asthoonlite.dungeon.map.DungeonMapScanner
 import com.asthoonlite.dungeon.solvers.CampHelper
+import com.asthoonlite.dungeon.solvers.TicTacToeSolver
+import com.asthoonlite.dungeon.solvers.TeleportMazeSolver
 import net.minecraft.client.multiplayer.ClientPacketListener
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket
 import net.minecraft.network.protocol.game.ClientboundMapItemDataPacket
 import net.minecraft.network.protocol.game.ClientboundMoveEntityPacket
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket
+import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket
+import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket
 import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket
+import net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket
 import net.minecraft.network.protocol.game.ClientboundSetTimePacket
 import net.minecraft.network.protocol.game.ClientboundSoundPacket
 import org.spongepowered.asm.mixin.Mixin
@@ -26,6 +35,13 @@ abstract class MixinClientPacketListener {
     @Inject(method = ["handleAddEntity"], at = [At("TAIL")])
     private fun asthoonlite_onAddEntity(packet: ClientboundAddEntityPacket, ci: CallbackInfo) {
         DragonPhase.onDragonPacket(packet)
+        StarMobESP.onAddEntity(packet)
+        TicTacToeSolver.onAddEntity(packet)
+    }
+
+    @Inject(method = ["handleMovePlayer"], at = [At("TAIL")])
+    private fun asthoonlite_onMovePlayer(packet: ClientboundPlayerPositionPacket, ci: CallbackInfo) {
+        TeleportMazeSolver.onPlayerPositionPacket(packet)
     }
 
     @Inject(method = ["handleSoundEvent"], at = [At("TAIL")])
@@ -54,7 +70,24 @@ abstract class MixinClientPacketListener {
 
     @Inject(method = ["handleMapItemData"], at = [At("TAIL")])
     private fun asthoonlite_onMapItemData(packet: ClientboundMapItemDataPacket, ci: CallbackInfo) {
+        AsthoonLite.LOGGER.info("[AsthoonLite-Debug] handleMapItemData: mapId=${packet.mapId().id()}, scale=${packet.scale()}, locked=${packet.locked()}, decorations=${packet.decorations().map { it.size }.orElse(0)}, colorPatch=${packet.colorPatch().isPresent}")
         DungeonMapScanner.onMapPacket(packet)
+    }
+
+    @Inject(method = ["handleSetEntityData"], at = [At("TAIL")])
+    private fun asthoonlite_onSetEntityData(packet: ClientboundSetEntityDataPacket, ci: CallbackInfo) {
+        StarMobESP.onEntityData(packet)
+    }
+
+    @Inject(method = ["handlePlayerInfoUpdate"], at = [At("TAIL")])
+    private fun asthoonlite_onPlayerInfoUpdate(packet: ClientboundPlayerInfoUpdatePacket, ci: CallbackInfo) {
+        DungeonContext.onPlayerInfoUpdate(packet)
+        StarMobESP.onPlayerInfoUpdate(packet)
+    }
+
+    @Inject(method = ["handleSetPlayerTeamPacket"], at = [At("TAIL")])
+    private fun asthoonlite_onSetPlayerTeam(packet: ClientboundSetPlayerTeamPacket, ci: CallbackInfo) {
+        DungeonContext.onSetPlayerTeam(packet)
     }
 
     @Inject(method = ["handleOpenScreen"], at = [At("HEAD")], cancellable = true)
@@ -70,4 +103,5 @@ abstract class MixinClientPacketListener {
         }
     }
 }
+
 

@@ -38,7 +38,11 @@ object CampHelper : HudElement {
     var watcherDialogFinished = false
     private var watcherKillAlertScheduled = false
 
+    private var registered = false
+
     fun register() {
+        if (registered) return
+        registered = true
         HudElementRegistry.addLast(
             Identifier.fromNamespaceAndPath("asthoonlite", "camp_helper"),
             this

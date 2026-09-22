@@ -34,13 +34,35 @@ object DungeonMap : HudElement {
         DungeonMapScanner.reset()
     }
 
-    override fun extractRenderState(context: GuiGraphicsExtractor, deltaTracker: DeltaTracker) {
-        if (!Config.dungeonMapEnabled || !DungeonContext.inDungeon) return
-        if (Config.dungeonMapHideInBoss && DungeonContext.inBoss) return
-        val mc = Minecraft.getInstance()
-        val player = mc.player ?: return
+    private var renderTicks = 0
+    private var lastRenderStateReason = ""
 
-        if (!Config.dungeonMapAlwaysShow && !isHoldingMap(player)) return
+    override fun extractRenderState(context: GuiGraphicsExtractor, deltaTracker: DeltaTracker) {
+        val mc = Minecraft.getInstance()
+        val player = mc.player
+        val earlyReturnReason = when {
+            !Config.dungeonMapEnabled -> "Config.dungeonMapEnabled is false"
+            !DungeonContext.inDungeon -> "DungeonContext.inDungeon is false"
+            Config.dungeonMapHideInBoss && DungeonContext.inBoss -> "inBoss is true and dungeonMapHideInBoss is true"
+            player == null -> "mc.player is null"
+            else -> null
+        }
+
+        if (earlyReturnReason != null || player == null) {
+            if (earlyReturnReason != null && earlyReturnReason != lastRenderStateReason) {
+                lastRenderStateReason = earlyReturnReason
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonMap not rendering: $earlyReturnReason")
+            }
+            return
+        }
+
+        renderTicks++
+        if (renderTicks % 60 == 0 || lastRenderStateReason.isNotEmpty()) {
+            lastRenderStateReason = ""
+            val nonNullRooms = DungeonScanner.rooms.filterNotNull().size
+            val nonNullDoors = DungeonScanner.doors.filterNotNull().size
+            AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonMap rendering: rooms=$nonNullRooms, doors=$nonNullDoors, icons=${DungeonMapScanner.playerIcons.size}, scale=${Config.dungeonMapScale}, pos=(${Config.dungeonMapX},${Config.dungeonMapY})")
+        }
 
         val scale = Config.dungeonMapScale.coerceIn(1f, 6f)
         val mapW = (BASE_SIZE * scale).toInt()
@@ -59,8 +81,10 @@ object DungeonMap : HudElement {
         val cellW = (mapW - cellGap * (GRID_SIZE + 1)) / GRID_SIZE
         val cellH = (mapH - cellGap * (GRID_SIZE + 1)) / GRID_SIZE
 
-        fun cellX(gx: Int): Float = cellGap + gx * (cellW + cellGap)
-        fun cellY(gz: Int): Float = cellGap + gz * (cellH + cellGap)
+        fun cellX(gx: Float): Float = cellGap + gx * (cellW + cellGap)
+        fun cellY(gz: Float): Float = cellGap + gz * (cellH + cellGap)
+        fun cellX(gx: Int): Float = cellX(gx.toFloat())
+        fun cellY(gz: Int): Float = cellY(gz.toFloat())
 
         // 1. Draw Rooms
         for (gz in 0 until GRID_SIZE) {
@@ -71,23 +95,27 @@ object DungeonMap : HudElement {
                 val x0 = cellX(gx)
                 val y0 = cellY(gz)
 
-                if (room == null || !room.explored) {
-                    if (Config.dungeonMapFullGrid && room != null) {
-                        val color = dim(colorForRoom(room.type), 0.35f)
-                        context.fill(x0.toInt(), y0.toInt(), (x0 + cellW).toInt(), (y0 + cellH).toInt(), color)
-                    } else if (Config.dungeonMapFullGrid) {
-                        context.fill(x0.toInt(), y0.toInt(), (x0 + cellW).toInt(), (y0 + cellH).toInt(), 0x33404040)
-                    }
+                if (room == null) {
                     continue
                 }
 
-                val color = colorForRoom(room.type)
+                if (!room.explored && !Config.dungeonMapFullGrid) {
+                    continue
+                }
+
+                val color = if (room.explored) {
+                    colorForRoom(room.type)
+                } else {
+                    if (room.type != RoomTypes.UNKNOWN) dim(colorForRoom(room.type), 0.65f)
+                    else 0xDD414141.toInt()
+                }
+
                 context.fill(x0.toInt(), y0.toInt(), (x0 + cellW).toInt(), (y0 + cellH).toInt(), color)
 
-                // Join components of same room
+                // Join components of same room (both explored and unopened when full grid is on)
                 if (gx + 1 < GRID_SIZE) {
                     val right = DungeonScanner.rooms.getOrNull(gz * 6 + gx + 1)
-                    if (right === room) {
+                    if (right === room && (room.explored || Config.dungeonMapFullGrid)) {
                         val jx0 = x0 + cellW
                         val jy0 = y0
                         context.fill(jx0.toInt(), jy0.toInt(), (jx0 + cellGap + 1).toInt(), (jy0 + cellH).toInt(), color)
@@ -95,7 +123,7 @@ object DungeonMap : HudElement {
                 }
                 if (gz + 1 < GRID_SIZE) {
                     val down = DungeonScanner.rooms.getOrNull((gz + 1) * 6 + gx)
-                    if (down === room) {
+                    if (down === room && (room.explored || Config.dungeonMapFullGrid)) {
                         val jx0 = x0
                         val jy0 = y0 + cellH
                         context.fill(jx0.toInt(), jy0.toInt(), (jx0 + cellW).toInt(), (jy0 + cellGap + 1).toInt(), color)
@@ -111,11 +139,16 @@ object DungeonMap : HudElement {
             val r2 = door.roomComp2
             val isHorizontal = r1.z == r2.z
 
+            // If not full grid, do not draw doors unless BOTH connecting rooms are explored
+            val r1Room = DungeonScanner.rooms.getOrNull(r1.z * 6 + r1.x)
+            val r2Room = DungeonScanner.rooms.getOrNull(r2.z * 6 + r2.x)
+            if (!Config.dungeonMapFullGrid && (r1Room?.explored != true || r2Room?.explored != true)) continue
+
             val color = when (door.type) {
                 DoorTypes.WITHER -> 0xFF000000.toInt()
                 DoorTypes.BLOOD -> 0xFFFF2222.toInt()
                 DoorTypes.ENTRANCE -> 0xFF148500.toInt()
-                DoorTypes.NORMAL -> if (door.opened) 0xFF5C340E.toInt() else continue
+                DoorTypes.NORMAL -> if (door.opened || Config.dungeonMapFullGrid) 0xFF5C340E.toInt() else continue
             }
 
             if (isHorizontal) {
@@ -140,43 +173,66 @@ object DungeonMap : HudElement {
         // 3. Draw Room Text / Checkmarks / Secrets
         val visitedRooms = HashSet<DungeonRoom>()
         for (room in DungeonScanner.rooms) {
-            if (room == null || !room.explored || !visitedRooms.add(room)) continue
-            val centerComp = room.comps.minByOrNull { it.cx + it.cz } ?: continue
-            val gx = centerComp.cx / 2
-            val gz = centerComp.cz / 2
-            val cx = cellX(gx) + cellW * 0.5f
-            val cy = cellY(gz) + cellH * 0.5f
+            if (room == null || !visitedRooms.add(room)) continue
+            if (!room.explored && !Config.dungeonMapFullGrid) continue
+            if (room.comps.isEmpty()) continue
 
-            // Checkmark
-            if (Config.dungeonMapShowCheckmarks && room.type != RoomTypes.ENTRANCE) {
-                if (!(Config.dungeonMapDontRenderFairyCheckmark && room.type == RoomTypes.FAIRY)) {
-                    val (checkStr, checkCol) = when (room.checkmark) {
-                        CheckmarkTypes.GREEN -> "✔" to 0xFF00FF00.toInt()
-                        CheckmarkTypes.WHITE -> "✔" to 0xFFFFFFFF.toInt()
-                        CheckmarkTypes.FAILED -> "✖" to 0xFFFF2222.toInt()
-                        else -> null to 0
+            val avgGx = room.comps.map { it.cx / 2f }.average().toFloat()
+            val avgGz = room.comps.map { it.cz / 2f }.average().toFloat()
+            val cx = cellX(avgGx) + cellW * 0.5f
+            val cy = cellY(avgGz) + cellH * 0.5f
+
+            val textScale = (cellW / 36f).coerceIn(0.55f, 1.0f)
+            val font = mc.font
+            val fontH = font.lineHeight * textScale
+
+            when (room.checkmark) {
+                CheckmarkTypes.GREEN -> {
+                    // Done: green check ✔
+                    context.pose().pushMatrix()
+                    context.pose().translate(cx, cy - fontH * 0.5f)
+                    context.pose().scale(textScale * 1.25f, textScale * 1.25f)
+                    context.centeredText(font, "✔", 0, 0, 0xFF55FF55.toInt())
+                    context.pose().popMatrix()
+                }
+                CheckmarkTypes.WHITE -> {
+                    // Cleared: secret count in white (or white checkmark if 0 secrets)
+                    val secStr = if (room.totalSecrets > 0) {
+                        val completed = if (room.secretsCompleted >= 0) room.secretsCompleted else 0
+                        "$completed/${room.totalSecrets}"
+                    } else {
+                        "✔"
                     }
-                    if (checkStr != null) {
-                        context.centeredText(mc.font, checkStr, cx.toInt(), (cy - 4).toInt(), checkCol)
+                    context.pose().pushMatrix()
+                    context.pose().translate(cx, cy - fontH * 0.5f)
+                    context.pose().scale(textScale, textScale)
+                    context.centeredText(font, secStr, 0, 0, 0xFFFFFFFF.toInt())
+                    context.pose().popMatrix()
+                }
+                CheckmarkTypes.FAILED -> {
+                    // Failed: red cross ✖
+                    context.pose().pushMatrix()
+                    context.pose().translate(cx, cy - fontH * 0.5f)
+                    context.pose().scale(textScale * 1.25f, textScale * 1.25f)
+                    context.centeredText(font, "✖", 0, 0, 0xFFFF5555.toInt())
+                    context.pose().popMatrix()
+                }
+                else -> {
+                    // Uncleared: display proper room name in white
+                    val rawName = room.name
+                    if (rawName != null && room.type != RoomTypes.ENTRANCE) {
+                        val words = rawName.replace("\u200B", "- ").split(" ").filter { it.isNotBlank() }
+                        val startY = cy - (words.size * (fontH + 0.5f)) / 2f
+                        words.forEachIndexed { lineIdx, word ->
+                            val wy = startY + lineIdx * (fontH + 0.5f)
+                            context.pose().pushMatrix()
+                            context.pose().translate(cx, wy)
+                            context.pose().scale(textScale, textScale)
+                            context.centeredText(font, word, 0, 0, 0xFFFFFFFF.toInt())
+                            context.pose().popMatrix()
+                        }
                     }
                 }
-            }
-
-            // Room Name
-            if (Config.dungeonMapShowNames && room.name != null && room.type != RoomTypes.ENTRANCE && room.type != RoomTypes.BLOOD && room.type != RoomTypes.FAIRY) {
-                val skipYellow = Config.dungeonMapDontRenderYellowName && room.type == RoomTypes.YELLOW
-                val skipCommon = Config.dungeonMapDontRenderCommonNames && room.type == RoomTypes.NORMAL
-                if (!skipYellow && !skipCommon) {
-                    val shortName = abbreviateName(room.name!!)
-                    val nameY = if (Config.dungeonMapShowCheckmarks && room.checkmark != CheckmarkTypes.NONE) cy + 3 else cy - 3
-                    context.centeredText(mc.font, shortName, cx.toInt(), nameY.toInt(), 0xFFE0E0E0.toInt())
-                }
-            }
-
-            // Secret Count
-            if (Config.dungeonMapShowSecrets && room.totalSecrets > 0) {
-                val secStr = if (room.secretsCompleted >= 0) "${room.secretsCompleted}/${room.totalSecrets}" else "${room.totalSecrets}s"
-                context.centeredText(mc.font, secStr, cx.toInt(), (cy + cellH * 0.3f).toInt(), 0xFFFFAA00.toInt())
             }
         }
 
@@ -198,9 +254,8 @@ object DungeonMap : HudElement {
 
         // Teammates from map scanner icons
         for (icon in DungeonMapScanner.playerIcons) {
-            val roomCenter = DungeonMapScanner.roomSize.toFloat() / (2 * DungeonMapScanner.roomGap)
-            val tx = cellX(0) + (icon.x.toFloat() / 2f - roomCenter) * (cellW + cellGap) + cellW * 0.5f
-            val tz = cellY(0) + (icon.z.toFloat() / 2f - roomCenter) * (cellH + cellGap) + cellH * 0.5f
+            val tx = cellX(0) + (icon.x.toFloat() / 2f) * (cellW + cellGap) + cellW * 0.5f
+            val tz = cellY(0) + (icon.z.toFloat() / 2f) * (cellH + cellGap) + cellH * 0.5f
             val yawDeg = Math.toDegrees(icon.rot)
             val skin = getPlayerSkin(icon.name)
 

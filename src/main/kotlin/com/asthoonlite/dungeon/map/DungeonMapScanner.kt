@@ -1,5 +1,6 @@
 package com.asthoonlite.dungeon.map
 
+import com.asthoonlite.AsthoonLite
 import com.asthoonlite.dungeon.DungeonContext
 import com.asthoonlite.dungeon.api.*
 import com.asthoonlite.dungeon.api.mapEnums.CheckmarkTypes
@@ -72,7 +73,12 @@ object DungeonMapScanner {
     }
 
     internal fun scanMapDimensions(colors: ByteArray, floor: FloorType): Boolean {
-        if (colors.size < COLOR_SIZE || floor == FloorType.None) return false
+        val f = if (floor != FloorType.None) floor else FloorType.M7
+        if (colors.size < COLOR_SIZE) {
+            AsthoonLite.LOGGER.warn("[AsthoonLite-Debug] scanMapDimensions: colors.size (${colors.size}) < COLOR_SIZE ($COLOR_SIZE)")
+            return false
+        }
+
         // Use the entrance's edges; ignore small green checkmarks and interior symbols.
         for (idx in 0 until COLOR_SIZE) {
             val x = idx % SCAN
@@ -84,26 +90,41 @@ object DungeonMapScanner {
             var height = 0
             while (colorAt(colors, x + width, z) == MapColors.ROOM_ENTRANCE.color) width++
             while (colorAt(colors, x, z + height) == MapColors.ROOM_ENTRANCE.color) height++
-            if (width !in 8..32 || width != height) continue
-            if ((width + ROOM_SPACING) * floor.roomsW - ROOM_SPACING > SCAN ||
-                (width + ROOM_SPACING) * floor.roomsH - ROOM_SPACING > SCAN) continue
+            if (width !in 8..32 || width != height) {
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] scanMapDimensions: candidate at ($x,$z) rejected width=$width, height=$height (not in 8..32 or non-square)")
+                continue
+            }
+            if ((width + ROOM_SPACING) * f.roomsW - ROOM_SPACING > SCAN ||
+                (width + ROOM_SPACING) * f.roomsH - ROOM_SPACING > SCAN) {
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] scanMapDimensions: candidate at ($x,$z) size ($width) exceeded SCAN for floor ${f.shortName}")
+                continue
+            }
             roomSize = width
             roomGap = roomSize + ROOM_SPACING
             mapOffsetX = x % roomGap
             mapOffsetZ = z % roomGap
-            mapWidth = roomGap * (floor.roomsW - 1) + roomSize
-            mapHeight = roomGap * (floor.roomsH - 1) + roomSize
+            mapWidth = roomGap * (f.roomsW - 1) + roomSize
+            mapHeight = roomGap * (f.roomsH - 1) + roomSize
             if (SCAN - mapWidth >= roomGap * 2) mapOffsetX += roomGap
             if (SCAN - mapHeight >= roomGap * 2) mapOffsetZ += roomGap
+            AsthoonLite.LOGGER.info("[AsthoonLite-Debug] scanMapDimensions SUCCESS: roomSize=$roomSize, roomGap=$roomGap, offset=($mapOffsetX,$mapOffsetZ), size=($mapWidth,$mapHeight), floor=${f.shortName}")
             return true
         }
+        AsthoonLite.LOGGER.warn("[AsthoonLite-Debug] scanMapDimensions: entrance NOT found in ${colors.size} bytes (nonZero=${colors.count { it != 0.toByte() }}, floor=${f.shortName})")
         return false
     }
 
     fun onMapPacket(packet: ClientboundMapItemDataPacket) {
-        if (!DungeonContext.inDungeon) return
-        if (packet.mapId() != inventoryMapId()) return
-        updateMap(packet.mapId())
+        val mapId = packet.mapId()
+        val invMapId = inventoryMapId()
+        AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonMapScanner.onMapPacket: packetMapId=${mapId.id()}, invMapId=${invMapId?.id()}")
+        if (invMapId != null && mapId != invMapId) {
+            if (mapId.id() and 1000 != 0) {
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonMapScanner.onMapPacket: filtered out mapId=${mapId.id()} (not inv map and matches mask)")
+                return
+            }
+        }
+        updateMap(mapId)
     }
 
     private fun inventoryMapId(): MapId? {
@@ -114,13 +135,26 @@ object DungeonMapScanner {
     }
 
     private fun updateMap(mapId: MapId) {
-        val level = Minecraft.getInstance().level ?: return
-        val mapState = level.getMapData(mapId) ?: return
+        val level = Minecraft.getInstance().level ?: run {
+            AsthoonLite.LOGGER.warn("[AsthoonLite-Debug] DungeonMapScanner.updateMap: mc.level is null")
+            return
+        }
+        val mapState = level.getMapData(mapId) ?: run {
+            AsthoonLite.LOGGER.warn("[AsthoonLite-Debug] DungeonMapScanner.updateMap: level.getMapData(${mapId.id()}) returned null")
+            return
+        }
         val colors = mapState.colors
-        if (colors.size < COLOR_SIZE || colors[0] != MapColors.EMPTY.color) return
-        if (lastMapId != null && lastMapId != mapId) reset()
-        if (roomSize == -1 && !scanMapDimensions(colors, DungeonContext.floor)) return
+        if (colors.size < COLOR_SIZE) {
+            AsthoonLite.LOGGER.warn("[AsthoonLite-Debug] DungeonMapScanner.updateMap: colors.size (${colors.size}) < COLOR_SIZE")
+            return
+        }
         lastMapId = mapId
+
+        val floor = if (DungeonContext.floor != FloorType.None) DungeonContext.floor else FloorType.M7
+        if (roomSize == -1 && !scanMapDimensions(colors, floor)) {
+            AsthoonLite.LOGGER.warn("[AsthoonLite-Debug] DungeonMapScanner.updateMap: roomSize is -1 and scanMapDimensions failed")
+            return
+        }
 
         updateRooms(colors)
         updatePlayerIcons(mapState.decorations.toList())
@@ -129,6 +163,11 @@ object DungeonMapScanner {
     private fun updatePlayerIcons(decorations: List<MapDecoration>) {
         if (roomGap <= 0) return
         val icons = mutableListOf<PlayerIcon>()
+        val mc = Minecraft.getInstance()
+        val localPlayer = mc.player
+        val onlinePlayers = mc.connection?.onlinePlayers?.filter { it.profile.name != localPlayer?.gameProfile?.name }?.toList() ?: emptyList()
+
+        var onlineIdx = 0
         decorations.forEach { dec ->
             if (dec.type().value() == MapDecorationTypes.FRAME.value()) return@forEach
             val x = MathUtils.rescale(
@@ -143,9 +182,13 @@ object DungeonMapScanner {
             )
             val r = -(dec.rot() / 16.0 * 360.0 + 90.0) / 180.0 * PI
             val name = dec.name().map { it.string }.orElse(null)
+                ?: onlinePlayers.getOrNull(onlineIdx++)?.profile?.name
             icons.add(PlayerIcon(x, z, r, name))
         }
         playerIcons = icons
+        if (decorations.isNotEmpty()) {
+            AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonMapScanner.updatePlayerIcons: ${decorations.size} decorations -> ${icons.size} player icons: ${icons.map { "${it.name}@(${it.x.toInt()},${it.z.toInt()})" }}")
+        }
     }
 
     internal fun colorAt(colors: ByteArray, x: Int, z: Int): Byte? =
@@ -172,9 +215,12 @@ object DungeonMapScanner {
             val room: DungeonRoom
             if (room_ == null) {
                 val comp = ComponentPosition(x * 2, z * 2)
-                room = DungeonRoom(mutableListOf(comp.withWorld()), 0)
+                room = DungeonRoom(mutableListOf(comp.withWorld()), 0).scan()
                 DungeonScanner.addRoom(comp, room)
-            } else room = room_
+            } else {
+                room = room_
+                if (room.name == null) room.scan()
+            }
 
             room.type = when (roomCol) {
                 MapColors.ROOM_ENTRANCE.color -> RoomTypes.ENTRANCE
@@ -260,7 +306,7 @@ object DungeonMapScanner {
     fun register() {
         // Map data can arrive before dungeon detection or before the map inventory slot.
         ClientTickEvents.END_CLIENT_TICK.register {
-            if (DungeonContext.inDungeon && ++scanTicks % 10 == 0) inventoryMapId()?.let(::updateMap)
+            if (DungeonContext.inDungeon && ++scanTicks % 10 == 0) (lastMapId ?: inventoryMapId())?.let(::updateMap)
         }
         ClientPlayConnectionEvents.JOIN.register { _, _, _ -> reset() }
         ClientPlayConnectionEvents.DISCONNECT.register { _, _ -> reset() }

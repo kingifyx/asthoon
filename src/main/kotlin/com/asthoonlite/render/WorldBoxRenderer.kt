@@ -1,6 +1,8 @@
 package com.asthoonlite.render
 
 import com.asthoonlite.AsthoonLite
+import com.mojang.blaze3d.pipeline.BlendFunction
+import com.mojang.blaze3d.pipeline.ColorTargetState
 import com.mojang.blaze3d.buffers.GpuBuffer
 import com.mojang.blaze3d.buffers.GpuBufferSlice
 import com.mojang.blaze3d.pipeline.RenderPipeline
@@ -26,6 +28,8 @@ import org.lwjgl.system.MemoryUtil
 import java.util.Optional
 import java.util.OptionalDouble
 import java.util.OptionalInt
+import kotlin.math.abs
+import kotlin.math.sqrt
 
 /**
  * Central world-space box renderer.
@@ -50,16 +54,27 @@ object WorldBoxRenderer {
         val throughWalls: Boolean = false
     )
 
+    data class Quad(
+        val x1: Double, val y1: Double, val z1: Double,
+        val x2: Double, val y2: Double, val z2: Double,
+        val x3: Double, val y3: Double, val z3: Double,
+        val x4: Double, val y4: Double, val z4: Double,
+        val r: Float, val g: Float, val b: Float, val a: Float,
+        val throughWalls: Boolean = false
+    )
+
     // Filled quads to draw this frame. Outline boxes are expanded into a
     // set of thin filled "slab" quads along each edge (12 per box) rather
     // than needing a separate LINES-mode pipeline — cheap, and renders at
     // any zoom without needing GL line-width support.
     private val filledQueue = ArrayList<Box>()
+    private val quadQueue = ArrayList<Quad>()
 
     private val PIPELINE: RenderPipeline = RenderPipelines.register(
         RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
             .withLocation(Identifier.fromNamespaceAndPath(AsthoonLite.MOD_ID, "pipeline/world_box"))
             .withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS)
+            .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
             .build()
     )
 
@@ -70,6 +85,7 @@ object WorldBoxRenderer {
         RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
             .withLocation(Identifier.fromNamespaceAndPath(AsthoonLite.MOD_ID, "pipeline/world_box_through_walls"))
             .withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS)
+            .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
             .withDepthStencilState(Optional.empty())
             .build()
     )
@@ -82,7 +98,10 @@ object WorldBoxRenderer {
     private var vertexBuffer: MappableRingBuffer? = null
 
     fun register() {
-        LevelRenderEvents.END_EXTRACTION.register { filledQueue.clear() }
+        LevelRenderEvents.END_EXTRACTION.register {
+            filledQueue.clear()
+            quadQueue.clear()
+        }
         LevelRenderEvents.AFTER_TRANSLUCENT_TERRAIN.register(::renderAndDraw)
     }
 
@@ -124,12 +143,58 @@ object WorldBoxRenderer {
         edge(x2 - t, y2 - t, z1, x2, y2, z2, r, g, b, a, throughWalls)
     }
 
+    fun queueLine(
+        x1: Double, y1: Double, z1: Double,
+        x2: Double, y2: Double, z2: Double,
+        r: Float, g: Float, b: Float, a: Float,
+        thickness: Double = 0.04,
+        throughWalls: Boolean = false
+    ) {
+        val dx = x2 - x1
+        val dy = y2 - y1
+        val dz = z2 - z1
+        val len = sqrt(dx * dx + dy * dy + dz * dz)
+        if (len < 1e-5) return
+
+        val t = thickness / 2.0
+        val (ux, uy, uz) = if (abs(dx) < abs(dy) && abs(dx) < abs(dz)) {
+            val uLen = sqrt(dy * dy + dz * dz).coerceAtLeast(1e-5)
+            Triple(0.0, -dz / uLen * t, dy / uLen * t)
+        } else {
+            val uLen = sqrt(dx * dx + dz * dz).coerceAtLeast(1e-5)
+            Triple(-dz / uLen * t, 0.0, dx / uLen * t)
+        }
+
+        val cx = dy * uz - dz * uy
+        val cy = dz * ux - dx * uz
+        val cz = dx * uy - dy * ux
+        val cLen = sqrt(cx * cx + cy * cy + cz * cz).coerceAtLeast(1e-5)
+        val vx = cx / cLen * t
+        val vy = cy / cLen * t
+        val vz = cz / cLen * t
+
+        val p1_0 = Triple(x1 + ux + vx, y1 + uy + vy, z1 + uz + vz)
+        val p1_1 = Triple(x1 - ux + vx, y1 - uy + vy, z1 - uz + vz)
+        val p1_2 = Triple(x1 - ux - vx, y1 - uy - vy, z1 - uz - vz)
+        val p1_3 = Triple(x1 + ux - vx, y1 + uy - vy, z1 + uz - vz)
+
+        val p2_0 = Triple(x2 + ux + vx, y2 + uy + vy, z2 + uz + vz)
+        val p2_1 = Triple(x2 - ux + vx, y2 - uy + vy, z2 - uz + vz)
+        val p2_2 = Triple(x2 - ux - vx, y2 - uy - vy, z2 - uz - vz)
+        val p2_3 = Triple(x2 + ux - vx, y2 + uy - vy, z2 + uz - vz)
+
+        quadQueue.add(Quad(p1_0.first, p1_0.second, p1_0.third, p1_1.first, p1_1.second, p1_1.third, p2_1.first, p2_1.second, p2_1.third, p2_0.first, p2_0.second, p2_0.third, r, g, b, a, throughWalls))
+        quadQueue.add(Quad(p1_1.first, p1_1.second, p1_1.third, p1_2.first, p1_2.second, p1_2.third, p2_2.first, p2_2.second, p2_2.third, p2_1.first, p2_1.second, p2_1.third, r, g, b, a, throughWalls))
+        quadQueue.add(Quad(p1_2.first, p1_2.second, p1_2.third, p1_3.first, p1_3.second, p1_3.third, p2_3.first, p2_3.second, p2_3.third, p2_2.first, p2_2.second, p2_2.third, r, g, b, a, throughWalls))
+        quadQueue.add(Quad(p1_3.first, p1_3.second, p1_3.third, p1_0.first, p1_0.second, p1_0.third, p2_0.first, p2_0.second, p2_0.third, p2_3.first, p2_3.second, p2_3.third, r, g, b, a, throughWalls))
+    }
+
     private fun edge(x1: Double, y1: Double, z1: Double, x2: Double, y2: Double, z2: Double, r: Float, g: Float, b: Float, a: Float, throughWalls: Boolean) {
         filledQueue.add(Box(x1, y1, z1, x2, y2, z2, r, g, b, a, throughWalls))
     }
 
     private fun renderAndDraw(context: LevelRenderContext) {
-        if (filledQueue.isEmpty()) return
+        if (filledQueue.isEmpty() && quadQueue.isEmpty()) return
 
         renderBoxes(context, throughWalls = false)
         drawBuffer(Minecraft.getInstance(), PIPELINE)
@@ -142,7 +207,8 @@ object WorldBoxRenderer {
         val matrices = context.poseStack()
         val camera = context.levelState().cameraRenderState.pos
         val boxes = filledQueue.asSequence().filter { it.throughWalls == throughWalls }.toList()
-        if (boxes.isEmpty()) return
+        val quads = quadQueue.asSequence().filter { it.throughWalls == throughWalls }.toList()
+        if (boxes.isEmpty() && quads.isEmpty()) return
 
         matrices.pushPose()
         matrices.translate(-camera.x, -camera.y, -camera.z)
@@ -154,8 +220,22 @@ object WorldBoxRenderer {
         for (box in boxes) {
             addFilledBox(pose, buffer!!, box)
         }
+        for (quad in quads) {
+            addQuad(pose, buffer!!, quad)
+        }
 
         matrices.popPose()
+    }
+
+    private fun addQuad(
+        pose: org.joml.Matrix4fc,
+        builder: BufferBuilder,
+        quad: Quad
+    ) {
+        builder.addVertex(pose, quad.x1.toFloat(), quad.y1.toFloat(), quad.z1.toFloat()).setColor(quad.r, quad.g, quad.b, quad.a)
+        builder.addVertex(pose, quad.x2.toFloat(), quad.y2.toFloat(), quad.z2.toFloat()).setColor(quad.r, quad.g, quad.b, quad.a)
+        builder.addVertex(pose, quad.x3.toFloat(), quad.y3.toFloat(), quad.z3.toFloat()).setColor(quad.r, quad.g, quad.b, quad.a)
+        builder.addVertex(pose, quad.x4.toFloat(), quad.y4.toFloat(), quad.z4.toFloat()).setColor(quad.r, quad.g, quad.b, quad.a)
     }
 
     private fun addFilledBox(

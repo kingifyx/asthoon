@@ -90,14 +90,19 @@ object AlertHud : HudElement {
             (255 * popup.ticksLeft / FADE_TICKS).coerceIn(0, 255)
         } else 255
 
-        val w = mc.window.guiScaledWidth
-        val textW = font.width(popup.text)
-        val x = (w - textW) / 2
-        val y = mc.window.guiScaledHeight / 4
+        val w = mc.window.guiScaledWidth.toFloat()
+        val h = mc.window.guiScaledHeight.toFloat()
+        val cx = w / 2f
+        val cy = h / 2f - (h * 0.056f)
 
-        val bgAlpha = (alpha * 0.7f).toInt().coerceIn(0, 255)
-        context.fill(x - 10, y - 6, x + textW + 10, y + font.lineHeight + 6, (bgAlpha shl 24) or 0x0D1F35)
+        val pose = context.pose()
+        pose.pushMatrix()
+        pose.translate(cx, cy)
+        pose.scale(2.5f, 2.5f)
+
         val textColor = (alpha shl 24) or (popup.color and 0x00FFFFFF)
-        context.text(font, popup.text, x, y, textColor)
+        context.centeredText(font, popup.text, 0, -font.lineHeight / 2, textColor)
+
+        pose.popMatrix()
     }
 }

@@ -47,17 +47,19 @@ object Config {
         var quizSolverEnabled       : Boolean = false,
         var weirdosSolverEnabled    : Boolean = false,
         var higherLowerSolverEnabled: Boolean = false,
+        var ticTacToeSolverEnabled  : Boolean = false,
+        var iceFillSolverEnabled    : Boolean = false,
+        var icePathSolverEnabled    : Boolean = false,
+        var waterBoardSolverEnabled : Boolean = false,
+        var boulderSolverEnabled    : Boolean = false,
+        var creeperBeamSolverEnabled: Boolean = false,
+        var teleportMazeSolverEnabled: Boolean = false,
+        var lividSolverEnabled      : Boolean = false,
         var starMobEspEnabled       : Boolean = false,
         var starMobEspThroughWalls : Boolean = false,
         // false = one flat color for every starred/miniboss mob (starMobColor).
         // true  = color-coded by mob category, like devonian's BoxStarMob.
         var starMobEspByType        : Boolean = false,
-        var starMobSa               : Boolean = false,
-        var starMobMiniboss         : Boolean = false,
-        var starMobChonk            : Boolean = false,
-        var starMobSm               : Boolean = false,
-        var starMobFel              : Boolean = false,
-        var starMobRegular          : Boolean = false,
         var starMobLineWidth        : Double  = 3.0,
         var starMobFillAlpha        : Double  = 0.25,
         var starMobShowFullShadow   : Boolean = true,
@@ -69,14 +71,14 @@ object Config {
         var starMobSmColor          : Int     = 0xFFFF8000.toInt(), // skeleton master
 
         var dungeonMapEnabled       : Boolean = false,
-        var dungeonMapAlwaysShow    : Boolean = false,
-        var dungeonMapFullGrid      : Boolean = false,
+        var dungeonMapAlwaysShow    : Boolean = true,
+        var dungeonMapFullGrid      : Boolean = true,
         var dungeonMapX             : Int     = 12,
         var dungeonMapY             : Int     = 42,
         var dungeonMapScale         : Float   = 1.66f,
-        var dungeonMapShowNames     : Boolean = false,
-        var dungeonMapShowSecrets   : Boolean = false,
-        var dungeonMapShowCheckmarks: Boolean = false,
+        var dungeonMapShowNames     : Boolean = true,
+        var dungeonMapShowSecrets   : Boolean = true,
+        var dungeonMapShowCheckmarks: Boolean = true,
         var dungeonMapDontRenderCommonNames : Boolean = false,
         var dungeonMapDontRenderYellowName : Boolean = false,
         var dungeonMapDontRenderFairyCheckmark : Boolean = false,
@@ -230,6 +232,38 @@ object Config {
         get() = data.higherLowerSolverEnabled
         set(v) { data.higherLowerSolverEnabled = v; save() }
 
+    var ticTacToeSolverEnabled: Boolean
+        get() = data.ticTacToeSolverEnabled
+        set(v) { data.ticTacToeSolverEnabled = v; save() }
+
+    var iceFillSolverEnabled: Boolean
+        get() = data.iceFillSolverEnabled
+        set(v) { data.iceFillSolverEnabled = v; save() }
+
+    var icePathSolverEnabled: Boolean
+        get() = data.icePathSolverEnabled
+        set(v) { data.icePathSolverEnabled = v; save() }
+
+    var waterBoardSolverEnabled: Boolean
+        get() = data.waterBoardSolverEnabled
+        set(v) { data.waterBoardSolverEnabled = v; save() }
+
+    var boulderSolverEnabled: Boolean
+        get() = data.boulderSolverEnabled
+        set(v) { data.boulderSolverEnabled = v; save() }
+
+    var creeperBeamSolverEnabled: Boolean
+        get() = data.creeperBeamSolverEnabled
+        set(v) { data.creeperBeamSolverEnabled = v; save() }
+
+    var teleportMazeSolverEnabled: Boolean
+        get() = data.teleportMazeSolverEnabled
+        set(v) { data.teleportMazeSolverEnabled = v; save() }
+
+    var lividSolverEnabled: Boolean
+        get() = data.lividSolverEnabled
+        set(v) { data.lividSolverEnabled = v; save() }
+
     var starMobEspEnabled: Boolean
         get() = data.starMobEspEnabled
         set(v) { data.starMobEspEnabled = v; save() }
@@ -242,30 +276,6 @@ object Config {
     var starMobEspByType: Boolean
         get() = data.starMobEspByType
         set(v) { data.starMobEspByType = v; save() }
-
-    var starMobSa: Boolean
-        get() = data.starMobSa
-        set(v) { data.starMobSa = v; save() }
-
-    var starMobMiniboss: Boolean
-        get() = data.starMobMiniboss
-        set(v) { data.starMobMiniboss = v; save() }
-
-    var starMobChonk: Boolean
-        get() = data.starMobChonk
-        set(v) { data.starMobChonk = v; save() }
-
-    var starMobSm: Boolean
-        get() = data.starMobSm
-        set(v) { data.starMobSm = v; save() }
-
-    var starMobFel: Boolean
-        get() = data.starMobFel
-        set(v) { data.starMobFel = v; save() }
-
-    var starMobRegular: Boolean
-        get() = data.starMobRegular
-        set(v) { data.starMobRegular = v; save() }
 
     var starMobLineWidth: Double
         get() = data.starMobLineWidth

@@ -1,11 +1,14 @@
 package com.asthoonlite.dungeon
 
+import com.asthoonlite.AsthoonLite
 import com.asthoonlite.dungeon.api.FloorType
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.minecraft.ChatFormatting
 import net.minecraft.client.Minecraft
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket
+import net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket
 import net.minecraft.world.scores.DisplaySlot
 import net.minecraft.world.scores.PlayerTeam
 import net.minecraft.world.scores.Objective
@@ -23,6 +26,7 @@ object DungeonContext {
         private set
 
     private var scoreboardMissingTicks = 0
+    private var lastLoggedLines: List<String> = emptyList()
     private val floorPattern = Regex("The Catacombs \\(([FM][1-7]|E)\\)", RegexOption.IGNORE_CASE)
 
     fun register() {
@@ -30,14 +34,17 @@ object DungeonContext {
             if (!overlay) onChat(ChatFormatting.stripFormatting(text.string) ?: "")
             true
         }
-        ClientPlayConnectionEvents.JOIN.register { _, _, _ -> reset() }
-        ClientPlayConnectionEvents.DISCONNECT.register { _, _ -> reset() }
+        ClientPlayConnectionEvents.JOIN.register { _, _, _ -> reset("ClientPlayConnectionEvents.JOIN") }
+        ClientPlayConnectionEvents.DISCONNECT.register { _, _ -> reset("ClientPlayConnectionEvents.DISCONNECT") }
         ClientTickEvents.END_CLIENT_TICK.register { tick() }
     }
 
     private fun onChat(message: String) {
         when {
-            message == "[NPC] Mort: Here, I found this map when I first entered the dungeon." -> activate()
+            message == "[NPC] Mort: Here, I found this map when I first entered the dungeon." -> {
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonContext: Mort map chat message detected.")
+                activate("Chat Mort")
+            }
             message.startsWith("[BOSS] Maxor:") ||
                 message.startsWith("[BOSS] Storm:") ||
                 message.startsWith("[BOSS] Goldor:") ||
@@ -48,15 +55,70 @@ object DungeonContext {
                 message.startsWith("[BOSS] Thorn:") ||
                 message.startsWith("[BOSS] Livid:") ||
                 message.startsWith("[BOSS] Sadan:") -> {
-                activate()
-                inBoss = true
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonContext: Boss chat detected: '$message'")
+                activate("Chat Boss")
+                if (!inBoss) {
+                    inBoss = true
+                    AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonContext: inBoss transitioned to TRUE.")
+                }
             }
             message.startsWith("[BOSS] The Watcher:") ||
-                message == "The BLOOD DOOR has been opened!" -> activate()
+                message == "The BLOOD DOOR has been opened!" -> {
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonContext: Blood/Watcher chat detected: '$message'")
+                activate("Chat Watcher/Blood")
+            }
+            message.contains("Sending to server", ignoreCase = true) ||
+                message.contains("Dungeon Hub", ignoreCase = true) ||
+                message.contains("You were spawned in Limbo", ignoreCase = true) -> {
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonContext: Exit chat detected: '$message'")
+                reset("Chat Exit: $message")
+            }
         }
     }
 
-    private fun activate() {
+    fun onSetPlayerTeam(packet: ClientboundSetPlayerTeamPacket) {
+        val params = packet.parameters.orElse(null) ?: return
+        val prefix = params.playerPrefix.string
+        val suffix = params.playerSuffix.string
+        val raw = prefix + suffix
+        val text = ChatFormatting.stripFormatting(raw) ?: raw
+        if (text.contains("The Catacombs (", ignoreCase = true) && !text.contains("Queue", ignoreCase = true)) {
+            AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonContext: TeamPacket matched Catacombs: '$text'")
+            floorPattern.find(text)?.let {
+                val detected = FloorType.from(it.groupValues[1])
+                if (floor != detected) {
+                    floor = detected
+                    AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonContext: Detected floor from TeamPacket: $floor")
+                }
+            }
+            activate("TeamPacket: $text")
+        }
+    }
+
+    fun onPlayerInfoUpdate(packet: ClientboundPlayerInfoUpdatePacket) {
+        val actions = packet.actions()
+        if (actions.contains(ClientboundPlayerInfoUpdatePacket.Action.UPDATE_DISPLAY_NAME) ||
+            actions.contains(ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER)) {
+            for (entry in packet.entries()) {
+                val display = entry.displayName?.string ?: continue
+                val text = ChatFormatting.stripFormatting(display) ?: display
+                if (text.startsWith("Area: ", ignoreCase = true) || text.startsWith("Dungeon: ", ignoreCase = true)) {
+                    AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonContext: TabList area entry: '$text'")
+                    if (text.contains("Catacombs", ignoreCase = true)) {
+                        activate("TabList: $text")
+                    } else if (inDungeon && !text.contains("Catacombs", ignoreCase = true)) {
+                        AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonContext: Left Catacombs according to TabList: '$text'")
+                        reset("TabList Left Catacombs: $text")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun activate(reason: String) {
+        if (!inDungeon) {
+            AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonContext.activate(): inDungeon transitioned from FALSE to TRUE! Reason: $reason")
+        }
         inDungeon = true
         scoreboardMissingTicks = 0
     }
@@ -65,13 +127,20 @@ object DungeonContext {
         val mc = Minecraft.getInstance()
         val level = mc.level
         if (level == null || mc.player == null) {
-            reset()
+            if (inDungeon) reset("Minecraft level or player is null")
             return
         }
 
         val scoreboard = level.scoreboard
         val objective = scoreboard.getDisplayObjective(DisplaySlot.SIDEBAR)
-        updateFromSidebar(sidebarLines(scoreboard, objective))
+        val lines = sidebarLines(scoreboard, objective)
+        if (lines != lastLoggedLines) {
+            lastLoggedLines = lines
+            if (lines.isNotEmpty()) {
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonContext: Sidebar updated (${lines.size} lines, obj='${objective?.name}'): [${lines.joinToString(" | ")}]")
+            }
+        }
+        updateFromSidebar(lines)
     }
 
     internal fun sidebarLines(scoreboard: Scoreboard, objective: Objective?): List<String> =
@@ -87,18 +156,27 @@ object DungeonContext {
         val hasDungeonScoreboard = lines.any { line ->
             line.contains("The Catacombs", ignoreCase = true) ||
                 line.contains("Completed Rooms:", ignoreCase = true) ||
-                line.contains("Secrets Found:", ignoreCase = true)
+                line.contains("Secrets Found:", ignoreCase = true) ||
+                line.contains("Time Elapsed:", ignoreCase = true) ||
+                line.contains("Cleared:", ignoreCase = true) ||
+                line.contains("Dungeon:", ignoreCase = true)
         }
 
         if (hasDungeonScoreboard) {
             lines.firstNotNullOfOrNull { floorPattern.find(it) }
-                ?.let { floor = FloorType.from(it.groupValues[1]) }
-            activate()
+                ?.let {
+                    val detected = FloorType.from(it.groupValues[1])
+                    if (floor != detected) {
+                        floor = detected
+                        AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonContext: Detected floor from Sidebar: $floor")
+                    }
+                }
+            activate("Sidebar lines")
         } else if (inDungeon) {
             scoreboardMissingTicks++
-            // Allow short scoreboard refresh gaps, but leave the dungeon
-            // shortly after the dungeon scoreboard disappears.
-            if (scoreboardMissingTicks > 80) reset()
+            if (scoreboardMissingTicks > 80) {
+                reset("Scoreboard missing for > 80 ticks")
+            }
         }
     }
 
@@ -110,10 +188,14 @@ object DungeonContext {
 
     fun sameRoom(a: Vec3, b: Vec3): Boolean = roomKey(a) == roomKey(b)
 
-    fun reset() {
+    fun reset(reason: String = "manual") {
+        if (inDungeon || inBoss || floor != FloorType.None) {
+            AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonContext.reset() called! Reason: $reason, wasInDungeon=$inDungeon, wasInBoss=$inBoss, wasFloor=$floor")
+        }
         inDungeon = false
         inBoss = false
         floor = FloorType.None
         scoreboardMissingTicks = 0
+        lastLoggedLines = emptyList()
     }
 }
