@@ -1,13 +1,15 @@
 package com.asthoonlite.dungeon
 
+import com.asthoonlite.dungeon.api.FloorType
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.minecraft.ChatFormatting
 import net.minecraft.client.Minecraft
-import net.minecraft.network.chat.Component
 import net.minecraft.world.scores.DisplaySlot
 import net.minecraft.world.scores.PlayerTeam
+import net.minecraft.world.scores.Objective
+import net.minecraft.world.scores.Scoreboard
 import net.minecraft.world.phys.Vec3
 import kotlin.math.round
 
@@ -17,8 +19,11 @@ object DungeonContext {
         private set
     @Volatile var inBoss: Boolean = false
         private set
+    var floor: FloorType = FloorType.None
+        private set
 
     private var scoreboardMissingTicks = 0
+    private val floorPattern = Regex("The Catacombs \\(([FM][1-7]|E)\\)", RegexOption.IGNORE_CASE)
 
     fun register() {
         ClientReceiveMessageEvents.ALLOW_GAME.register { text, overlay ->
@@ -66,18 +71,28 @@ object DungeonContext {
 
         val scoreboard = level.scoreboard
         val objective = scoreboard.getDisplayObjective(DisplaySlot.SIDEBAR)
-        val hasDungeonScoreboard = objective != null && scoreboard.listPlayerScores(objective).any { score ->
+        updateFromSidebar(sidebarLines(scoreboard, objective))
+    }
+
+    internal fun sidebarLines(scoreboard: Scoreboard, objective: Objective?): List<String> =
+        objective?.let { scoreboard.listPlayerScores(it) }.orEmpty().filterNot { it.isHidden }.map { score ->
             val name = score.owner
             val line = PlayerTeam.formatNameForTeam(
-                scoreboard.getPlayersTeam(name), Component.literal(name)
+                scoreboard.getPlayersTeam(name), score.ownerName()
             ).string
-            val clean = ChatFormatting.stripFormatting(line) ?: line
-            clean.contains("The Catacombs", ignoreCase = true) ||
-                clean.contains("Completed Rooms:", ignoreCase = true) ||
-                clean.contains("Secrets Found:", ignoreCase = true)
+            ChatFormatting.stripFormatting(line) ?: line
+        }
+
+    internal fun updateFromSidebar(lines: List<String>) {
+        val hasDungeonScoreboard = lines.any { line ->
+            line.contains("The Catacombs", ignoreCase = true) ||
+                line.contains("Completed Rooms:", ignoreCase = true) ||
+                line.contains("Secrets Found:", ignoreCase = true)
         }
 
         if (hasDungeonScoreboard) {
+            lines.firstNotNullOfOrNull { floorPattern.find(it) }
+                ?.let { floor = FloorType.from(it.groupValues[1]) }
             activate()
         } else if (inDungeon) {
             scoreboardMissingTicks++
@@ -98,6 +113,7 @@ object DungeonContext {
     fun reset() {
         inDungeon = false
         inBoss = false
+        floor = FloorType.None
         scoreboardMissingTicks = 0
     }
 }

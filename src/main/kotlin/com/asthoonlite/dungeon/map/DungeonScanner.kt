@@ -1,6 +1,5 @@
 package com.asthoonlite.dungeon.map
 
-import com.asthoonlite.config.Config
 import com.asthoonlite.dungeon.DungeonContext
 import com.asthoonlite.dungeon.api.*
 import com.asthoonlite.dungeon.api.mapEnums.CheckmarkTypes
@@ -70,7 +69,7 @@ object DungeonScanner {
         val level = Minecraft.getInstance().level ?: return -1
         var height = 0
         val mutable = BlockPos.MutableBlockPos(x, 0, z)
-        for (idx in 256 downTo 0) {
+        for (idx in minOf(256, level.maxY) downTo maxOf(0, level.minY)) {
             mutable.set(x, idx, z)
             if (!level.isLoaded(mutable)) return -1
             val blockState = level.getBlockState(mutable)

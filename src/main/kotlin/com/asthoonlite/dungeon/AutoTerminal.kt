@@ -28,8 +28,7 @@ object AutoTerminal {
     private var lastClickAt = 0L
     private var terminalOpenedAt = 0L
     private var suppressReopenUntil = 0L
-    private var lastWindowId = -1
-    private var lastMelodyWindowId = -1
+    private var lastTerminalTitle: String? = null
     private var firstClickPending = true
     private var currentClickDelayMs = 0L
     private val melodySkipQueue = ArrayDeque<Int>()
@@ -54,25 +53,19 @@ object AutoTerminal {
             return
         }
         val type = typeFor(title) ?: run { reset(); return }
-        if (!isTypeEnabled(type)) return
+        if (!isTypeEnabled(type)) { reset(); return }
 
         val player = mc.player ?: return
         val gameMode = mc.gameMode ?: return
         val now = System.currentTimeMillis()
         val windowId = screen.menu.containerId
 
-        // New terminal window opened: engage first-click delay once from opening
-        if (windowId != lastWindowId) {
-            lastWindowId = windowId
-            firstClickPending = true
-            terminalOpenedAt = now
-            lastClickAt = now
+        // Hypixel replaces the window ID after clicks; the terminal session continues.
+        if (beginTerminal(title, now)) {
             currentClickDelayMs = nextFirstClickDelayMs()
-            melodySkipQueue.clear()
 
             // Melody party announcement
-            if (type == Type.MELODY && Config.autoTerminalAnnounceMelody && windowId != lastMelodyWindowId) {
-                lastMelodyWindowId = windowId
+            if (type == Type.MELODY && Config.autoTerminalAnnounceMelody) {
                 val msg = Config.autoTerminalMelodyMessage.trim()
                 if (msg.isNotEmpty()) {
                     mc.player?.connection?.sendCommand("pc $msg")
@@ -81,19 +74,13 @@ object AutoTerminal {
         }
 
         // Delay timer check: first click delay applies ONLY to the first click from opening
-        if (firstClickPending) {
-            if (now - terminalOpenedAt < currentClickDelayMs) return
-        } else {
-            if (now - lastClickAt < currentClickDelayMs) return
-        }
+        if (!canClick(now)) return
 
         // Process queued Melody skip clicks first if available
         if (melodySkipQueue.isNotEmpty()) {
             val nextSlot = melodySkipQueue.removeFirst()
             gameMode.handleContainerInput(windowId, nextSlot, 0, ContainerInput.PICKUP, player)
-            lastClickAt = now
-            lastSlot = nextSlot
-            currentClickDelayMs = 40L // Rapid safe skip click
+            recordClick(now, nextSlot, 40L)
             return
         }
 
@@ -110,13 +97,29 @@ object AutoTerminal {
         val input = if (click.button == 0) ContainerInput.CLONE else ContainerInput.PICKUP
         gameMode.handleContainerInput(windowId, click.slot, button, input, player)
 
-        lastClickAt = now
-        lastSlot = click.slot
-        firstClickPending = false
-        currentClickDelayMs = nextClickDelayMs()
+        recordClick(now, click.slot, nextClickDelayMs())
     }
 
     private var lastSlot = -1
+
+    internal fun beginTerminal(title: String, now: Long): Boolean {
+        if (lastTerminalTitle == title) return false
+        reset()
+        lastTerminalTitle = title
+        terminalOpenedAt = now
+        lastClickAt = now
+        return true
+    }
+
+    internal fun canClick(now: Long): Boolean =
+        now - (if (firstClickPending) terminalOpenedAt else lastClickAt) >= currentClickDelayMs
+
+    internal fun recordClick(now: Long, slot: Int, delayMs: Long) {
+        lastClickAt = now
+        lastSlot = slot
+        firstClickPending = false
+        currentClickDelayMs = delayMs
+    }
 
     private data class Click(val slot: Int, val button: Int = 0)
     private enum class Type(val slotCount: Int) { COLORS(54), MELODY(54), NUMBERS(36), REDGREEN(45), RUBIX(45), STARTWITH(45) }
@@ -302,7 +305,7 @@ object AutoTerminal {
         lastClickAt = 0L
         terminalOpenedAt = 0L
         lastSlot = -1
-        lastWindowId = -1
+        lastTerminalTitle = null
         firstClickPending = true
         currentClickDelayMs = 0L
         melodySkipQueue.clear()

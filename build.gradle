@@ -40,6 +40,19 @@ kotlin {
     jvmToolchain(25)
 }
 
+tasks.register('regressionCheck', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.asthoonlite.dungeon.DungeonRegressionCheckKt'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
+    workingDir = layout.buildDirectory.dir('regression-check').get().asFile
+    doFirst { workingDir.mkdirs() }
+}
+
+tasks.named('check') { dependsOn 'regressionCheck' }
+// The checks above use Kotlin check(), without a test framework.
+tasks.named('test') { failOnNoDiscoveredTests = false }
+
 jar {
     from("LICENSE") {
         rename { "${it}_${project.base.archivesName.get()}" }
