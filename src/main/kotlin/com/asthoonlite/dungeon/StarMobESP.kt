@@ -33,7 +33,6 @@ object StarMobESP {
     }
 
     private val starMobs = LinkedHashMap<Int, MobCategory>()
-    private val pendingStands = LinkedHashMap<Int, String>()
 
     fun register() {
         ClientTickEvents.END_CLIENT_TICK.register { tick() }
@@ -45,7 +44,6 @@ object StarMobESP {
         val level = mc.level
         if (!Config.starMobEspEnabled || !DungeonContext.inDungeon || level == null) {
             starMobs.clear()
-            pendingStands.clear()
             return
         }
 
@@ -53,35 +51,28 @@ object StarMobESP {
 
         // Scan loaded armor stands continuously
         for (stand in level.getEntitiesOfClass(ArmorStand::class.java, localPlayer.boundingBox.inflate(96.0))) {
-            val raw = stand.name.string
+            val raw = stand.customName?.string ?: continue
             val name = ChatFormatting.stripFormatting(raw) ?: continue
             if (!name.contains("✯")) continue
             val normalized = name.uppercase()
-            pendingStands[stand.id] = normalized
-        }
-
-        val resolved = ArrayList<Int>()
-        for ((standId, name) in pendingStands) {
-            val stand = level.getEntity(standId) as? ArmorStand ?: continue
-            val offset = if (name.contains("WITHERMANCER")) 3 else 1
-            val direct = level.getEntity(standId - offset)
-            val mob = if (isCandidateMob(direct, mc.player)) direct else {
-                level.getEntities(stand, stand.boundingBox.move(0.0, -1.0, 0.0)) { entity ->
-                    isCandidateMob(entity, mc.player)
-                }.firstOrNull()
+            val offset = if (normalized.contains("WITHERMANCER")) 3 else 1
+            val direct = level.getEntity(stand.id - offset)
+            // Marker stands have zero-sized bounds. Include the mob below the nameplate.
+            val bounds = stand.boundingBox.move(0.0, -1.0, 0.0).inflate(0.5, 1.0, 0.5)
+            val mob = if (isCandidateMob(direct, localPlayer) && direct!!.boundingBox.intersects(bounds)) direct else {
+                level.getEntities(stand, bounds) { entity ->
+                    isCandidateMob(entity, localPlayer)
+                }.minByOrNull { it.distanceToSqr(stand) }
             }
             if (mob != null) {
-                starMobs[mob.id] = categorize(name)
-                resolved += standId
+                starMobs[mob.id] = categorize(normalized)
             }
         }
-        resolved.forEach { pendingStands.remove(it) }
 
         // Fake-player minibosses (Shadow Assassin, Lost Adventurer, Diamond Guy, King Midas)
         for (fake in level.getEntitiesOfClass(Player::class.java, localPlayer.boundingBox.inflate(128.0))) {
             if (fake == localPlayer) continue
-            val info = mc.connection?.getPlayerInfo(fake.uuid) ?: continue
-            categorizePlayer(info.profile.name)?.let { starMobs[fake.id] = it }
+            categorizePlayer(fake.gameProfile.name)?.let { starMobs[fake.id] = it }
         }
 
         // Fels (Enderman with name "Dinnerbone")
@@ -106,7 +97,8 @@ object StarMobESP {
     private fun isCandidateMob(entity: Entity?, local: Player?): Boolean = when {
         entity == null || entity is ArmorStand || entity.isRemoved -> false
         entity is net.minecraft.world.entity.ExperienceOrb -> false
-        entity is Player -> entity != local && !entity.isInvisible
+        entity is Player -> entity != local && entity.health > 0f &&
+            (entity.uuid.version() == 2 || categorizePlayer(entity.gameProfile.name) != null)
         entity is LivingEntity -> entity.health > 0f
         else -> false
     }
@@ -202,6 +194,5 @@ object StarMobESP {
 
     fun resetRun() {
         starMobs.clear()
-        pendingStands.clear()
     }
 }

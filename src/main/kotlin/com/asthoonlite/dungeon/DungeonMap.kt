@@ -8,7 +8,6 @@ import com.asthoonlite.dungeon.api.mapEnums.DoorTypes
 import com.asthoonlite.dungeon.api.mapEnums.RoomTypes
 import com.asthoonlite.dungeon.map.DungeonMapScanner
 import com.asthoonlite.dungeon.map.DungeonScanner
-import com.asthoonlite.utils.MathUtils
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElement
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
 import net.minecraft.client.DeltaTracker
@@ -16,10 +15,8 @@ import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.core.component.DataComponents
 import net.minecraft.resources.Identifier
-import net.minecraft.world.item.ItemStack
 import kotlin.math.cos
 import kotlin.math.sin
-import kotlin.math.max
 
 object DungeonMap : HudElement {
     private const val BASE_SIZE = 100f
@@ -184,11 +181,10 @@ object DungeonMap : HudElement {
         }
 
         // 4. Draw Teammate & Self Player Icons
-        val selfComp = WorldPosition(player.x.toInt(), player.z.toInt()).toComponent()
-        val selfGx = (selfComp.x.toFloat() / 2f).coerceIn(0f, 5f)
-        val selfGz = (selfComp.z.toFloat() / 2f).coerceIn(0f, 5f)
-        val selfPx = cellX(0) + (selfGx / 6f) * (mapW - cellGap * 2) + cellW * 0.5f
-        val selfPz = cellY(0) + (selfGz / 6f) * (mapH - cellGap * 2) + cellH * 0.5f
+        val selfGx = ((player.x - cornerStart.x - halfRoomSize) / roomDoorCombinedSize).toFloat().coerceIn(0f, 5f)
+        val selfGz = ((player.z - cornerStart.z - halfRoomSize) / roomDoorCombinedSize).toFloat().coerceIn(0f, 5f)
+        val selfPx = cellX(0) + selfGx * (cellW + cellGap) + cellW * 0.5f
+        val selfPz = cellY(0) + selfGz * (cellH + cellGap) + cellH * 0.5f
 
         val showNames = Config.dungeonMapPlayerNames && (!Config.dungeonMapNamesOnlyLeap || isHoldingLeap(player))
 
@@ -202,8 +198,9 @@ object DungeonMap : HudElement {
 
         // Teammates from map scanner icons
         for (icon in DungeonMapScanner.playerIcons) {
-            val tx = (icon.x.toFloat() / 12f) * mapW
-            val tz = (icon.z.toFloat() / 12f) * mapH
+            val roomCenter = DungeonMapScanner.roomSize.toFloat() / (2 * DungeonMapScanner.roomGap)
+            val tx = cellX(0) + (icon.x.toFloat() / 2f - roomCenter) * (cellW + cellGap) + cellW * 0.5f
+            val tz = cellY(0) + (icon.z.toFloat() / 2f - roomCenter) * (cellH + cellGap) + cellH * 0.5f
             val yawDeg = Math.toDegrees(icon.rot)
             val skin = getPlayerSkin(icon.name)
 
@@ -276,35 +273,15 @@ object DungeonMap : HudElement {
         color: Int
     ) {
         val arrow = (4.0 * scale).coerceAtLeast(3.0)
-        val yaw = Math.toRadians(yawDeg)
-        val dx = -sin(yaw)
-        val dz = cos(yaw)
-        val px = -dz
-        val pz = dx
-
-        val tipX = x + dx * arrow
-        val tipZ = z + dz * arrow
-        val leftX = x - dx * arrow * 0.65 + px * arrow * 0.65
-        val leftZ = z - dz * arrow * 0.65 + pz * arrow * 0.65
-        val rightX = x - dx * arrow * 0.65 - px * arrow * 0.65
-        val rightZ = z - dz * arrow * 0.65 - pz * arrow * 0.65
-
-        val minX = kotlin.math.floor(minOf(tipX, leftX, rightX)).toInt()
-        val maxX = kotlin.math.ceil(maxOf(tipX, leftX, rightX)).toInt()
-        val minZ = kotlin.math.floor(minOf(tipZ, leftZ, rightZ)).toInt()
-        val maxZ = kotlin.math.ceil(maxOf(tipZ, leftZ, rightZ)).toInt()
-
-        for (yy in minZ..maxZ) {
-            val t = if (maxZ == minZ) 0.5 else (yy - minZ).toDouble() / (maxZ - minZ)
-            val center = leftX + (rightX - leftX) * t
-            val half = (1.0 - t).coerceIn(0.0, 1.0) * arrow * 0.7
-            context.fill(
-                kotlin.math.floor(center - half).toInt(), yy,
-                kotlin.math.ceil(center + half).toInt() + 1, yy + 1,
-                color
-            )
+        context.pose().pushMatrix()
+        context.pose().translate(x, z)
+        context.pose().rotate(Math.toRadians(yawDeg).toFloat())
+        for (row in (-arrow * 0.65).toInt()..arrow.toInt()) {
+            val half = ((arrow - row) * 0.4).toInt()
+            context.fill(-half, row, half + 1, row + 1, color)
         }
-        context.fill((x - 1.0).toInt(), (z - 1.0).toInt(), (x + 2.0).toInt(), (z + 2.0).toInt(), 0xFF000000.toInt())
+        context.fill(-1, -1, 2, 2, 0xFF000000.toInt())
+        context.pose().popMatrix()
     }
 
     private fun colorForRoom(type: RoomTypes): Int = when (type) {

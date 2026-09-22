@@ -6,8 +6,10 @@ import com.asthoonlite.dungeon.api.mapEnums.CheckmarkTypes
 import com.asthoonlite.dungeon.api.mapEnums.DoorTypes
 import com.asthoonlite.dungeon.api.mapEnums.RoomTypes
 import com.asthoonlite.utils.MathUtils
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.minecraft.client.Minecraft
+import net.minecraft.core.component.DataComponents
 import net.minecraft.network.protocol.game.ClientboundMapItemDataPacket
 import net.minecraft.world.level.saveddata.maps.MapDecoration
 import net.minecraft.world.level.saveddata.maps.MapDecorationTypes
@@ -26,6 +28,7 @@ object DungeonMapScanner {
     var mapHeight = -1
     private val unscannedDoors = mutableSetOf<ComponentPosition>()
     private var lastMapId: MapId? = null
+    private var scanTicks = 0
     var playerIcons = mutableListOf<PlayerIcon>()
 
     data class PlayerIcon(val x: Double, val z: Double, val rot: Double, val name: String?)
@@ -45,6 +48,7 @@ object DungeonMapScanner {
         }
         playerIcons.clear()
         lastMapId = null
+        scanTicks = 0
     }
 
     private enum class MapColors(val color: Byte) {
@@ -67,63 +71,63 @@ object DungeonMapScanner {
         DOOR_BLOOD(18);
     }
 
-    private fun scanMapDimensions(colors: ByteArray): Boolean {
-        var entranceIdx = 0
-        var i = 0
-        while (entranceIdx < colors.size && colors[entranceIdx] != MapColors.ROOM_ENTRANCE.color) {
-            i++
-            entranceIdx = ((i and 7) shl 4) + ((i shr 3) shl 11)
+    internal fun scanMapDimensions(colors: ByteArray, floor: FloorType): Boolean {
+        if (colors.size < COLOR_SIZE || floor == FloorType.None) return false
+        // Use the entrance's edges; ignore small green checkmarks and interior symbols.
+        for (idx in 0 until COLOR_SIZE) {
+            val x = idx % SCAN
+            val z = idx / SCAN
+            if (colors[idx] != MapColors.ROOM_ENTRANCE.color ||
+                colorAt(colors, x - 1, z) == MapColors.ROOM_ENTRANCE.color ||
+                colorAt(colors, x, z - 1) == MapColors.ROOM_ENTRANCE.color) continue
+            var width = 0
+            var height = 0
+            while (colorAt(colors, x + width, z) == MapColors.ROOM_ENTRANCE.color) width++
+            while (colorAt(colors, x, z + height) == MapColors.ROOM_ENTRANCE.color) height++
+            if (width !in 8..32 || width != height) continue
+            if ((width + ROOM_SPACING) * floor.roomsW - ROOM_SPACING > SCAN ||
+                (width + ROOM_SPACING) * floor.roomsH - ROOM_SPACING > SCAN) continue
+            roomSize = width
+            roomGap = roomSize + ROOM_SPACING
+            mapOffsetX = x % roomGap
+            mapOffsetZ = z % roomGap
+            mapWidth = roomGap * (floor.roomsW - 1) + roomSize
+            mapHeight = roomGap * (floor.roomsH - 1) + roomSize
+            if (SCAN - mapWidth >= roomGap * 2) mapOffsetX += roomGap
+            if (SCAN - mapHeight >= roomGap * 2) mapOffsetZ += roomGap
+            return true
         }
-
-        if (entranceIdx >= colors.size) return false
-
-        var l = entranceIdx
-        var r = entranceIdx
-        while (l > 0 && colors[l - 1] == MapColors.ROOM_ENTRANCE.color) l--
-        while (r < colors.size - 1 && colors[r + 1] == MapColors.ROOM_ENTRANCE.color) r++
-
-        var t = entranceIdx
-        var b = entranceIdx
-        while (t >= SCAN && colors[t - SCAN] == MapColors.ROOM_ENTRANCE.color) t -= SCAN
-        while (b + SCAN < colors.size && colors[b + SCAN] == MapColors.ROOM_ENTRANCE.color) b += SCAN
-
-        l = l and 127
-        r = r and 127
-        t = t shr 7
-        b = b shr 7
-        roomSize = r - l + 1
-        roomGap = roomSize + ROOM_SPACING
-
-        mapOffsetX = l % roomGap
-        mapOffsetZ = t % roomGap
-
-        mapWidth = roomGap * 5 + roomSize
-        mapHeight = roomGap * 5 + roomSize
-
-        if (SCAN - mapWidth >= roomGap * 2) mapOffsetX += roomGap
-        if (SCAN - mapHeight >= roomGap * 2) mapOffsetZ += roomGap
-
-        return true
+        return false
     }
 
     fun onMapPacket(packet: ClientboundMapItemDataPacket) {
         if (!DungeonContext.inDungeon) return
-        val mapId = packet.mapId()
+        if (packet.mapId() != inventoryMapId()) return
+        updateMap(packet.mapId())
+    }
+
+    private fun inventoryMapId(): MapId? {
+        val inventory = Minecraft.getInstance().player?.inventory ?: return null
+        return (0 until inventory.containerSize).firstNotNullOfOrNull {
+            inventory.getItem(it).get(DataComponents.MAP_ID)
+        }
+    }
+
+    private fun updateMap(mapId: MapId) {
         val level = Minecraft.getInstance().level ?: return
         val mapState = level.getMapData(mapId) ?: return
         val colors = mapState.colors
-        if (colors.size < COLOR_SIZE) return
-
-        if (colors[0] != MapColors.EMPTY.color) lastMapId = mapId
-
-        if (roomSize == -1 && !scanMapDimensions(colors)) return
+        if (colors.size < COLOR_SIZE || colors[0] != MapColors.EMPTY.color) return
+        if (lastMapId != null && lastMapId != mapId) reset()
+        if (roomSize == -1 && !scanMapDimensions(colors, DungeonContext.floor)) return
+        lastMapId = mapId
 
         updateRooms(colors)
-        updatePlayerIcons(packet.decorations().orElse(emptyList()))
+        updatePlayerIcons(mapState.decorations.toList())
     }
 
     private fun updatePlayerIcons(decorations: List<MapDecoration>) {
-        if (decorations.isEmpty() || roomGap <= 0) return
+        if (roomGap <= 0) return
         val icons = mutableListOf<PlayerIcon>()
         decorations.forEach { dec ->
             if (dec.type().value() == MapDecorationTypes.FRAME.value()) return@forEach
@@ -144,6 +148,9 @@ object DungeonMapScanner {
         playerIcons = icons
     }
 
+    internal fun colorAt(colors: ByteArray, x: Int, z: Int): Byte? =
+        if (x in 0 until SCAN && z in 0 until SCAN) colors.getOrNull(x + z * SCAN) else null
+
     private fun updateRooms(colors: ByteArray) {
         val visited = mutableSetOf<DungeonRoom>()
         for (idx in DungeonScanner.rooms.indices) {
@@ -152,15 +159,13 @@ object DungeonMapScanner {
 
             val x = idx % 6
             val z = idx / 6
+            if (x * roomGap >= mapWidth || z * roomGap >= mapHeight) continue
             val mrx = mapOffsetX + x * roomGap
             val mrz = mapOffsetZ + z * roomGap
             val mcx = mrx + roomSize / 2 - 1
             val mcz = mrz + roomSize / 2 - 1 + 2
-            val mridx = mrx + mrz * SCAN
-            val mcidx = mcx + mcz * SCAN
-
-            val roomCol = colors.getOrNull(mridx) ?: continue
-            val centerCol = colors.getOrNull(mcidx) ?: continue
+            val roomCol = colorAt(colors, mrx, mrz) ?: continue
+            val centerCol = colorAt(colors, mcx, mcz) ?: continue
 
             if (roomCol == MapColors.EMPTY.color) continue
 
@@ -188,7 +193,8 @@ object DungeonMapScanner {
             }
 
             val nstate = roomCol != MapColors.ROOM_UNOPENED.color
-            room.explored = nstate
+            room.explored = nstate || room.clientExplored
+            if (nstate) room.clientExplored = false
 
             if (room.checkmark != CheckmarkTypes.GREEN) {
                 room.checkmark = if (roomCol == centerCol) CheckmarkTypes.NONE
@@ -210,11 +216,9 @@ object DungeonMapScanner {
             val mjz = mapOffsetZ + (comp.z / 2) * roomGap + (comp.z and 1) * roomSize
             val mdx = mjx + (comp.z and 1) * roomSize / 2
             val mdz = mjz + (comp.x and 1) * roomSize / 2
-            val mjidx = mjx + mjz * SCAN
-            val mdidx = mdx + mdz * SCAN
-
-            val joinedCol = colors.getOrNull(mjidx) ?: return@removeIf false
-            val doorCol = colors.getOrNull(mdidx) ?: return@removeIf false
+            if (mjx >= mapOffsetX + mapWidth || mjz >= mapOffsetZ + mapHeight) return@removeIf false
+            val joinedCol = colorAt(colors, mjx, mjz) ?: return@removeIf false
+            val doorCol = colorAt(colors, mdx, mdz) ?: return@removeIf false
 
             if (doorCol == MapColors.EMPTY.color) return@removeIf false
 
@@ -254,6 +258,10 @@ object DungeonMapScanner {
     }
 
     fun register() {
+        // Map data can arrive before dungeon detection or before the map inventory slot.
+        ClientTickEvents.END_CLIENT_TICK.register {
+            if (DungeonContext.inDungeon && ++scanTicks % 10 == 0) inventoryMapId()?.let(::updateMap)
+        }
         ClientPlayConnectionEvents.JOIN.register { _, _, _ -> reset() }
         ClientPlayConnectionEvents.DISCONNECT.register { _, _ -> reset() }
     }

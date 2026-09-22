@@ -77,7 +77,6 @@ class DungeonRoom(comps: List<WorldComponentPosition>, var height: Int) {
     }
 
     fun scan() = apply {
-        checkmark = CheckmarkTypes.UNEXPLORED
         val level = Minecraft.getInstance().level ?: return@apply
         for (comp in comps) {
             val x = comp.wx
