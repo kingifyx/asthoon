@@ -667,7 +667,8 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
     private fun autoClickerKeyLabel(): String {
         if (listeningForAutoClickerKey) return "Press a key (ESC = NONE)"
         val key = Config.autoClickerKey
-        if (key == InputConstants.UNKNOWN.value || key == GLFW.GLFW_KEY_UNKNOWN) return "Autoclicker Keybind: NONE"
+        if (key == InputConstants.UNKNOWN.value || key == GLFW.GLFW_KEY_UNKNOWN || key < 0) return "Autoclicker Keybind: NONE"
+        if (key in 0..7) return "Autoclicker Keybind: MOUSE $key"
         return "Autoclicker Keybind: ${InputConstants.Type.KEYSYM.getOrCreate(key).displayName.string.uppercase()}"
     }
 
@@ -675,6 +676,7 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
         if (listeningForInventoryAutoClickerKey) return "Press a key (ESC = NONE)"
         val key = Config.inventoryAutoClickerKey
         if (key == InputConstants.UNKNOWN.value || key == GLFW.GLFW_KEY_UNKNOWN || key < 0) return "Stash Macro Keybind: NONE"
+        if (key in 0..7) return "Stash Macro Keybind: MOUSE $key"
         return "Stash Macro Keybind: ${InputConstants.Type.KEYSYM.getOrCreate(key).displayName.string.uppercase()}"
     }
 
@@ -718,6 +720,23 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
     }
 
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
+        if (listeningForAutoClickerKey && event.button() != 0) {
+            Config.autoClickerKey = event.button()
+            listeningForAutoClickerKey = false
+            if (::btnAutoClickerKey.isInitialized) {
+                btnAutoClickerKey.message = Component.literal(autoClickerKeyLabel())
+            }
+            return true
+        }
+        if (listeningForInventoryAutoClickerKey && event.button() != 0) {
+            Config.inventoryAutoClickerKey = event.button()
+            listeningForInventoryAutoClickerKey = false
+            if (::btnInventoryAutoClickerKey.isInitialized) {
+                btnInventoryAutoClickerKey.message = Component.literal(inventoryAutoClickerKeyLabel())
+            }
+            return true
+        }
+
         // First allow child widgets (buttons, sliders) to handle clicks
         if (super.mouseClicked(event, doubleClick)) return true
 

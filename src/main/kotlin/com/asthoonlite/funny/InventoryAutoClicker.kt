@@ -54,12 +54,26 @@ object InventoryAutoClicker {
         return false
     }
 
+    /**
+     * Intercepts mouse button clicks inside container screens for mouse button keybinds.
+     */
+    fun handleScreenMouseClicked(button: Int): Boolean {
+        if (!Config.inventoryAutoClickerEnabled) return false
+        val boundKey = Config.inventoryAutoClickerKey
+        if (boundKey in 0..9 && button == boundKey) {
+            toggleMacro()
+            return true
+        }
+        return false
+    }
+
     private fun toggleMacro() {
         isMacroActive = !isMacroActive
         val mc = Minecraft.getInstance()
         val player = mc.player ?: return
         val status = if (isMacroActive) "§aACTIVE" else "§cINACTIVE"
         val msg = Component.literal("§7[AsthoonLite] Stash Macro: $status")
+        player.sendSystemMessage(msg)
         mc.gui.setOverlayMessage(msg, false)
         player.playSound(SoundEvents.UI_BUTTON_CLICK.value(), 0.5f, if (isMacroActive) 1.2f else 0.8f)
     }
@@ -96,11 +110,9 @@ object InventoryAutoClicker {
             previousKeyDown = false
         }
 
-        val isLeftMouseDown = GLFW.glfwGetMouseButton(window.handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS
-
-        // Active if toggled ON or if holding left-click
-        val isClicking = isMacroActive || isLeftMouseDown
-        if (!isClicking) {
+        // The stash macro ONLY runs when explicitly toggled ON.
+        // It never interferes with or hijacks regular manual mouse clicks when inactive.
+        if (!isMacroActive) {
             reset()
             return
         }
@@ -108,22 +120,29 @@ object InventoryAutoClicker {
         val screenAcc = screen as? AbstractContainerScreenAccessor ?: return
         val slot = screenAcc.hoveredSlot
         if (slot == null || !slot.hasItem()) {
-            wasMouseDown = false
             return
         }
 
         val now = System.currentTimeMillis()
-
-        if (!wasMouseDown && !isMacroActive) {
-            wasMouseDown = true
+        if (nextClickTime == 0L) {
             nextClickTime = now + calculateNextInterval(now, Config.inventoryAutoClickerCps.toDouble())
             return
         }
 
         if (now >= nextClickTime) {
             val player = mc.player ?: return
+            val gameMode = mc.gameMode ?: return
 
-            // Ensure cursor has no ghost item blocking clicks
+            // In "View Stash", right-click picks up a full 64-stack while left-click picks up 1 item.
+            // If the item lore indicates stack pickup, send right-click (button 1) for full stack pickup.
+            val isStackPickup = hasStackPickupLore(slot.item)
+            val button = if (isStackPickup) 1 else 0
+
+            gameMode.handleContainerInput(screen.menu.containerId, slot.index, button, ContainerInput.PICKUP, player)
+
+            // In Hypixel menus like View Stash, clicking an item transfers it straight into
+            // the player inventory. Clear client-side carried stack immediately so subsequent
+            // clicks don't attempt to place the item back into the container slot.
             if (!screen.menu.carried.isEmpty) {
                 screen.menu.carried = ItemStack.EMPTY
             }
@@ -131,10 +150,18 @@ object InventoryAutoClicker {
                 player.containerMenu.carried = ItemStack.EMPTY
             }
 
-            // QUICK_MOVE moves items directly from stash into inventory without putting them in cursor
-            screenAcc.invokeSlotClicked(slot, slot.index, 0, ContainerInput.QUICK_MOVE)
             nextClickTime = now + calculateNextInterval(now, Config.inventoryAutoClickerCps.toDouble())
         }
+    }
+
+    private fun hasStackPickupLore(stack: ItemStack): Boolean {
+        val lore = stack.get(net.minecraft.core.component.DataComponents.LORE) ?: return false
+        for (line in lore.lines) {
+            if (line.string.contains("Right-click to pickup a stack", ignoreCase = true)) {
+                return true
+            }
+        }
+        return false
     }
 
     private fun reset() {

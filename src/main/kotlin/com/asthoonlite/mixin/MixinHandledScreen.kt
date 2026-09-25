@@ -14,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo
 
 import com.asthoonlite.funny.InventoryAutoClicker
 import net.minecraft.client.input.KeyEvent
+import net.minecraft.client.input.MouseButtonEvent
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable
 
 // Confirmed against real 26.1.2 Mojang-mapped sources via javap:
@@ -29,6 +30,17 @@ abstract class MixinHandledScreen {
     )
     private fun asthoonlite_onContainerKeyPressed(event: KeyEvent, cir: CallbackInfoReturnable<Boolean>) {
         if (InventoryAutoClicker.handleScreenKeyPressed(event.key())) {
+            cir.returnValue = true
+        }
+    }
+
+    @Inject(
+        method = ["mouseClicked(Lnet/minecraft/client/input/MouseButtonEvent;Z)Z"],
+        at = [At("HEAD")],
+        cancellable = true
+    )
+    private fun asthoonlite_onContainerMouseClicked(event: MouseButtonEvent, doubleClick: Boolean, cir: CallbackInfoReturnable<Boolean>) {
+        if (InventoryAutoClicker.handleScreenMouseClicked(event.button())) {
             cir.returnValue = true
         }
     }
