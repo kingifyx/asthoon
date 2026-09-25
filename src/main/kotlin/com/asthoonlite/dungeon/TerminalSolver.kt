@@ -22,15 +22,16 @@ object TerminalSolver {
 
     fun colorFor(screenTitle: String, slot: Int, stack: ItemStack, all: List<ItemStack>): Int? {
         if (!Config.terminalSolverEnabled || slot < 0) return null
-        val type = typeFor(screenTitle)
+        val cleanTitle = ChatFormatting.stripFormatting(screenTitle)?.trim() ?: screenTitle.trim()
+        val type = typeFor(cleanTitle)
         val size = slotCount(type)
         if (slot >= size) return null
         val terminalAll = all.take(size)
         return when (type) {
             Type.PANES -> if (stack.`is`(Items.RED_STAINED_GLASS_PANE)) 0xCC55FFFF.toInt() else null
             Type.ORDER -> orderColor(slot, stack, terminalAll)
-            Type.SELECT -> selectColor(screenTitle, stack)
-            Type.STARTS -> startsColor(screenTitle, stack)
+            Type.SELECT -> selectColor(cleanTitle, stack)
+            Type.STARTS -> startsColor(cleanTitle, stack)
             Type.RUBIX -> rubixColor(slot, stack, terminalAll)
             Type.MELODY -> melodyColor(slot, stack, terminalAll)
             Type.NONE -> null
@@ -70,33 +71,40 @@ object TerminalSolver {
     }
 
     private fun selectColor(title: String, stack: ItemStack): Int? {
-        val m = Pattern.compile("Select all the (.+) items!", Pattern.CASE_INSENSITIVE).matcher(title)
-        if (!m.find() || stack.isEmpty || stack.get(DataComponents.ENCHANTMENT_GLINT_OVERRIDE) == true) return null
-        val wanted = normalizeColor(m.group(1))
-        val name = ChatFormatting.stripFormatting(stack.hoverName.string)?.lowercase(Locale.ROOT) ?: return null
-        return if (name.startsWith(wanted)) 0xCCFF55FF.toInt() else null
+        val m = Pattern.compile("Select all the (.+?) items!?", Pattern.CASE_INSENSITIVE).matcher(title)
+        if (!m.find() || stack.isEmpty || TerminalHelper.isSelected(stack)) return null
+        val wanted = m.group(1)
+        return if (TerminalHelper.matchesColor(stack, wanted)) 0xCCFF55FF.toInt() else null
     }
 
     private fun startsColor(title: String, stack: ItemStack): Int? {
-        val m = Pattern.compile("What starts with: '(.+)'\\?", Pattern.CASE_INSENSITIVE).matcher(title)
-        if (!m.find() || stack.isEmpty || stack.get(DataComponents.ENCHANTMENT_GLINT_OVERRIDE) == true) return null
+        val m = Pattern.compile("What starts with: '(.+?)'\\??", Pattern.CASE_INSENSITIVE).matcher(title)
+        if (!m.find() || stack.isEmpty || TerminalHelper.isSelected(stack)) return null
         val wanted = m.group(1).lowercase(Locale.ROOT)
         val name = ChatFormatting.stripFormatting(stack.hoverName.string)?.lowercase(Locale.ROOT) ?: return null
         return if (name.startsWith(wanted)) 0xCC55FF55.toInt() else null
     }
 
     private fun rubixColor(slot: Int, stack: ItemStack, all: List<ItemStack>): Int? {
-        val colors = listOf(
-            Items.BLUE_STAINED_GLASS_PANE,
-            Items.RED_STAINED_GLASS_PANE,
-            Items.ORANGE_STAINED_GLASS_PANE,
-            Items.YELLOW_STAINED_GLASS_PANE,
-            Items.GREEN_STAINED_GLASS_PANE
-        )
-        if (stack.item !in colors) return null
-        val counts = colors.associateWith { item -> all.count { it.item == item } }
-        val target = colors.maxByOrNull { counts[it] ?: 0 } ?: return null
-        return if (stack.item == target) 0xAA00E676.toInt() else 0xAAFFAA00.toInt()
+        val allowed = listOf(12, 13, 14, 21, 22, 23, 30, 31, 32)
+        if (slot !in allowed) return null
+
+        val panes = allowed.mapNotNull { s ->
+            val st = all.getOrNull(s) ?: return@mapNotNull null
+            val idx = TerminalHelper.rubixColorIndex(st)
+            if (idx >= 0) s to idx else null
+        }
+        if (panes.size < 9) return null
+
+        val costs = IntArray(5)
+        for (target in 0..4) {
+            for (p in panes) {
+                costs[target] += (target - p.second + 5) % 5
+            }
+        }
+        val target = costs.indices.minByOrNull { costs[it] } ?: return null
+        val currentIdx = TerminalHelper.rubixColorIndex(stack)
+        return if (currentIdx == target) 0xAA00E676.toInt() else 0xAAFFAA00.toInt()
     }
 
     private fun melodyColor(slot: Int, stack: ItemStack, all: List<ItemStack>): Int? {
@@ -116,18 +124,5 @@ object TerminalSolver {
             (slotCol == magentaCol && slotRow in 0..5) -> 0xAAE040FB.toInt()
             else -> null
         }
-    }
-
-    private fun normalizeColor(value: String): String = when (value.lowercase(Locale.ROOT)) {
-        "light gray" -> "silver"
-        "wool" -> "white"
-        "bone" -> "white"
-        "ink" -> "black"
-        "lapis" -> "blue"
-        "cocoa" -> "brown"
-        "dandelion" -> "yellow"
-        "rose" -> "red"
-        "cactus" -> "green"
-        else -> value.lowercase(Locale.ROOT)
     }
 }

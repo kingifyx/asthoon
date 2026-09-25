@@ -32,6 +32,7 @@ object AutoTerminal {
     private var firstClickPending = true
     private var currentClickDelayMs = 0L
     private val melodySkipQueue = ArrayDeque<Int>()
+    private val clickedSlots = mutableSetOf<Int>()
 
     private const val RUBIX_REPEAT_GUARD_MS = 70L
 
@@ -48,11 +49,12 @@ object AutoTerminal {
         val mc = Minecraft.getInstance()
         val screen = mc.screen as? AbstractContainerScreen<*> ?: run { reset(); return }
         val title = screen.title.string
-        if (suppressReopenUntil > System.currentTimeMillis() && typeFor(title) != null) {
+        val cleanTitle = ChatFormatting.stripFormatting(title)?.trim() ?: title.trim()
+        if (suppressReopenUntil > System.currentTimeMillis() && typeFor(cleanTitle) != null) {
             mc.setScreen(null)
             return
         }
-        val type = typeFor(title) ?: run { reset(); return }
+        val type = typeFor(cleanTitle) ?: run { reset(); return }
         if (!isTypeEnabled(type)) { reset(); return }
 
         val player = mc.player ?: return
@@ -61,7 +63,7 @@ object AutoTerminal {
         val windowId = screen.menu.containerId
 
         // Hypixel replaces the window ID after clicks; the terminal session continues.
-        if (beginTerminal(title, now)) {
+        if (beginTerminal(cleanTitle, now)) {
             currentClickDelayMs = nextFirstClickDelayMs()
 
             // Melody party announcement
@@ -79,7 +81,7 @@ object AutoTerminal {
         // Process queued Melody skip clicks first if available
         if (melodySkipQueue.isNotEmpty()) {
             val nextSlot = melodySkipQueue.removeFirst()
-            gameMode.handleContainerInput(windowId, nextSlot, 0, ContainerInput.PICKUP, player)
+            gameMode.handleContainerInput(windowId, nextSlot, 2, ContainerInput.CLONE, player)
             recordClick(now, nextSlot, 40L)
             return
         }
@@ -88,14 +90,14 @@ object AutoTerminal {
         val size = type.slotCount
         if (slots.size < size) return
         val items = slots.take(size).map { it.item }
-        val click = nextClick(type, title, items) ?: return
+        val click = nextClick(type, cleanTitle, items) ?: return
 
         // Rubix repeat guard
         if (click.slot == lastSlot && type == Type.RUBIX && now - lastClickAt < RUBIX_REPEAT_GUARD_MS) return
 
-        val button = if (click.button == 0) 2 else click.button
-        val input = if (click.button == 0) ContainerInput.CLONE else ContainerInput.PICKUP
-        gameMode.handleContainerInput(windowId, click.slot, button, input, player)
+        // Always send middle-click (CLONE) in survival: Hypixel registers the menu click
+        // while the client-side inventory never moves items or desyncs slots into air.
+        gameMode.handleContainerInput(windowId, click.slot, 2, ContainerInput.CLONE, player)
 
         recordClick(now, click.slot, nextClickDelayMs())
     }
@@ -117,6 +119,7 @@ object AutoTerminal {
     internal fun recordClick(now: Long, slot: Int, delayMs: Long) {
         lastClickAt = now
         lastSlot = slot
+        clickedSlots.add(slot)
         firstClickPending = false
         currentClickDelayMs = delayMs
     }
@@ -124,7 +127,10 @@ object AutoTerminal {
     private data class Click(val slot: Int, val button: Int = 0)
     private enum class Type(val slotCount: Int) { COLORS(54), MELODY(54), NUMBERS(36), REDGREEN(45), RUBIX(45), STARTWITH(45) }
 
-    fun isTerminalTitle(title: String): Boolean = typeFor(title) != null
+    fun isTerminalTitle(title: String): Boolean {
+        val clean = ChatFormatting.stripFormatting(title)?.trim() ?: title.trim()
+        return typeFor(clean) != null
+    }
 
     private fun isTypeEnabled(type: Type): Boolean = when (type) {
         Type.COLORS -> Config.autoTermColors
@@ -147,36 +153,45 @@ object AutoTerminal {
 
     private fun nextClick(type: Type, title: String, items: List<ItemStack>): Click? = when (type) {
         Type.NUMBERS -> items.mapIndexedNotNull { i, stack ->
-            if (stack.`is`(Items.RED_STAINED_GLASS_PANE)) i to stack.count else null
+            if (i in clickedSlots) null
+            else if (stack.`is`(Items.RED_STAINED_GLASS_PANE)) i to stack.count
+            else null
         }
             .sortedBy { it.second }
             .take(NUMBER_TERM_COUNT)
             .minByOrNull { it.second }
             ?.let { Click(it.first) }
 
-        Type.REDGREEN -> items.indexOfFirst { it.`is`(Items.RED_STAINED_GLASS_PANE) }
-            .takeIf { it >= 0 }?.let { Click(it) }
+        Type.REDGREEN -> items.indices.firstOrNull { i ->
+            if (i in clickedSlots) false
+            else items[i].`is`(Items.RED_STAINED_GLASS_PANE)
+        }?.let { Click(it) }
 
         Type.COLORS -> {
-            val match = Regex("^Select all the (.+) items!$", RegexOption.IGNORE_CASE).matchEntire(title)
+            val match = Regex("Select all the (.+?) items!?", RegexOption.IGNORE_CASE).find(title)
                 ?: return null
-            val wanted = normalizeColor(match.groupValues[1])
-            items.indexOfFirst { stack ->
-                if (stack.isEmpty || stack.`is`(Items.BLACK_STAINED_GLASS_PANE)) return@indexOfFirst false
-                val name = ChatFormatting.stripFormatting(stack.hoverName.string)?.lowercase() ?: return@indexOfFirst false
-                name.startsWith(wanted) && stack.get(DataComponents.ENCHANTMENT_GLINT_OVERRIDE) != true
-            }.takeIf { it >= 0 }?.let { Click(it) }
+            val wanted = match.groupValues[1]
+            items.indices.firstOrNull { i ->
+                if (i in clickedSlots) return@firstOrNull false
+                val stack = items[i]
+                if (stack.isEmpty || stack.`is`(Items.BLACK_STAINED_GLASS_PANE)) return@firstOrNull false
+                if (TerminalHelper.isSelected(stack)) return@firstOrNull false
+                TerminalHelper.matchesColor(stack, wanted)
+            }?.let { Click(it) }
         }
 
         Type.STARTWITH -> {
-            val match = Regex("^What starts with: '(.+)'\\?$", RegexOption.IGNORE_CASE).matchEntire(title)
+            val match = Regex("What starts with: '(.+?)'\\??", RegexOption.IGNORE_CASE).find(title)
                 ?: return null
-            val wanted = match.groupValues[1].lowercase()
-            items.indexOfFirst { stack ->
-                if (stack.isEmpty) return@indexOfFirst false
-                val name = ChatFormatting.stripFormatting(stack.hoverName.string)?.lowercase() ?: return@indexOfFirst false
-                name.startsWith(wanted) && stack.get(DataComponents.ENCHANTMENT_GLINT_OVERRIDE) != true
-            }.takeIf { it >= 0 }?.let { Click(it) }
+            val wanted = match.groupValues[1].lowercase(java.util.Locale.ROOT)
+            items.indices.firstOrNull { i ->
+                if (i in clickedSlots) return@firstOrNull false
+                val stack = items[i]
+                if (stack.isEmpty || stack.`is`(Items.BLACK_STAINED_GLASS_PANE)) return@firstOrNull false
+                if (TerminalHelper.isSelected(stack)) return@firstOrNull false
+                val name = ChatFormatting.stripFormatting(stack.hoverName.string)?.lowercase(java.util.Locale.ROOT) ?: return@firstOrNull false
+                name.startsWith(wanted)
+            }?.let { Click(it) }
         }
 
         Type.RUBIX -> rubixClick(items)
@@ -184,37 +199,26 @@ object AutoTerminal {
     }
 
     private fun rubixClick(items: List<ItemStack>): Click? {
-        val allowed = intArrayOf(12, 13, 14, 21, 22, 23, 30, 31, 32)
-        val colors = listOf(
-            Items.BLUE_STAINED_GLASS_PANE,
-            Items.RED_STAINED_GLASS_PANE,
-            Items.ORANGE_STAINED_GLASS_PANE,
-            Items.YELLOW_STAINED_GLASS_PANE,
-            Items.GREEN_STAINED_GLASS_PANE
-        )
-        val panes = allowed.toList().mapNotNull { slot ->
-            val item = items.getOrNull(slot)?.item ?: return@mapNotNull null
-            val idx = colors.indexOf(item)
+        val allowed = listOf(12, 13, 14, 21, 22, 23, 30, 31, 32)
+        val panes = allowed.mapNotNull { slot ->
+            val stack = items.getOrNull(slot) ?: return@mapNotNull null
+            val idx = TerminalHelper.rubixColorIndex(stack)
             if (idx >= 0) slot to idx else null
         }
-        if (panes.isEmpty()) return null
+        // Wait until all 9 panes are present/synced
+        if (panes.size < 9) return null
 
         val costs = IntArray(5)
-        for (target in 0..4) for ((_, current) in panes) {
-            val dist = abs(target - current)
-            costs[target] += if (dist > 2) 5 - dist else dist
+        for (target in 0..4) {
+            for (p in panes) {
+                costs[target] += (target - p.second + 5) % 5
+            }
         }
         val target = costs.indices.minByOrNull { costs[it] } ?: return null
-        val mismatch = panes.firstOrNull { (_, current) -> current != target } ?: return null
-        val current = mismatch.second
-        var diff = target - current
-        if (diff > 2) diff -= 5
-        if (diff < -2) diff += 5
-        return when {
-            diff > 0 -> Click(mismatch.first, 0)
-            diff < 0 -> Click(mismatch.first, 1)
-            else -> null
-        }
+        if (costs[target] == 0) return null // All 9 panes match target!
+
+        val mismatch = panes.firstOrNull { it.second != target } ?: return null
+        return Click(mismatch.first)
     }
 
     private fun melodyClick(items: List<ItemStack>): Click? {
@@ -283,19 +287,6 @@ object AutoTerminal {
         return gaussianRandom(lower, upper).toLong()
     }
 
-    private fun normalizeColor(value: String): String = when (value.lowercase()) {
-        "light gray" -> "silver"
-        "wool" -> "white"
-        "bone" -> "white"
-        "ink" -> "black"
-        "lapis" -> "blue"
-        "cocoa" -> "brown"
-        "dandelion" -> "yellow"
-        "rose" -> "red"
-        "cactus" -> "green"
-        else -> value.lowercase()
-    }
-
     fun onEscape() {
         suppressReopenUntil = System.currentTimeMillis() + 750L
         reset()
@@ -309,5 +300,6 @@ object AutoTerminal {
         firstClickPending = true
         currentClickDelayMs = 0L
         melodySkipQueue.clear()
+        clickedSlots.clear()
     }
 }
