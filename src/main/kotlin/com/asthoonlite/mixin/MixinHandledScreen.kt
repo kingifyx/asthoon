@@ -43,6 +43,17 @@ abstract class MixinHandledScreen {
         cancellable = true
     )
     private fun asthoonlite_onContainerMouseClicked(event: MouseButtonEvent, doubleClick: Boolean, cir: CallbackInfoReturnable<Boolean>) {
+        val self = (this as Any) as AbstractContainerScreen<*>
+        if (self.title.string.contains("Stash", ignoreCase = true)) {
+            InventoryAutoClicker.clearSkymyceWorthlessItems()
+            if (!self.menu.carried.isEmpty) {
+                self.menu.carried = ItemStack.EMPTY
+            }
+            val mc = Minecraft.getInstance()
+            if (mc.player != null && !mc.player!!.containerMenu.carried.isEmpty) {
+                mc.player!!.containerMenu.carried = ItemStack.EMPTY
+            }
+        }
         if (InventoryAutoClicker.handleScreenMouseClicked(event.button())) {
             cir.returnValue = true
         }
@@ -70,11 +81,11 @@ abstract class MixinHandledScreen {
 
         // Fix for Hypixel Stash (e.g. View Stash): prevents vanilla from clearing the slot item
         // and desyncing the cursor with a ghost item when manual clicking or picking up items.
-        if (slot != null && slot.hasItem()) {
+        val title = self.title.string
+        if (title.contains("Stash", ignoreCase = true) && slot != null && slot.hasItem()) {
             val mc = Minecraft.getInstance()
             val player = mc.player ?: return
-            val isTopContainer = slot.container != player.inventory
-            if (isTopContainer && (InventoryAutoClicker.hasStackPickupLore(slot.item) || InventoryAutoClicker.hasPickupLore(slot.item))) {
+            if (InventoryAutoClicker.isStashSlot(slot, title, player)) {
                 ci.cancel()
                 val gameMode = mc.gameMode ?: return
 
@@ -121,8 +132,11 @@ abstract class MixinHandledScreen {
         mouseY: Int,
         ci: CallbackInfo
     ) {
-        if (!Config.petMenuHighlightEnabled) return
         val self = (this as Any) as AbstractContainerScreen<*>
+        if (self.title.string.contains("Stash", ignoreCase = true)) {
+            InventoryAutoClicker.clearSkymyceWorthlessItems()
+        }
+        if (!Config.petMenuHighlightEnabled) return
         if (!self.title.string.startsWith("Pets")) return
 
         val stack = slot.item

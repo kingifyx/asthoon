@@ -133,12 +133,15 @@ object InventoryAutoClicker {
             return
         }
 
-        val player = mc.player ?: return
-        val isTopContainer = slot.container != player.inventory
-        val isStashItem = isTopContainer && (hasStackPickupLore(slot.item) || hasPickupLore(slot.item))
+        if (screen.title.string.contains("Stash", ignoreCase = true)) {
+            clearSkymyceWorthlessItems()
+        }
 
-        // When holding left-click, only auto-click if hovering over actual stash items
-        if (!isStashItem) {
+        val player = mc.player ?: return
+        val isStash = isStashSlot(slot, screen.title.string, player)
+
+        // When holding left-click or toggled active, only auto-click if hovering over actual stash items
+        if (!isStash) {
             wasMouseDown = false
             return
         }
@@ -154,11 +157,6 @@ object InventoryAutoClicker {
 
         if (nextClickTime == 0L) {
             nextClickTime = now + calculateNextInterval(now, Config.inventoryAutoClickerCps.toDouble())
-            return
-        }
-
-        // When inventory is completely full, pause clicking until space opens up (e.g. compactor or manual sell)
-        if (!canAcceptItems(player, slot.item)) {
             return
         }
 
@@ -186,13 +184,71 @@ object InventoryAutoClicker {
         }
     }
 
-    fun canAcceptItems(player: net.minecraft.world.entity.player.Player, stashItem: ItemStack): Boolean {
-        val inv = player.inventory
-        if (inv.freeSlot != -1) return true
-        for (i in 0 until 36) {
-            val stack = inv.getItem(i)
-            if (stack.isEmpty) return true
-            if (stack.item == stashItem.item && stack.count < stack.maxStackSize) {
+    /**
+     * Returns true if Control-click simulation is requested:
+     * Either the stash macro is currently active, or the player is interacting with a Stash GUI.
+     * When true, Minecraft.hasControlDown() and InputConstants.isKeyDown() will return true,
+     * bypassing item protection / worthless item block in mods like skymyce.
+     */
+    fun isControlSimulated(): Boolean {
+        if (isMacroActive) return true
+        val mc = Minecraft.getInstance()
+        val screen = mc.screen as? AbstractContainerScreen<*> ?: return false
+        if (!screen.title.string.contains("Stash", ignoreCase = true)) return false
+        val focused = screen.focused
+        if (focused is net.minecraft.client.gui.components.EditBox) return false
+        return true
+    }
+
+    /**
+     * Clears skymyce's worthlessItems set so it doesn't render red overlay boxes or block clicks.
+     */
+    fun clearSkymyceWorthlessItems() {
+        try {
+            val clazz = Class.forName("me.mycellium.skymyce.features.general.StashHelper")
+            val field = clazz.getDeclaredField("worthlessItems")
+            field.isAccessible = true
+            val set = field.get(null) as? MutableSet<*>
+            if (set != null && set.isNotEmpty()) {
+                set.clear()
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
+    /**
+     * Identifies stash items in the top container of a Stash screen.
+     */
+    fun isStashSlot(slot: net.minecraft.world.inventory.Slot, screenTitle: String, player: net.minecraft.world.entity.player.Player): Boolean {
+        if (!slot.hasItem()) return false
+        if (slot.container == player.inventory) return false
+        val stack = slot.item
+        if (isStashItem(stack)) return true
+        if (screenTitle.contains("Stash", ignoreCase = true)) {
+            val itemName = stack.item.toString().lowercase()
+            if (itemName.contains("glass_pane") || itemName.contains("barrier") || itemName.contains("arrow")) {
+                return false
+            }
+            return true
+        }
+        return false
+    }
+
+    fun isStashItem(stack: ItemStack): Boolean {
+        if (stack.isEmpty) return false
+        val name = stack.hoverName.string
+        if (name.contains(" x", ignoreCase = true)) return true
+
+        val lore = stack.get(net.minecraft.core.component.DataComponents.LORE) ?: return false
+        for (line in lore.lines) {
+            val text = line.string
+            if (text.contains("pickup", ignoreCase = true) ||
+                text.contains("claim", ignoreCase = true) ||
+                text.contains("inventory is full", ignoreCase = true) ||
+                text.contains("Bazaar", ignoreCase = true) ||
+                text.contains("NPC Sell", ignoreCase = true) ||
+                text.contains("Minion Fuel", ignoreCase = true) ||
+                text.contains("Collection Item", ignoreCase = true)) {
                 return true
             }
         }

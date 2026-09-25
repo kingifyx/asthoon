@@ -1,6 +1,7 @@
 package com.asthoonlite.mixin;
 
 import com.asthoonlite.config.Config;
+import com.asthoonlite.funny.InventoryAutoClicker;
 import com.asthoonlite.dungeon.ArrowAlignSolver;
 import com.asthoonlite.dungeon.DungeonContext;
 import com.asthoonlite.dungeon.F7Devices;
@@ -83,6 +84,13 @@ public abstract class MixinMinecraft {
     @Inject(method = "shouldEntityAppearGlowing", at = @At("HEAD"), cancellable = true)
     private void asthoonlite_forceStarGlow(Entity entity, CallbackInfoReturnable<Boolean> cir) {
         if (StarMobESP.INSTANCE.shouldForceGlow(entity)) cir.setReturnValue(true);
+    }
+
+    @Inject(method = "hasControlDown", at = @At("HEAD"), cancellable = true)
+    private void asthoonlite$stashControlDown(CallbackInfoReturnable<Boolean> cir) {
+        if (InventoryAutoClicker.INSTANCE.isControlSimulated()) {
+            cir.setReturnValue(true);
+        }
     }
 
 }

@@ -17,6 +17,8 @@
     "MixinLevelRenderer",
     "MixinMultiPlayerGameMode",
     "MixinMinecraft",
+    "MixinInputConstants",
+    "MixinMouseButtonEvent",
     "MinecraftAccessor",
     "AbstractContainerScreenAccessor"
   ],
