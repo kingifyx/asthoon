@@ -24,6 +24,8 @@ import com.asthoonlite.dungeon.map.DungeonMapScanner
 import com.asthoonlite.dungeon.map.DungeonScanner
 import com.asthoonlite.fishing.FishBiteAlert
 import com.asthoonlite.funny.AutoClicker
+import com.asthoonlite.funny.InventoryAutoClicker
+import com.asthoonlite.funny.WeaponAutoClicker
 import com.asthoonlite.hud.AlertHud
 import com.asthoonlite.mining.PickaxeAbilityTimer
 import com.asthoonlite.nucleus.AutoNucleusWarp
@@ -103,6 +105,8 @@ object AsthoonLite : ClientModInitializer {
 
         // ── Funny ─────────────────────────────────────────────────────────────
         AutoClicker.register()
+        WeaponAutoClicker.register()
+        InventoryAutoClicker.register()
 
         ClientTickEvents.END_CLIENT_TICK.register {
             DungeonServerTick.tick()

@@ -16,7 +16,9 @@
     "MixinLeverBlock",
     "MixinLevelRenderer",
     "MixinMultiPlayerGameMode",
-    "MixinMinecraft"
+    "MixinMinecraft",
+    "MinecraftAccessor",
+    "AbstractContainerScreenAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

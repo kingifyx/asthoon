@@ -525,7 +525,7 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 }),
             )
             Tab.FUNNY -> listOf(
-                SectionHeader("Autoclicker"),
+                SectionHeader("Right-Click Autoclicker"),
                 ToggleRow("Autoclicker", "Right-click autoclicker at configured CPS",
                     { Config.autoClickerEnabled }, { Config.autoClickerEnabled = it }),
                 WidgetRow(run {
@@ -538,6 +538,21 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 WidgetRow(IntSlider(subX, 0, subW, 24, 1, 500, Config.autoClickerCps, "Autoclicker CPS: ", " CPS") {
                     Config.autoClickerCps = it
                 }),
+
+                SectionHeader("Weapon Left-Click Macro"),
+                ToggleRow("Weapon Left-Click", "Simulates ~7 CPS left clicks when holding left click with Terminator, Claymore, Hyperion, or Slayer weapons",
+                    { Config.weaponAutoClickerEnabled }, { Config.weaponAutoClickerEnabled = it }),
+                WidgetRow(IntSlider(subX, 0, subW, 24, 4, 15, Config.weaponAutoClickerCps, "Weapon CPS: ", " CPS") {
+                    Config.weaponAutoClickerCps = it
+                }),
+
+                SectionHeader("Inventory Stash Macro"),
+                ToggleRow("Inventory Left-Click", "Simulates lower CPS humanized clicks when holding left click over inventory or stash items",
+                    { Config.inventoryAutoClickerEnabled }, { Config.inventoryAutoClickerEnabled = it }),
+                WidgetRow(IntSlider(subX, 0, subW, 24, 2, 12, Config.inventoryAutoClickerCps, "Inventory CPS: ", " CPS") {
+                    Config.inventoryAutoClickerCps = it
+                }),
+
                 SectionHeader("Simon Says"),
                 ToggleRow("I1 / Instant SS", "Instant start-button click for Simon Says",
                     { Config.instantSimonSaysEnabled }, { Config.instantSimonSaysEnabled = it }),

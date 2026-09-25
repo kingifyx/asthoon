@@ -167,6 +167,10 @@ object Config {
         var autoClickerEnabled      : Boolean = false,
         var autoClickerCps          : Int     = 10,
         var autoClickerKey           : Int     = -1,
+        var weaponAutoClickerEnabled : Boolean = false,
+        var weaponAutoClickerCps     : Int     = 7,
+        var inventoryAutoClickerEnabled : Boolean = false,
+        var inventoryAutoClickerCps     : Int     = 5,
     )
 
     var data = Data()
@@ -726,6 +730,22 @@ object Config {
     var autoClickerKey: Int
         get() = data.autoClickerKey
         set(v) { data.autoClickerKey = v; save() }
+
+    var weaponAutoClickerEnabled: Boolean
+        get() = data.weaponAutoClickerEnabled
+        set(v) { data.weaponAutoClickerEnabled = v; save() }
+
+    var weaponAutoClickerCps: Int
+        get() = data.weaponAutoClickerCps
+        set(v) { data.weaponAutoClickerCps = v.coerceIn(4, 15); save() }
+
+    var inventoryAutoClickerEnabled: Boolean
+        get() = data.inventoryAutoClickerEnabled
+        set(v) { data.inventoryAutoClickerEnabled = v; save() }
+
+    var inventoryAutoClickerCps: Int
+        get() = data.inventoryAutoClickerCps
+        set(v) { data.inventoryAutoClickerCps = v.coerceIn(2, 15); save() }
 
     fun load() {
         if (!configDir.exists()) configDir.mkdirs()
