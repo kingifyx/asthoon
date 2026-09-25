@@ -17,6 +17,9 @@ import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable
 
+import net.minecraft.client.Minecraft
+import net.minecraft.world.item.ItemStack
+
 // Confirmed against real 26.1.2 Mojang-mapped sources via javap:
 // protected void slotClicked(Slot, int, int, ContainerInput)
 // ClickType no longer exists; it was replaced by ContainerInput.
@@ -47,7 +50,8 @@ abstract class MixinHandledScreen {
 
     @Inject(
         method = ["slotClicked(Lnet/minecraft/world/inventory/Slot;IILnet/minecraft/world/inventory/ContainerInput;)V"],
-        at = [At("HEAD")]
+        at = [At("HEAD")],
+        cancellable = true
     )
     private fun asthoonlite_onSlotClick(
         slot: Slot?,
@@ -56,10 +60,42 @@ abstract class MixinHandledScreen {
         actionType: ContainerInput,
         ci: CallbackInfo
     ) {
-        val self = this as AbstractContainerScreen<*>
-        if (!self.title.string.startsWith("Pets")) return
-        if (slot == null) return
-        PetTracker.handleSlotClick(self, slot, slotId)
+        val self = (this as Any) as AbstractContainerScreen<*>
+        if (self.title.string.startsWith("Pets")) {
+            if (slot != null) {
+                PetTracker.handleSlotClick(self, slot, slotId)
+            }
+            return
+        }
+
+        // Fix for Hypixel Stash (e.g. View Stash): prevents vanilla from clearing the slot item
+        // and desyncing the cursor with a ghost item when manual clicking or picking up items.
+        if (slot != null && slot.hasItem()) {
+            val mc = Minecraft.getInstance()
+            val player = mc.player ?: return
+            val isTopContainer = slot.container != player.inventory
+            if (isTopContainer && (InventoryAutoClicker.hasStackPickupLore(slot.item) || InventoryAutoClicker.hasPickupLore(slot.item))) {
+                ci.cancel()
+                val gameMode = mc.gameMode ?: return
+
+                // If stack pickup is supported, use right-click (button 1) to claim full stacks into inventory
+                val targetButton = if (InventoryAutoClicker.hasStackPickupLore(slot.item)) 1 else button
+                val savedItem = slot.item.copy()
+
+                gameMode.handleContainerInput(self.menu.containerId, slot.index, targetButton, ContainerInput.PICKUP, player)
+
+                // Restore slot item so it never disappears on client
+                slot.set(savedItem)
+
+                // Clear client-side carried stack immediately so subsequent clicks don't desync
+                if (!self.menu.carried.isEmpty) {
+                    self.menu.carried = ItemStack.EMPTY
+                }
+                if (!player.containerMenu.carried.isEmpty) {
+                    player.containerMenu.carried = ItemStack.EMPTY
+                }
+            }
+        }
     }
 
     // Draws the pet-menu slot highlight right after each slot's item/overlay
@@ -86,7 +122,7 @@ abstract class MixinHandledScreen {
         ci: CallbackInfo
     ) {
         if (!Config.petMenuHighlightEnabled) return
-        val self = this as AbstractContainerScreen<*>
+        val self = (this as Any) as AbstractContainerScreen<*>
         if (!self.title.string.startsWith("Pets")) return
 
         val stack = slot.item
@@ -123,7 +159,7 @@ abstract class MixinHandledScreen {
         ci: CallbackInfo
     ) {
         if (!Config.terminalSolverEnabled) return
-        val self = this as AbstractContainerScreen<*>
+        val self = (this as Any) as AbstractContainerScreen<*>
         val title = self.title.string
         if (!title.startsWith("Correct all the panes!") &&
             !title.startsWith("Change all to same color!") &&

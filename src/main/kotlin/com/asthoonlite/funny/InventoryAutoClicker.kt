@@ -47,8 +47,9 @@ object InventoryAutoClicker {
     fun handleScreenKeyPressed(keyCode: Int): Boolean {
         if (!Config.inventoryAutoClickerEnabled) return false
         val boundKey = Config.inventoryAutoClickerKey
-        if (boundKey >= 0 && keyCode == boundKey) {
+        if (boundKey >= 10 && keyCode == boundKey) {
             toggleMacro()
+            previousKeyDown = true
             return true
         }
         return false
@@ -56,12 +57,14 @@ object InventoryAutoClicker {
 
     /**
      * Intercepts mouse button clicks inside container screens for mouse button keybinds.
+     * Button 0 (left-click) is never intercepted here to protect normal container clicks.
      */
     fun handleScreenMouseClicked(button: Int): Boolean {
         if (!Config.inventoryAutoClickerEnabled) return false
         val boundKey = Config.inventoryAutoClickerKey
-        if (boundKey in 0..9 && button == boundKey) {
+        if (boundKey in 1..9 && button == boundKey) {
             toggleMacro()
+            previousKeyDown = true
             return true
         }
         return false
@@ -94,25 +97,31 @@ object InventoryAutoClicker {
 
         val window = mc.window
 
-        // Poll keybind in tick loop as well for mouse buttons or modifier keys
+        // Poll keybind in tick loop to synchronize state and support outside-container or modifier toggles
         val boundKey = Config.inventoryAutoClickerKey
         if (boundKey >= 0) {
-            val isKeyDown = if (boundKey < 10) {
+            val isKeyDown = if (boundKey in 1..9) {
                 GLFW.glfwGetMouseButton(window.handle(), boundKey) == GLFW.GLFW_PRESS
             } else {
                 InputConstants.isKeyDown(window, boundKey)
             }
-            if (isKeyDown && !previousKeyDown) {
-                toggleMacro()
+            if (isKeyDown) {
+                if (!previousKeyDown) {
+                    toggleMacro()
+                    previousKeyDown = true
+                }
+            } else {
+                previousKeyDown = false
             }
-            previousKeyDown = isKeyDown
         } else {
             previousKeyDown = false
         }
 
-        // The stash macro ONLY runs when explicitly toggled ON.
-        // It never interferes with or hijacks regular manual mouse clicks when inactive.
-        if (!isMacroActive) {
+        val isLeftMouseDown = GLFW.glfwGetMouseButton(window.handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS
+
+        // Macro runs if toggled ACTIVE, or if holding left-click while hovering over stash items
+        val isClicking = isMacroActive || isLeftMouseDown
+        if (!isClicking) {
             reset()
             return
         }
@@ -120,17 +129,35 @@ object InventoryAutoClicker {
         val screenAcc = screen as? AbstractContainerScreenAccessor ?: return
         val slot = screenAcc.hoveredSlot
         if (slot == null || !slot.hasItem()) {
+            wasMouseDown = false
+            return
+        }
+
+        val player = mc.player ?: return
+        val isTopContainer = slot.container != player.inventory
+        val isStashItem = isTopContainer && (hasStackPickupLore(slot.item) || hasPickupLore(slot.item))
+
+        // When holding left-click, only auto-click if hovering over actual stash items
+        if (!isStashItem) {
+            wasMouseDown = false
             return
         }
 
         val now = System.currentTimeMillis()
+
+        // When holding left mouse button, initial click was handled by physical click
+        if (isLeftMouseDown && !isMacroActive && !wasMouseDown) {
+            wasMouseDown = true
+            nextClickTime = now + calculateNextInterval(now, Config.inventoryAutoClickerCps.toDouble())
+            return
+        }
+
         if (nextClickTime == 0L) {
             nextClickTime = now + calculateNextInterval(now, Config.inventoryAutoClickerCps.toDouble())
             return
         }
 
         if (now >= nextClickTime) {
-            val player = mc.player ?: return
             val gameMode = mc.gameMode ?: return
 
             // In "View Stash", right-click picks up a full 64-stack while left-click picks up 1 item.
@@ -138,11 +165,13 @@ object InventoryAutoClicker {
             val isStackPickup = hasStackPickupLore(slot.item)
             val button = if (isStackPickup) 1 else 0
 
+            val savedItem = slot.item.copy()
             gameMode.handleContainerInput(screen.menu.containerId, slot.index, button, ContainerInput.PICKUP, player)
 
-            // In Hypixel menus like View Stash, clicking an item transfers it straight into
-            // the player inventory. Clear client-side carried stack immediately so subsequent
-            // clicks don't attempt to place the item back into the container slot.
+            // Restore slot item so it never disappears on client
+            slot.set(savedItem)
+
+            // Clear client-side carried stack immediately so subsequent clicks don't desync
             if (!screen.menu.carried.isEmpty) {
                 screen.menu.carried = ItemStack.EMPTY
             }
@@ -154,10 +183,27 @@ object InventoryAutoClicker {
         }
     }
 
-    private fun hasStackPickupLore(stack: ItemStack): Boolean {
+    fun hasStackPickupLore(stack: ItemStack): Boolean {
+        if (stack.isEmpty) return false
         val lore = stack.get(net.minecraft.core.component.DataComponents.LORE) ?: return false
         for (line in lore.lines) {
-            if (line.string.contains("Right-click to pickup a stack", ignoreCase = true)) {
+            val text = line.string
+            if (text.contains("Right-click to pickup a stack", ignoreCase = true) ||
+                text.contains("pickup a stack", ignoreCase = true)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    fun hasPickupLore(stack: ItemStack): Boolean {
+        if (stack.isEmpty) return false
+        val lore = stack.get(net.minecraft.core.component.DataComponents.LORE) ?: return false
+        for (line in lore.lines) {
+            val text = line.string
+            if (text.contains("Left-click to pickup", ignoreCase = true) ||
+                text.contains("click to pickup", ignoreCase = true) ||
+                text.contains("click to claim", ignoreCase = true)) {
                 return true
             }
         }
