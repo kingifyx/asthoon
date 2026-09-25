@@ -6,6 +6,7 @@ import com.mojang.blaze3d.platform.InputConstants
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.AbstractWidget
+import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
@@ -107,6 +108,10 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
     private lateinit var btnDone: ModernButton
     private lateinit var btnAutoClickerKey: ModernButton
     private var listeningForAutoClickerKey = false
+    private lateinit var btnInventoryAutoClickerKey: ModernButton
+    private var listeningForInventoryAutoClickerKey = false
+    private lateinit var searchBox: EditBox
+    private var searchQuery = ""
     private var scrollOffset = 0
 
     private fun panelH() = (height - 24).coerceIn(360, 560)
@@ -115,7 +120,7 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
 
     private fun contentTop(): Int {
         val base = py() + HEADER_H + TAB_BAR_H
-        return if (activeTab == Tab.DUNGEON) base + DUNGEON_BAR_H + 8 else base + 8
+        return if (searchQuery.isEmpty() && activeTab == Tab.DUNGEON) base + DUNGEON_BAR_H + 8 else base + 8
     }
 
     private fun contentBottom(): Int = py() + panelH() - FOOTER_H
@@ -123,6 +128,27 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
     override fun init() {
         val px = px()
         val py = py()
+
+        // ── Header Search Box ────────────────────────────────────────────────
+        val searchX = px + 145
+        val searchW = PANEL_W - 145 - 34
+        searchBox = EditBox(font, searchX, py + 9, searchW, 20, Component.literal("Search..."))
+        searchBox.setHint(Component.literal("Search features..."))
+        searchBox.setResponder { query ->
+            if (query.isBlank()) {
+                if (searchQuery.isNotEmpty()) {
+                    searchQuery = ""
+                    scrollOffset = 0
+                    rebuildTab(activeTab)
+                }
+            } else {
+                scrollOffset = 0
+                rebuildSearch(query)
+            }
+        }
+        searchBox.setBordered(true)
+        searchBox.setTextColor(COL_TEXT_TITLE)
+        addRenderableWidget(searchBox)
 
         // ── Header Close button ───────────────────────────────────────────────
         btnClose = ModernButton(px + PANEL_W - 28, py + 9, 20, 20, Component.literal("✕")) { onClose() }
@@ -132,7 +158,11 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
         val tabW = (PANEL_W - 16) / Tab.entries.size
         tabButtons = Tab.entries.mapIndexed { i, tab ->
             ModernButton(px + 8 + i * tabW, py + HEADER_H, tabW, TAB_BAR_H, Component.literal(tab.label)) {
-                if (activeTab != tab) {
+                if (::searchBox.isInitialized && searchBox.value.isNotEmpty()) {
+                    searchBox.value = ""
+                }
+                if (activeTab != tab || searchQuery.isNotEmpty()) {
+                    searchQuery = ""
                     scrollOffset = 0
                     rebuildTab(tab)
                 }
@@ -149,6 +179,7 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
 
     private fun rebuildTab(tab: Tab) {
         activeTab = tab
+        searchQuery = ""
 
         // Remove old extra widgets & dungeon section buttons
         extraWidgets.forEach { removeWidget(it.first) }
@@ -156,6 +187,7 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
         dungeonSectionButtons.forEach { removeWidget(it) }
         dungeonSectionButtons.clear()
         listeningForAutoClickerKey = false
+        listeningForInventoryAutoClickerKey = false
 
         val px = px()
         val py = py()
@@ -214,6 +246,71 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
         }
         val viewport = (contentBottom() - contentTop()).coerceAtLeast(60)
         return (totalHeight - viewport).coerceAtLeast(0)
+    }
+
+    private fun getAllSearchableItems(px: Int): List<Pair<String, ToggleRow>> {
+        val list = mutableListOf<Pair<String, ToggleRow>>()
+
+        fun collect(category: String, items: List<ContentItem>) {
+            for (item in items) {
+                if (item is ToggleRow) {
+                    list.add(Pair(category, item))
+                }
+            }
+        }
+
+        val prevTab = activeTab
+        val prevSec = activeDungeonSection
+        for (tab in Tab.entries) {
+            if (tab == Tab.DUNGEON) {
+                for (section in DungeonSection.entries) {
+                    activeDungeonSection = section
+                    val items = buildItemsForTab(Tab.DUNGEON, px)
+                    collect("Dungeon - ${section.label}", items)
+                }
+            } else {
+                collect(tab.label, buildItemsForTab(tab, px))
+            }
+        }
+        activeTab = prevTab
+        activeDungeonSection = prevSec
+        return list
+    }
+
+    private fun rebuildSearch(query: String) {
+        searchQuery = query
+
+        extraWidgets.forEach { removeWidget(it.first) }
+        extraWidgets.clear()
+        dungeonSectionButtons.forEach { removeWidget(it) }
+        dungeonSectionButtons.clear()
+        listeningForAutoClickerKey = false
+        listeningForInventoryAutoClickerKey = false
+
+        val px = px()
+        val all = getAllSearchableItems(px)
+        val q = query.lowercase().trim()
+        val matched = all.filter { (_, row) ->
+            val cleanLabel = row.label.replace(Regex("^\\s*↳\\s*"), "")
+            cleanLabel.lowercase().contains(q) || row.subtitle.lowercase().contains(q)
+        }
+
+        val items = mutableListOf<ContentItem>()
+        if (matched.isEmpty()) {
+            items.add(SectionHeader("No results for \"$query\""))
+        } else {
+            val grouped = matched.groupBy { it.first }
+            for ((category, list) in grouped) {
+                items.add(SectionHeader(category))
+                for ((_, row) in list) {
+                    val cleanLabel = row.label.replace(Regex("^\\s*↳\\s*"), "")
+                    items.add(ToggleRow(cleanLabel, row.subtitle, row.get, row.set))
+                }
+            }
+        }
+
+        currentItems = items
+        updateWidgetPositions()
     }
 
     private fun buildItemsForTab(tab: Tab, px: Int): List<ContentItem> {
@@ -549,6 +646,13 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 SectionHeader("Inventory Stash Macro"),
                 ToggleRow("Inventory Left-Click", "Simulates lower CPS humanized clicks when holding left click over inventory or stash items",
                     { Config.inventoryAutoClickerEnabled }, { Config.inventoryAutoClickerEnabled = it }),
+                WidgetRow(run {
+                    btnInventoryAutoClickerKey = ModernButton(subX, 0, subW, 24, Component.literal(inventoryAutoClickerKeyLabel())) {
+                        listeningForInventoryAutoClickerKey = true
+                        btnInventoryAutoClickerKey.message = Component.literal("Press a key (ESC = NONE)")
+                    }
+                    btnInventoryAutoClickerKey
+                }),
                 WidgetRow(IntSlider(subX, 0, subW, 24, 2, 12, Config.inventoryAutoClickerCps, "Inventory CPS: ", " CPS") {
                     Config.inventoryAutoClickerCps = it
                 }),
@@ -567,6 +671,13 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
         return "Autoclicker Keybind: ${InputConstants.Type.KEYSYM.getOrCreate(key).displayName.string.uppercase()}"
     }
 
+    private fun inventoryAutoClickerKeyLabel(): String {
+        if (listeningForInventoryAutoClickerKey) return "Press a key (ESC = NONE)"
+        val key = Config.inventoryAutoClickerKey
+        if (key == InputConstants.UNKNOWN.value || key == GLFW.GLFW_KEY_UNKNOWN || key < 0) return "Stash Macro Keybind: NONE"
+        return "Stash Macro Keybind: ${InputConstants.Type.KEYSYM.getOrCreate(key).displayName.string.uppercase()}"
+    }
+
     override fun keyPressed(event: KeyEvent): Boolean {
         if (listeningForAutoClickerKey) {
             val keyCode = event.key()
@@ -580,6 +691,28 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 btnAutoClickerKey.message = Component.literal(autoClickerKeyLabel())
             }
             return true
+        }
+        if (listeningForInventoryAutoClickerKey) {
+            val keyCode = event.key()
+            Config.inventoryAutoClickerKey = if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+                InputConstants.UNKNOWN.value
+            } else {
+                keyCode
+            }
+            listeningForInventoryAutoClickerKey = false
+            if (::btnInventoryAutoClickerKey.isInitialized) {
+                btnInventoryAutoClickerKey.message = Component.literal(inventoryAutoClickerKeyLabel())
+            }
+            return true
+        }
+        if (::searchBox.isInitialized && searchBox.isFocused) {
+            if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+                if (searchBox.value.isNotEmpty()) {
+                    searchBox.value = ""
+                    return true
+                }
+                searchBox.isFocused = false
+            }
         }
         return super.keyPressed(event)
     }
@@ -609,6 +742,9 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                         val cardW = PANEL_W - 32 - indent
 
                         if (mx in cardX..(cardX + cardW) && my in itemY..(itemY + itemH)) {
+                            if (::searchBox.isInitialized && searchBox.isFocused) {
+                                searchBox.isFocused = false
+                            }
                             item.set(!item.get())
                             AbstractWidget.playButtonClickSound(minecraft.soundManager)
                             return true
@@ -672,15 +808,17 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
         context.text(font, ver, badgeX + 5, py + 15, 0xFF7DD3FC.toInt())
 
         // ── Tab Bar Active Underline ─────────────────────────────────────────
-        val tabW = (PANEL_W - 16) / Tab.entries.size
-        val activeIdx = Tab.entries.indexOf(activeTab)
-        if (activeIdx >= 0) {
-            val barX = px + 8 + activeIdx * tabW
-            context.fill(barX, py + HEADER_H + TAB_BAR_H - 2, barX + tabW, py + HEADER_H + TAB_BAR_H, COL_ACCENT)
+        if (searchQuery.isEmpty()) {
+            val tabW = (PANEL_W - 16) / Tab.entries.size
+            val activeIdx = Tab.entries.indexOf(activeTab)
+            if (activeIdx >= 0) {
+                val barX = px + 8 + activeIdx * tabW
+                context.fill(barX, py + HEADER_H + TAB_BAR_H - 2, barX + tabW, py + HEADER_H + TAB_BAR_H, COL_ACCENT)
+            }
         }
 
         // ── Dungeon Subcategory Indicator ────────────────────────────────────
-        if (activeTab == Tab.DUNGEON) {
+        if (searchQuery.isEmpty() && activeTab == Tab.DUNGEON) {
             val secW = (PANEL_W - 24) / DungeonSection.entries.size
             val activeSecIdx = DungeonSection.entries.indexOf(activeDungeonSection)
             if (activeSecIdx >= 0) {

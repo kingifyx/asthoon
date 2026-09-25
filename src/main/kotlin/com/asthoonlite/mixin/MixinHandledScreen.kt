@@ -12,11 +12,26 @@ import org.spongepowered.asm.mixin.injection.At
 import org.spongepowered.asm.mixin.injection.Inject
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo
 
+import com.asthoonlite.funny.InventoryAutoClicker
+import net.minecraft.client.input.KeyEvent
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable
+
 // Confirmed against real 26.1.2 Mojang-mapped sources via javap:
 // protected void slotClicked(Slot, int, int, ContainerInput)
 // ClickType no longer exists; it was replaced by ContainerInput.
 @Mixin(AbstractContainerScreen::class)
 abstract class MixinHandledScreen {
+
+    @Inject(
+        method = ["keyPressed(Lnet/minecraft/client/input/KeyEvent;)Z"],
+        at = [At("HEAD")],
+        cancellable = true
+    )
+    private fun asthoonlite_onContainerKeyPressed(event: KeyEvent, cir: CallbackInfoReturnable<Boolean>) {
+        if (InventoryAutoClicker.handleScreenKeyPressed(event.key())) {
+            cir.returnValue = true
+        }
+    }
 
     @Inject(
         method = ["slotClicked(Lnet/minecraft/world/inventory/Slot;IILnet/minecraft/world/inventory/ContainerInput;)V"],

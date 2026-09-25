@@ -6,13 +6,21 @@ import com.mojang.blaze3d.platform.InputConstants
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
+import net.minecraft.network.chat.Component
+import net.minecraft.sounds.SoundEvents
 import net.minecraft.world.inventory.ContainerInput
+import net.minecraft.world.item.ItemStack
 import org.lwjgl.glfw.GLFW
 import java.util.Random
 
 /**
- * Spams left-clicks in inventories/containers (such as claiming stash items)
- * at a lower, human-simulated CPS when holding down left-click over items.
+ * Spams clicks in inventories/containers (such as claiming stash items directly into
+ * the inventory) at a lower, human-simulated CPS via either:
+ * 1) A toggleable keybind that works even while inside container/stash GUIs.
+ * 2) Holding down left-click over items.
+ *
+ * Uses QUICK_MOVE (Shift-click) to move items straight into the player's inventory
+ * without cursor pickup desyncs or stuck items.
  */
 object InventoryAutoClicker {
 
@@ -21,6 +29,10 @@ object InventoryAutoClicker {
     private var lastDriftTime = 0L
     private var nextClickTime = 0L
     private var wasMouseDown = false
+    private var previousKeyDown = false
+
+    var isMacroActive = false
+        private set
 
     fun register() {
         ClientTickEvents.END_CLIENT_TICK.register {
@@ -28,22 +40,67 @@ object InventoryAutoClicker {
         }
     }
 
+    /**
+     * Intercepts key presses inside container screens so the stash macro keybind
+     * can toggle the macro while actively viewing the stash GUI.
+     */
+    fun handleScreenKeyPressed(keyCode: Int): Boolean {
+        if (!Config.inventoryAutoClickerEnabled) return false
+        val boundKey = Config.inventoryAutoClickerKey
+        if (boundKey >= 0 && keyCode == boundKey) {
+            toggleMacro()
+            return true
+        }
+        return false
+    }
+
+    private fun toggleMacro() {
+        isMacroActive = !isMacroActive
+        val mc = Minecraft.getInstance()
+        val player = mc.player ?: return
+        val status = if (isMacroActive) "§aACTIVE" else "§cINACTIVE"
+        val msg = Component.literal("§7[AsthoonLite] Stash Macro: $status")
+        mc.gui.setOverlayMessage(msg, false)
+        player.playSound(SoundEvents.UI_BUTTON_CLICK.value(), 0.5f, if (isMacroActive) 1.2f else 0.8f)
+    }
+
     private fun tick() {
-        if (!Config.inventoryAutoClickerEnabled) {
+        val mc = Minecraft.getInstance()
+        val screen = mc.screen as? AbstractContainerScreen<*> ?: run {
+            if (isMacroActive) isMacroActive = false
             reset()
             return
         }
 
-        val mc = Minecraft.getInstance()
-        val screen = mc.screen as? AbstractContainerScreen<*> ?: run {
+        if (!Config.inventoryAutoClickerEnabled) {
+            if (isMacroActive) isMacroActive = false
             reset()
             return
         }
+
         val window = mc.window
+
+        // Poll keybind in tick loop as well for mouse buttons or modifier keys
+        val boundKey = Config.inventoryAutoClickerKey
+        if (boundKey >= 0) {
+            val isKeyDown = if (boundKey < 10) {
+                GLFW.glfwGetMouseButton(window.handle(), boundKey) == GLFW.GLFW_PRESS
+            } else {
+                InputConstants.isKeyDown(window, boundKey)
+            }
+            if (isKeyDown && !previousKeyDown) {
+                toggleMacro()
+            }
+            previousKeyDown = isKeyDown
+        } else {
+            previousKeyDown = false
+        }
 
         val isLeftMouseDown = GLFW.glfwGetMouseButton(window.handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS
 
-        if (!isLeftMouseDown) {
+        // Active if toggled ON or if holding left-click
+        val isClicking = isMacroActive || isLeftMouseDown
+        if (!isClicking) {
             reset()
             return
         }
@@ -51,26 +108,31 @@ object InventoryAutoClicker {
         val screenAcc = screen as? AbstractContainerScreenAccessor ?: return
         val slot = screenAcc.hoveredSlot
         if (slot == null || !slot.hasItem()) {
-            // When hovering over empty slots, don't spam clicks
-            reset()
+            wasMouseDown = false
             return
         }
 
         val now = System.currentTimeMillis()
 
-        // First click is handled by the physical mouse-down event
-        if (!wasMouseDown) {
+        if (!wasMouseDown && !isMacroActive) {
             wasMouseDown = true
             nextClickTime = now + calculateNextInterval(now, Config.inventoryAutoClickerCps.toDouble())
             return
         }
 
         if (now >= nextClickTime) {
-            val isShiftDown = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_SHIFT) ||
-                    InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_SHIFT)
-            val inputType = if (isShiftDown) ContainerInput.QUICK_MOVE else ContainerInput.PICKUP
+            val player = mc.player ?: return
 
-            screenAcc.invokeSlotClicked(slot, slot.index, 0, inputType)
+            // Ensure cursor has no ghost item blocking clicks
+            if (!screen.menu.carried.isEmpty) {
+                screen.menu.carried = ItemStack.EMPTY
+            }
+            if (!player.containerMenu.carried.isEmpty) {
+                player.containerMenu.carried = ItemStack.EMPTY
+            }
+
+            // QUICK_MOVE moves items directly from stash into inventory without putting them in cursor
+            screenAcc.invokeSlotClicked(slot, slot.index, 0, ContainerInput.QUICK_MOVE)
             nextClickTime = now + calculateNextInterval(now, Config.inventoryAutoClickerCps.toDouble())
         }
     }

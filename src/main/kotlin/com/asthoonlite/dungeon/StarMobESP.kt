@@ -75,8 +75,8 @@ object StarMobESP {
             val uuid = packet.uuid
             val cat = playerMobMap[uuid]
             if (cat != null) {
-                starMobs[packet.id] = cat
-                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP: Player spawned matching miniboss uuid=$uuid, id=${packet.id}, cat=$cat")
+                // Miniboss players are only highlighted if they have a '✯' armor stand
+                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP: Miniboss player entity spawned id=${packet.id}, uuid=$uuid, cat=$cat")
             }
         }
     }
@@ -94,6 +94,12 @@ object StarMobESP {
         val offset = if (normalized.contains("WITHERMANCER")) 3 else 1
         val targetId = packet.id - offset
         val cat = categorize(normalized)
+        val mc = Minecraft.getInstance()
+        val level = mc.level
+        val direct = level?.getEntity(targetId)
+        if (direct != null && !isCandidateMob(direct, mc.player)) {
+            return
+        }
         if (!starMobs.containsKey(targetId)) {
             starMobs[targetId] = cat
             AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP: onEntityData armor stand id=${packet.id} with '✯' ('$name') -> targetMobId=$targetId, cat=$cat")
@@ -122,7 +128,7 @@ object StarMobESP {
             val offset = if (normalized.contains("WITHERMANCER")) 3 else 1
             val direct = level.getEntity(stand.id - offset)
             val mob = if (isCandidateMob(direct, localPlayer)) direct else {
-                val bounds = stand.boundingBox.move(0.0, -1.0, 0.0).inflate(1.2, 1.5, 1.2)
+                val bounds = stand.boundingBox.move(0.0, -1.0, 0.0).inflate(1.5, 2.5, 1.5)
                 level.getEntities(stand, bounds) { entity ->
                     isCandidateMob(entity, localPlayer)
                 }.minByOrNull { it.distanceToSqr(stand) }
@@ -131,25 +137,6 @@ object StarMobESP {
                 val cat = categorize(normalized)
                 starMobs[mob.id] = cat
                 AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP: Tick scan detected mob id=${mob.id} near stand id=${stand.id} ('$name'), cat=$cat")
-            }
-        }
-
-        // Fake-player minibosses (Shadow Assassin, Lost Adventurer, Diamond Guy, King Midas)
-        for (fake in level.getEntitiesOfClass(Player::class.java, localPlayer.boundingBox.inflate(128.0))) {
-            if (fake == localPlayer) continue
-            val cat = categorizePlayer(fake.gameProfile.name)
-            if (cat != null && !starMobs.containsKey(fake.id)) {
-                starMobs[fake.id] = cat
-                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP: Tick scan found miniboss player id=${fake.id}, name='${fake.gameProfile.name}', cat=$cat")
-            }
-        }
-
-        // Fels (Enderman with name "Dinnerbone")
-        for (enderman in level.getEntitiesOfClass(EnderMan::class.java, localPlayer.boundingBox.inflate(96.0))) {
-            val name = enderman.customName?.string
-            if (name == "Dinnerbone" && !starMobs.containsKey(enderman.id)) {
-                starMobs[enderman.id] = MobCategory.FEL
-                AsthoonLite.LOGGER.info("[AsthoonLite-Debug] StarMobESP: Found Fel id=${enderman.id}")
             }
         }
 
@@ -185,7 +172,7 @@ object StarMobESP {
 
     private fun categorize(name: String): MobCategory = when {
         name.contains("SHADOW ASSASSIN") -> MobCategory.SHADOW_ASSASSIN
-        name.contains("FELS") -> MobCategory.FEL
+        name.contains("FEL") -> MobCategory.FEL
         name.contains("SKELETON MASTER") -> MobCategory.SKELETON_MASTER
         name.contains("WITHERMANCER") || name.contains("LORD") ||
             name.contains("ZOMBIE COMMANDER") || name.contains("SUPER ARCHER") -> MobCategory.CHONK

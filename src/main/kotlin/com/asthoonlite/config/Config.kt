@@ -171,6 +171,7 @@ object Config {
         var weaponAutoClickerCps     : Int     = 7,
         var inventoryAutoClickerEnabled : Boolean = false,
         var inventoryAutoClickerCps     : Int     = 5,
+        var inventoryAutoClickerKey     : Int     = -1,
     )
 
     var data = Data()
@@ -746,6 +747,10 @@ object Config {
     var inventoryAutoClickerCps: Int
         get() = data.inventoryAutoClickerCps
         set(v) { data.inventoryAutoClickerCps = v.coerceIn(2, 15); save() }
+
+    var inventoryAutoClickerKey: Int
+        get() = data.inventoryAutoClickerKey
+        set(v) { data.inventoryAutoClickerKey = v; save() }
 
     fun load() {
         if (!configDir.exists()) configDir.mkdirs()
