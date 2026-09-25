@@ -157,13 +157,16 @@ object InventoryAutoClicker {
             return
         }
 
+        // When inventory is completely full, pause clicking until space opens up (e.g. compactor or manual sell)
+        if (!canAcceptItems(player, slot.item)) {
+            return
+        }
+
         if (now >= nextClickTime) {
             val gameMode = mc.gameMode ?: return
 
-            // In "View Stash", right-click picks up a full 64-stack while left-click picks up 1 item.
-            // If the item lore indicates stack pickup, send right-click (button 1) for full stack pickup.
-            val isStackPickup = hasStackPickupLore(slot.item)
-            val button = if (isStackPickup) 1 else 0
+            // Left-click (button 0) fills the player's inventory from the material stash
+            val button = 0
 
             val savedItem = slot.item.copy()
             gameMode.handleContainerInput(screen.menu.containerId, slot.index, button, ContainerInput.PICKUP, player)
@@ -181,6 +184,19 @@ object InventoryAutoClicker {
 
             nextClickTime = now + calculateNextInterval(now, Config.inventoryAutoClickerCps.toDouble())
         }
+    }
+
+    fun canAcceptItems(player: net.minecraft.world.entity.player.Player, stashItem: ItemStack): Boolean {
+        val inv = player.inventory
+        if (inv.freeSlot != -1) return true
+        for (i in 0 until 36) {
+            val stack = inv.getItem(i)
+            if (stack.isEmpty) return true
+            if (stack.item == stashItem.item && stack.count < stack.maxStackSize) {
+                return true
+            }
+        }
+        return false
     }
 
     fun hasStackPickupLore(stack: ItemStack): Boolean {

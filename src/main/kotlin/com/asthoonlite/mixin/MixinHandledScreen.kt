@@ -78,8 +78,8 @@ abstract class MixinHandledScreen {
                 ci.cancel()
                 val gameMode = mc.gameMode ?: return
 
-                // If stack pickup is supported, use right-click (button 1) to claim full stacks into inventory
-                val targetButton = if (InventoryAutoClicker.hasStackPickupLore(slot.item)) 1 else button
+                // Preserve exact button: button 0 (left-click) fills inventory, button 1 (right-click) grabs 1 stack
+                val targetButton = button
                 val savedItem = slot.item.copy()
 
                 gameMode.handleContainerInput(self.menu.containerId, slot.index, targetButton, ContainerInput.PICKUP, player)
