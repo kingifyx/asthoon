@@ -269,12 +269,15 @@ object DungeonMapScanner {
             if (doorCol == MapColors.EMPTY.color) return@removeIf false
 
             if (joinedCol == doorCol) {
+                val neighboring = comp.getNeighboringRooms()
+                if (neighboring.size != 2) return@removeIf false
+                val r1 = DungeonScanner.rooms[neighboring[0].getRoomIdx()]
+                val r2 = DungeonScanner.rooms[neighboring[1].getRoomIdx()]
+                if (r1?.type == RoomTypes.FAIRY || r2?.type == RoomTypes.FAIRY) return@removeIf false
                 DungeonScanner.doors[idx]?.also { d ->
                     d.rooms.forEach { it.doors.remove(d) }
                 }
                 DungeonScanner.doors[idx] = null
-                val neighboring = comp.getNeighboringRooms()
-                if (neighboring.size != 2) return@removeIf false
                 return@removeIf DungeonScanner.mergeRooms(neighboring[0], neighboring[1])
             }
 
@@ -288,6 +291,11 @@ object DungeonMapScanner {
                 MapColors.DOOR_WITHER.color -> {
                     door.type = DoorTypes.WITHER
                     door.opened = false
+                    if (
+                        comp.getNeighboringRooms()
+                            .mapNotNull { DungeonScanner.rooms[it.getRoomIdx()] }
+                            .any { it.type == RoomTypes.FAIRY && !it.explored }
+                    ) door.holyShitFairyDoorPleaseStopFlashingSobs = true
                     false
                 }
                 MapColors.DOOR_BLOOD.color -> {

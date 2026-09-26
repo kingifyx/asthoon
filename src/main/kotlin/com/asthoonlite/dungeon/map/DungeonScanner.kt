@@ -220,6 +220,7 @@ object DungeonScanner {
     fun mergeRooms(room1: DungeonRoom, room2: DungeonRoom) {
         if (room1 === room2) return
         if (room1.type == RoomTypes.ENTRANCE || room2.type == RoomTypes.ENTRANCE) return
+        if (room1.type == RoomTypes.FAIRY || room2.type == RoomTypes.FAIRY) return
 
         for (comp in room2.comps) {
             val c = comp.toComponent()

@@ -151,20 +151,27 @@ object DungeonMap : HudElement {
             val r1 = door.roomComp1
             val r2 = door.roomComp2
             if (floor != FloorType.None) {
-                if (r1.x / 2 >= maxW || r1.z / 2 >= maxH || r2.x / 2 >= maxW || r2.z / 2 >= maxH) continue
+                if (r1.x >= maxW || r1.z >= maxH || r2.x >= maxW || r2.z >= maxH) continue
             }
             val isHorizontal = r1.z == r2.z
 
-            // If not full grid, do not draw doors unless BOTH connecting rooms are explored
             val r1Room = DungeonScanner.rooms.getOrNull(r1.z * 6 + r1.x)
             val r2Room = DungeonScanner.rooms.getOrNull(r2.z * 6 + r2.x)
-            if (!Config.dungeonMapFullGrid && (r1Room?.explored != true || r2Room?.explored != true)) continue
 
+            // Never draw doors between components of the same room (e.g. 2x2, 1x2, L-room)
+            if (r1Room != null && r2Room != null && r1Room === r2Room) continue
+
+            // When full grid is OFF: show door if AT LEAST ONE connected room is explored
+            // so you can see where to go from the doors in the room you're currently in
+            if (!Config.dungeonMapFullGrid && (r1Room?.explored != true && r2Room?.explored != true)) continue
+
+            // Only draw confirmed doors (opened normal doors, wither doors, blood doors, entrance doors)
+            // Do NOT draw fake unconfirmed doors on solid walls
             val color = when (door.type) {
                 DoorTypes.WITHER -> 0xFF000000.toInt()
                 DoorTypes.BLOOD -> 0xFFFF2222.toInt()
                 DoorTypes.ENTRANCE -> 0xFF148500.toInt()
-                DoorTypes.NORMAL -> if (door.opened || Config.dungeonMapFullGrid) 0xFF5C340E.toInt() else continue
+                DoorTypes.NORMAL -> if (door.opened) 0xFF5C340E.toInt() else continue
             }
 
             if (isHorizontal) {
@@ -174,7 +181,7 @@ object DungeonMap : HudElement {
                 val dy0 = cellY(gz) + cellH * 0.35f
                 val dx1 = dx0 + cellGap
                 val dy1 = dy0 + cellH * 0.3f
-                context.fill(dx0.toInt(), dy0.toInt(), (dx1 + 1).toInt(), dy1.toInt(), color)
+                context.fill(dx0.toInt(), dy0.toInt(), dx1.toInt(), dy1.toInt(), color)
             } else {
                 val minZ = minOf(r1.z, r2.z)
                 val gx = r1.x
@@ -182,7 +189,7 @@ object DungeonMap : HudElement {
                 val dy0 = cellY(minZ) + cellH
                 val dx1 = dx0 + cellW * 0.3f
                 val dy1 = dy0 + cellGap
-                context.fill(dx0.toInt(), dy0.toInt(), dx1.toInt(), (dy1 + 1).toInt(), color)
+                context.fill(dx0.toInt(), dy0.toInt(), dx1.toInt(), dy1.toInt(), color)
             }
         }
 
@@ -346,35 +353,47 @@ object DungeonMap : HudElement {
         color: Int,
         isSelf: Boolean
     ) {
-        val w = (10 * scale * Config.dungeonMapMarkerScale).toInt().coerceAtLeast(8)
-        val h = (14 * scale * Config.dungeonMapMarkerScale).toInt().coerceAtLeast(11)
+        val markerScale = scale * Config.dungeonMapMarkerScale
+        val w = (10 * markerScale).toInt().coerceAtLeast(8)
+        val h = (14 * markerScale).toInt().coerceAtLeast(11)
         val halfW = w / 2
         val halfH = h / 2
 
         context.pose().pushMatrix()
         context.pose().translate(x, z)
         context.pose().rotate(Math.toRadians(yawDeg + 180.0).toFloat())
+
+        val u = if (isSelf) 0f else 20f
+        val tint = if (isSelf) 0xFFFFFFFF.toInt() else color
+
+        var drewTexture = false
         try {
-            if (isSelf) {
-                context.blit(MARKER_ATLAS, -halfW, -halfH, w, h, 0.0f, 0.0f, 0.5f, 0.5f)
-            } else {
-                context.blit(
-                    RenderPipelines.GUI_TEXTURED,
-                    MARKER_ATLAS,
-                    -halfW, -halfH,
-                    20f, 0f,
-                    w, h,
-                    40, 56,
-                    color
-                )
-            }
+            context.blit(
+                RenderPipelines.GUI_TEXTURED,
+                MARKER_ATLAS,
+                -halfW, -halfH,
+                u, 0f,
+                w, h,
+                20, 28,
+                40, 56,
+                tint
+            )
+            drewTexture = true
         } catch (_: Throwable) {
-            val arrow = (4.0 * scale).coerceAtLeast(3.0)
-            for (row in (-arrow * 0.65).toInt()..arrow.toInt()) {
-                val half = ((arrow - row) * 0.4).toInt()
-                context.fill(-half, -row, half + 1, -row + 1, color)
+            drewTexture = false
+        }
+
+        if (!drewTexture) {
+            val arrow = (5.0 * markerScale).coerceAtLeast(4.0)
+            val arrowColor = if (isSelf) 0xFF00FF00.toInt() else color
+            for (row in (-arrow).toInt()..arrow.toInt()) {
+                val half = ((row + arrow) * 0.45).toInt() + 1
+                context.fill(-half, row, half + 1, row + 1, 0xFF000000.toInt())
             }
-            context.fill(-1, -1, 2, 2, 0xFF000000.toInt())
+            for (row in (-arrow * 0.85).toInt()..(arrow * 0.85).toInt()) {
+                val half = ((row + arrow) * 0.38).toInt()
+                context.fill(-half, row, half + 1, row + 1, arrowColor)
+            }
         }
         context.pose().popMatrix()
     }
