@@ -270,7 +270,7 @@ object DungeonMap : HudElement {
         // Self icon
         val selfColor = DungeonContext.classColor(player.gameProfile.name)
         if (Config.dungeonMapMarkerSelf || !Config.dungeonMapPlayerHeads) {
-            drawPlayerArrow(context, selfPx, selfPz, player.yRot.toDouble(), scale * Config.dungeonMapMarkerScale, selfColor, isSelf = true)
+            drawPlayerArrow(context, selfPx, selfPz, player.yRot.toDouble(), scale, selfColor, isSelf = true)
         } else {
             val selfSkin = player.skin
             drawPlayerHead(context, selfSkin, selfPx, selfPz, player.yRot.toDouble(), scale, selfColor)
@@ -287,7 +287,7 @@ object DungeonMap : HudElement {
             if (Config.dungeonMapPlayerHeads && skin != null) {
                 drawPlayerHead(context, skin, tx, tz, yawDeg, scale, mateColor)
             } else {
-                drawPlayerArrow(context, tx, tz, yawDeg, scale * 0.8f * Config.dungeonMapMarkerScale, mateColor, isSelf = false)
+                drawPlayerArrow(context, tx, tz, yawDeg, scale * 0.8f, mateColor, isSelf = false)
             }
 
             if (showNames && icon.name != null) {
@@ -353,9 +353,9 @@ object DungeonMap : HudElement {
         color: Int,
         isSelf: Boolean
     ) {
-        val markerScale = scale * Config.dungeonMapMarkerScale
-        val w = (10 * markerScale).toInt().coerceAtLeast(8)
-        val h = (14 * markerScale).toInt().coerceAtLeast(11)
+        val markerScale = scale * Config.dungeonMapMarkerScale * 0.5f
+        val w = (10 * markerScale).toInt().coerceAtLeast(4)
+        val h = (14 * markerScale).toInt().coerceAtLeast(6)
         val halfW = w / 2
         val halfH = h / 2
 
@@ -384,7 +384,7 @@ object DungeonMap : HudElement {
         }
 
         if (!drewTexture) {
-            val arrow = (5.0 * markerScale).coerceAtLeast(4.0)
+            val arrow = (5.0 * markerScale).coerceAtLeast(2.0)
             val arrowColor = if (isSelf) 0xFF00FF00.toInt() else color
             for (row in (-arrow).toInt()..arrow.toInt()) {
                 val half = ((row + arrow) * 0.45).toInt() + 1

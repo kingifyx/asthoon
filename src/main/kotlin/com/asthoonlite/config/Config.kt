@@ -573,6 +573,41 @@ object Config {
         save()
     }
 
+    fun enableAllPuzzleSolvers() {
+        data.quizSolverEnabled = true
+        data.weirdosSolverEnabled = true
+        data.higherLowerSolverEnabled = true
+        data.ticTacToeSolverEnabled = true
+        data.iceFillSolverEnabled = true
+        data.icePathSolverEnabled = true
+        data.waterBoardSolverEnabled = true
+        data.boulderSolverEnabled = true
+        data.creeperBeamSolverEnabled = true
+        data.teleportMazeSolverEnabled = true
+        data.lividSolverEnabled = true
+        save()
+    }
+
+    fun disableAllPuzzleSolvers() {
+        data.quizSolverEnabled = false
+        data.weirdosSolverEnabled = false
+        data.higherLowerSolverEnabled = false
+        data.ticTacToeSolverEnabled = false
+        data.iceFillSolverEnabled = false
+        data.icePathSolverEnabled = false
+        data.waterBoardSolverEnabled = false
+        data.boulderSolverEnabled = false
+        data.creeperBeamSolverEnabled = false
+        data.teleportMazeSolverEnabled = false
+        data.lividSolverEnabled = false
+        save()
+    }
+
+    fun resetToCleanDefaults() {
+        data = Data()
+        save()
+    }
+
     var autoI4Enabled: Boolean
         get() = data.autoI4Enabled
         set(v) { data.autoI4Enabled = v; save() }

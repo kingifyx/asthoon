@@ -331,6 +331,11 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 }),
                 ToggleRow("Pet Menu Highlight", "Glows active pet in Pets GUI",
                     { Config.petMenuHighlightEnabled }, { Config.petMenuHighlightEnabled = it }),
+                SectionHeader("Configuration"),
+                WidgetRow(ModernButton(fullX, 0, fullW, 24, Component.literal("Reset All Settings to Clean Defaults")) {
+                    Config.resetToCleanDefaults()
+                    rebuildTab(Tab.QOL)
+                }),
             )
             Tab.MAP -> listOf(
                 SectionHeader("Presets"),
@@ -500,6 +505,15 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                     }),
                 )
                 DungeonSection.PUZZLES -> listOf(
+                    SectionHeader("Bulk Controls"),
+                    WidgetRow(ModernButton(fullX, 0, fullW, 24, Component.literal("Turn On All Puzzle Solvers")) {
+                        Config.enableAllPuzzleSolvers()
+                        rebuildTab(Tab.DUNGEON)
+                    }),
+                    WidgetRow(ModernButton(fullX, 0, fullW, 24, Component.literal("Turn Off All Puzzle Solvers")) {
+                        Config.disableAllPuzzleSolvers()
+                        rebuildTab(Tab.DUNGEON)
+                    }),
                     SectionHeader("Puzzle Solvers"),
                     ToggleRow("Quiz Solver", "Shows the correct trivia answer in chat",
                         { Config.quizSolverEnabled }, { Config.quizSolverEnabled = it }),

@@ -44,6 +44,7 @@ object WaterBoardSolver : HudElement {
     private var solution = ConcurrentHashMap<LEVER, List<Double>>()
     private var patternId = -1
     private var waterLeverStartMs: Long = -1L
+    private var lastClickMs: Long = 0L
 
     private var center: BlockPos? = null
     private var rotation: Int = 0
@@ -57,17 +58,23 @@ object WaterBoardSolver : HudElement {
         )
         UseBlockCallback.EVENT.register { player, world, hand, hitResult ->
             if (patternId != -1 && Config.waterBoardSolverEnabled && DungeonContext.inDungeon) {
-                val pos = hitResult.blockPos
-                val block = world.getBlockState(pos).block
-                val lever = LEVER.entries.find { it.getPos(center, rotation) == pos }
-                if (lever != null) {
-                    if (lever == LEVER.WATER && waterLeverStartMs == -1L) {
-                        waterLeverStartMs = System.currentTimeMillis()
+                if (hand == net.minecraft.world.InteractionHand.MAIN_HAND) {
+                    val pos = hitResult.blockPos
+                    val block = world.getBlockState(pos).block
+                    val lever = LEVER.entries.find { it.getPos(center, rotation) == pos }
+                    if (lever != null) {
+                        val now = System.currentTimeMillis()
+                        if (now - lastClickMs > 250L) {
+                            lastClickMs = now
+                            if (lever == LEVER.WATER && waterLeverStartMs == -1L) {
+                                waterLeverStartMs = now
+                            }
+                            lever.clickCount++
+                        }
                     }
-                    lever.clickCount++
-                }
-                if (block is ChestBlock) {
-                    reset()
+                    if (block is ChestBlock) {
+                        reset()
+                    }
                 }
             }
             InteractionResult.PASS
@@ -96,6 +103,22 @@ object WaterBoardSolver : HudElement {
         if (patternId == -1) {
             solve()
         }
+
+        // Auto-detect if water lever was powered by a teammate or game event
+        val c = center
+        if (c != null && waterLeverStartMs == -1L && patternId != -1) {
+            val level = Minecraft.getInstance().level
+            if (level != null) {
+                val waterPos = LEVER.WATER.getPos(c, rotation)
+                if (level.isLoaded(waterPos)) {
+                    val state = level.getBlockState(waterPos)
+                    if (state.block == Blocks.LEVER && state.getValue(net.minecraft.world.level.block.LeverBlock.POWERED)) {
+                        waterLeverStartMs = System.currentTimeMillis()
+                        if (LEVER.WATER.clickCount == 0) LEVER.WATER.clickCount = 1
+                    }
+                }
+            }
+        }
     }
 
     private fun queueRender() {
@@ -107,35 +130,47 @@ object WaterBoardSolver : HudElement {
             .flatMap { (lever, times) -> times.drop(lever.clickCount).map { lever to it } }
             .sortedBy { (lever, time) -> time + if (lever == LEVER.WATER) 0.01 else 0.0 }
 
-        val nextClick = clicks.firstOrNull()?.first
+        val nextEntry = clicks.firstOrNull()
+        val nextClick = nextEntry?.first
+        val nextTime = nextEntry?.second ?: 0.0
+
+        val now = System.currentTimeMillis()
+        val elapsed = if (waterLeverStartMs == -1L) 0.0 else (now - waterLeverStartMs) / 1000.0
+        val isReady = if (waterLeverStartMs == -1L) nextTime <= 0.0 else (nextTime - elapsed) <= 0.0
+
         if (nextClick != null) {
             val nextPos = nextClick.getPos(c, rot)
-            // Highlight next lever in green
+
+            // Red when waiting for time, lights up green when ready to click
+            val boxR = if (isReady) 0f else 1f
+            val boxG = if (isReady) 1f else 0f
+            val boxB = 0f
+
             WorldBoxRenderer.queueFilled(
                 nextPos.x.toDouble(), nextPos.y.toDouble(), nextPos.z.toDouble(),
                 nextPos.x + 1.0, nextPos.y + 1.0, nextPos.z + 1.0,
-                0f, 1f, 0f, 0.5f, throughWalls = true
+                boxR, boxG, boxB, 0.4f, throughWalls = true
             )
             WorldBoxRenderer.queueOutline(
                 nextPos.x.toDouble(), nextPos.y.toDouble(), nextPos.z.toDouble(),
                 nextPos.x + 1.0, nextPos.y + 1.0, nextPos.z + 1.0,
-                0f, 1f, 0f, 1f, thickness = 0.03, throughWalls = true
+                boxR, boxG, boxB, 1f, thickness = 0.03, throughWalls = true
             )
 
-            // Tracer from player eye to next click (Noamm style)
+            // Tracer from player eye to next click: RED when waiting, GREEN when ready
             val player = Minecraft.getInstance().player
             if (player != null) {
                 val eye = player.eyePosition
                 WorldBoxRenderer.queueLine(
                     eye.x, eye.y - 0.2, eye.z,
                     nextPos.x + 0.5, nextPos.y + 0.5, nextPos.z + 0.5,
-                    0f, 1f, 0f, 0.8f,
+                    boxR, boxG, boxB, 0.85f,
                     thickness = 0.04,
                     throughWalls = true
                 )
             }
 
-            // Line from next click to second click (Noamm style)
+            // Line from next click to second click (Noamm style yellow/orange line)
             if (clicks.size > 1) {
                 val secondClick = clicks[1].first
                 if (nextClick != secondClick) {
@@ -152,9 +187,6 @@ object WaterBoardSolver : HudElement {
         }
 
         // Render countdown timers directly on the levers in 3D world space (Noamm style)
-        val now = System.currentTimeMillis()
-        val elapsed = if (waterLeverStartMs == -1L) 0.0 else (now - waterLeverStartMs) / 1000.0
-
         for ((mech, times) in solution) {
             val lpos = mech.getPos(c, rot)
             times.drop(mech.clickCount).forEachIndexed { index, timeSeconds ->
@@ -257,6 +289,7 @@ object WaterBoardSolver : HudElement {
         patternId = -1
         solution.clear()
         waterLeverStartMs = -1L
+        lastClickMs = 0L
         center = null
         rotation = 0
     }
