@@ -286,6 +286,14 @@ object DungeonScanner {
         availablePos.removeIf { pos ->
             val (wx, wz, cx, cz) = pos
             val comp = pos.toComponent()
+
+            val floor = DungeonContext.floor
+            if (floor != FloorType.None) {
+                if (cx / 2 >= floor.roomsW || cz / 2 >= floor.roomsH) {
+                    return@removeIf true
+                }
+            }
+
             if (!level.isLoaded(BlockPos(wx, 67, wz))) return@removeIf false
 
             val roofHeight = getHighestY(wx, wz)

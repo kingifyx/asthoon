@@ -25,9 +25,37 @@ object DungeonContext {
     var floor: FloorType = FloorType.None
         private set
 
+    enum class PlayerClass(val displayName: String, val color: Int) {
+        ARCHER("Archer", 0xFFFF3333.toInt()),
+        MAGE("Mage", 0xFF3388FF.toInt()),
+        TANK("Tank", 0xFF33CC33.toInt()),
+        BERSERK("Berserk", 0xFFFFAA00.toInt()),
+        HEALER("Healer", 0xFFAA00AA.toInt()),
+        UNKNOWN("Unknown", 0xFFFFFFFF.toInt());
+
+        companion object {
+            fun from(name: String): PlayerClass = when (name.uppercase()) {
+                "ARCHER" -> ARCHER
+                "MAGE" -> MAGE
+                "TANK" -> TANK
+                "BERSERK" -> BERSERK
+                "HEALER" -> HEALER
+                else -> UNKNOWN
+            }
+        }
+    }
+
+    val playerClasses = java.util.concurrent.ConcurrentHashMap<String, PlayerClass>()
+
+    fun classColor(playerName: String?): Int {
+        if (playerName == null) return PlayerClass.UNKNOWN.color
+        return playerClasses[playerName]?.color ?: PlayerClass.UNKNOWN.color
+    }
+
     private var scoreboardMissingTicks = 0
     private var lastLoggedLines: List<String> = emptyList()
     private val floorPattern = Regex("The Catacombs \\(([FM][1-7]|E)\\)", RegexOption.IGNORE_CASE)
+    private val tabClassPattern = Regex("""(?:\[\d+\]\s+)?(?:\[[^\]]+\]\s+)*([A-Za-z0-9_]{1,16})\s+(?:.*?\s+)?\((\w+)(?:\s+[0-9IVXLCDM]+)?\)""")
 
     fun register() {
         ClientReceiveMessageEvents.ALLOW_GAME.register { text, overlay ->
@@ -141,6 +169,25 @@ object DungeonContext {
             }
         }
         updateFromSidebar(lines)
+
+        // Parse player classes from tab list
+        val onlinePlayers = mc.connection?.onlinePlayers ?: emptyList()
+        for (info in onlinePlayers) {
+            val displayName = info.tabListDisplayName?.string ?: continue
+            val text = ChatFormatting.stripFormatting(displayName) ?: continue
+            parseTabPlayerClass(text)
+        }
+    }
+
+    private fun parseTabPlayerClass(text: String) {
+        val match = tabClassPattern.find(text) ?: return
+        val name = match.groupValues[1]
+        val role = match.groupValues[2]
+        if (role.equals("DEAD", ignoreCase = true)) return
+        val playerClass = PlayerClass.from(role)
+        if (playerClass != PlayerClass.UNKNOWN) {
+            playerClasses[name] = playerClass
+        }
     }
 
     internal fun sidebarLines(scoreboard: Scoreboard, objective: Objective?): List<String> =
@@ -197,5 +244,6 @@ object DungeonContext {
         floor = FloorType.None
         scoreboardMissingTicks = 0
         lastLoggedLines = emptyList()
+        playerClasses.clear()
     }
 }

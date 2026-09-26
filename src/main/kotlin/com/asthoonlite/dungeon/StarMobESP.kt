@@ -206,6 +206,7 @@ object StarMobESP {
     fun shouldForceGlow(entity: Entity): Boolean {
         if (!Config.starMobEspEnabled || !DungeonContext.inDungeon || !starMobs.containsKey(entity.id)) return false
         val player = Minecraft.getInstance().player ?: return false
+        if (!Config.starMobEspThroughWalls && !player.hasLineOfSight(entity)) return false
         return isInSameRoom(entity.position(), player.position())
     }
 
@@ -241,6 +242,8 @@ object StarMobESP {
         val level = mc.level ?: return
         val player = mc.player ?: return
 
+        val phase = Config.starMobEspThroughWalls
+
         renderLogTicks++
         if (renderLogTicks % 40 == 0 || starMobs.size != lastRenderedCount) {
             lastRenderedCount = starMobs.size
@@ -255,6 +258,8 @@ object StarMobESP {
             val pos = entity.position()
             // Restrict ESP to only mobs in the current room as the player
             if (!isInSameRoom(pos, player.position())) continue
+            // If through-walls is off, skip mobs blocked by geometry
+            if (!phase && !player.hasLineOfSight(entity)) continue
 
             val height = getHeight(entity, category)
             val color = colorFor(category)
@@ -271,7 +276,6 @@ object StarMobESP {
 
             val fillA = Config.starMobFillAlpha.toFloat()
             val thickness = (Config.starMobLineWidth * 0.007).coerceIn(0.01, 0.08)
-            val phase = Config.starMobEspThroughWalls
 
             if (fillA > 0f) {
                 WorldBoxRenderer.queueFilled(minX, minY, minZ, maxX, maxY, maxZ, r, g, b, fillA, throughWalls = phase)

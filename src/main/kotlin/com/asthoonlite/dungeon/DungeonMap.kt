@@ -13,6 +13,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
 import net.minecraft.client.DeltaTracker
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.core.component.DataComponents
 import net.minecraft.resources.Identifier
 import kotlin.math.cos
@@ -21,6 +22,7 @@ import kotlin.math.sin
 object DungeonMap : HudElement {
     private const val BASE_SIZE = 100f
     private const val GRID_SIZE = 6
+    private val MARKER_ATLAS = Identifier.fromNamespaceAndPath(AsthoonLite.MOD_ID, "textures/map/marker_atlas.png")
 
     fun register() {
         HudElementRegistry.addLast(
@@ -87,8 +89,14 @@ object DungeonMap : HudElement {
         fun cellY(gz: Int): Float = cellY(gz.toFloat())
 
         // 1. Draw Rooms
+        val floor = DungeonContext.floor
+        val maxW = if (floor != FloorType.None) floor.roomsW else GRID_SIZE
+        val maxH = if (floor != FloorType.None) floor.roomsH else GRID_SIZE
+
         for (gz in 0 until GRID_SIZE) {
             for (gx in 0 until GRID_SIZE) {
+                if (gx >= maxW || gz >= maxH) continue
+
                 val idx = gz * 6 + gx
                 val room = DungeonScanner.rooms.getOrNull(idx)
 
@@ -96,6 +104,11 @@ object DungeonMap : HudElement {
                 val y0 = cellY(gz)
 
                 if (room == null) {
+                    continue
+                }
+
+                // Skip phantom/bedrock rooms detected outside the active dungeon
+                if (room.type == RoomTypes.UNKNOWN && !room.explored && room.doors.isEmpty() && room.name == null) {
                     continue
                 }
 
@@ -113,7 +126,7 @@ object DungeonMap : HudElement {
                 context.fill(x0.toInt(), y0.toInt(), (x0 + cellW).toInt(), (y0 + cellH).toInt(), color)
 
                 // Join components of same room (both explored and unopened when full grid is on)
-                if (gx + 1 < GRID_SIZE) {
+                if (gx + 1 < maxW) {
                     val right = DungeonScanner.rooms.getOrNull(gz * 6 + gx + 1)
                     if (right === room && (room.explored || Config.dungeonMapFullGrid)) {
                         val jx0 = x0 + cellW
@@ -121,7 +134,7 @@ object DungeonMap : HudElement {
                         context.fill(jx0.toInt(), jy0.toInt(), (jx0 + cellGap + 1).toInt(), (jy0 + cellH).toInt(), color)
                     }
                 }
-                if (gz + 1 < GRID_SIZE) {
+                if (gz + 1 < maxH) {
                     val down = DungeonScanner.rooms.getOrNull((gz + 1) * 6 + gx)
                     if (down === room && (room.explored || Config.dungeonMapFullGrid)) {
                         val jx0 = x0
@@ -137,6 +150,9 @@ object DungeonMap : HudElement {
             if (door == null) continue
             val r1 = door.roomComp1
             val r2 = door.roomComp2
+            if (floor != FloorType.None) {
+                if (r1.x / 2 >= maxW || r1.z / 2 >= maxH || r2.x / 2 >= maxW || r2.z / 2 >= maxH) continue
+            }
             val isHorizontal = r1.z == r2.z
 
             // If not full grid, do not draw doors unless BOTH connecting rooms are explored
@@ -245,11 +261,12 @@ object DungeonMap : HudElement {
         val showNames = Config.dungeonMapPlayerNames && (!Config.dungeonMapNamesOnlyLeap || isHoldingLeap(player))
 
         // Self icon
+        val selfColor = DungeonContext.classColor(player.gameProfile.name)
         if (Config.dungeonMapMarkerSelf || !Config.dungeonMapPlayerHeads) {
-            drawPlayerArrow(context, selfPx, selfPz, player.yRot.toDouble(), scale * Config.dungeonMapMarkerScale, 0xFF00FF00.toInt())
+            drawPlayerArrow(context, selfPx, selfPz, player.yRot.toDouble(), scale * Config.dungeonMapMarkerScale, selfColor, isSelf = true)
         } else {
             val selfSkin = player.skin
-            drawPlayerHead(context, selfSkin, selfPx, selfPz, player.yRot.toDouble(), scale, 0xFF00FF00.toInt())
+            drawPlayerHead(context, selfSkin, selfPx, selfPz, player.yRot.toDouble(), scale, selfColor)
         }
 
         // Teammates from map scanner icons
@@ -258,11 +275,12 @@ object DungeonMap : HudElement {
             val tz = cellY(0) + (icon.z.toFloat() / 2f) * (cellH + cellGap) + cellH * 0.5f
             val yawDeg = Math.toDegrees(icon.rot)
             val skin = getPlayerSkin(icon.name)
+            val mateColor = DungeonContext.classColor(icon.name)
 
             if (Config.dungeonMapPlayerHeads && skin != null) {
-                drawPlayerHead(context, skin, tx, tz, yawDeg, scale, 0xFF1E90FF.toInt())
+                drawPlayerHead(context, skin, tx, tz, yawDeg, scale, mateColor)
             } else {
-                drawPlayerArrow(context, tx, tz, yawDeg, scale * 0.8f * Config.dungeonMapMarkerScale, 0xFF1E90FF.toInt())
+                drawPlayerArrow(context, tx, tz, yawDeg, scale * 0.8f * Config.dungeonMapMarkerScale, mateColor, isSelf = false)
             }
 
             if (showNames && icon.name != null) {
@@ -325,17 +343,39 @@ object DungeonMap : HudElement {
         x: Float, z: Float,
         yawDeg: Double,
         scale: Float,
-        color: Int
+        color: Int,
+        isSelf: Boolean
     ) {
-        val arrow = (4.0 * scale).coerceAtLeast(3.0)
+        val w = (10 * scale * Config.dungeonMapMarkerScale).toInt().coerceAtLeast(8)
+        val h = (14 * scale * Config.dungeonMapMarkerScale).toInt().coerceAtLeast(11)
+        val halfW = w / 2
+        val halfH = h / 2
+
         context.pose().pushMatrix()
         context.pose().translate(x, z)
-        context.pose().rotate(Math.toRadians(yawDeg).toFloat())
-        for (row in (-arrow * 0.65).toInt()..arrow.toInt()) {
-            val half = ((arrow - row) * 0.4).toInt()
-            context.fill(-half, row, half + 1, row + 1, color)
+        context.pose().rotate(Math.toRadians(yawDeg + 180.0).toFloat())
+        try {
+            if (isSelf) {
+                context.blit(MARKER_ATLAS, -halfW, -halfH, w, h, 0.0f, 0.0f, 0.5f, 0.5f)
+            } else {
+                context.blit(
+                    RenderPipelines.GUI_TEXTURED,
+                    MARKER_ATLAS,
+                    -halfW, -halfH,
+                    20f, 0f,
+                    w, h,
+                    40, 56,
+                    color
+                )
+            }
+        } catch (_: Throwable) {
+            val arrow = (4.0 * scale).coerceAtLeast(3.0)
+            for (row in (-arrow * 0.65).toInt()..arrow.toInt()) {
+                val half = ((arrow - row) * 0.4).toInt()
+                context.fill(-half, -row, half + 1, -row + 1, color)
+            }
+            context.fill(-1, -1, 2, 2, 0xFF000000.toInt())
         }
-        context.fill(-1, -1, 2, 2, 0xFF000000.toInt())
         context.pose().popMatrix()
     }
 
