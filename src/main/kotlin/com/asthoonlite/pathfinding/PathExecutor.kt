@@ -465,14 +465,14 @@ object PathExecutor {
         if (nodeType == RouteNodeType.BONZO_STAFF) {
             val isPrecedingJump = points.getOrNull(currentNodeIndex - 1)?.nodeType() == RouteNodeType.JUMP
             val isTargetMidAir = level.getBlockState(BlockPos.containing(target.x, target.y - 0.5, target.z)).isAir
-            val isAirborneBonzo = isPrecedingJump || isTargetMidAir || !player.onGround()
+            val isAirborneBonzo = isPrecedingJump || isTargetMidAir
 
             // Auto-select Bonzo's Staff
             selectBonzoStaff()
 
             // Keep player firmly grounded during arrival at Bonzo launch point;
             // allows clean sprinting across the runway without jumping into the void
-            if (!isAirborneBonzo && bonzoState == BonzoState.IDLE && player.onGround() && distH <= 1.8) {
+            if (!isAirborneBonzo && bonzoState == BonzoState.IDLE && distH <= 2.5) {
                 jumpTicksRemaining = 0
                 mc.options.keyJump.setDown(false)
             }
@@ -518,22 +518,30 @@ object PathExecutor {
             val launchDistanceThreshold = when {
                 isAirborneBonzo && currentBpsH >= 12.0 -> 2.2
                 isAirborneBonzo -> 1.8
-                currentBpsH >= 12.0 -> 1.5
-                else -> 1.2
+                currentBpsH >= 12.0 -> 1.0
+                else -> 0.8
             }
-            val isArrivedOnPlatform = distH <= launchDistanceThreshold || (passedAlongRoute && distH <= 0.8)
+            val isArrivedOnPlatform = if (isAirborneBonzo) {
+                distH <= launchDistanceThreshold || (passedAlongRoute && distH <= 0.8)
+            } else {
+                player.onGround() && (distH <= launchDistanceThreshold || (passedAlongRoute && distH <= 0.8))
+            }
 
             val effectiveShotYaw = if (target.hasLookNode) {
                 val ldx = target.lookX - player.x
                 val ldz = target.lookZ - player.z
                 (-Math.toDegrees(atan2(ldx, ldz))).toFloat()
-            } else if (launchParams.isRedirection) {
-                launchParams.shotYaw
+            } else if (target.yaw != 0f && abs(Mth.wrapDegrees(target.yaw - flightYaw)) <= 35.0f) {
+                target.yaw
             } else {
                 flightYaw
             }
 
-            val baseLaunchPitch = if (target.pitch in 20.0f..88.0f) {
+            val toDestDistH = if (nextTarget != null) hypot(destinationPos.x - player.x, destinationPos.z - player.z) else 15.0
+            val deltaY = destinationPos.y - player.y
+            val baseLaunchPitch = if (deltaY < -2.0 && toDestDistH >= 16.0 && target.pitch > 42.0f) {
+                40.0f
+            } else if (target.pitch in 20.0f..88.0f) {
                 target.pitch
             } else {
                 launchParams.shotPitch
@@ -744,15 +752,21 @@ object PathExecutor {
                 val ldx = target.lookX - player.x
                 val ldz = target.lookZ - player.z
                 (-Math.toDegrees(atan2(ldx, ldz))).toFloat()
+            } else if (target.yaw != 0f && abs(Mth.wrapDegrees(target.yaw - flightYaw)) <= 35.0f) {
+                target.yaw
             } else {
                 flightYaw
             }
-            val prePitch = if (target.pitch in 20.0f..88.0f) {
+            val toDestDistH = hypot(flightDx, flightDz)
+            val toDestDy = if (nextTarget != null) nextTarget.y - player.y else 0.0
+            val prePitch = if (toDestDy < -2.0 && toDestDistH >= 16.0 && target.pitch > 42.0f) {
+                40.0f
+            } else if (target.pitch in 20.0f..88.0f) {
                 target.pitch
             } else {
                 KinematicTrajectory.calculateOptimalBonzoPitch(
-                    distH = hypot(flightDx, flightDz),
-                    deltaY = if (nextTarget != null) nextTarget.y - player.y else 0.0,
+                    distH = toDestDistH,
+                    deltaY = toDestDy,
                     recordedPitch = target.pitch
                 )
             }
@@ -1423,15 +1437,21 @@ object PathExecutor {
                     val ldx = target.lookX - currentX
                     val ldz = target.lookZ - currentZ
                     (-Math.toDegrees(atan2(ldx, ldz))).toFloat()
+                } else if (target.yaw != 0f && abs(Mth.wrapDegrees(target.yaw - flightYaw)) <= 35.0f) {
+                    target.yaw
                 } else {
                     flightYaw
                 }
-                val basePrePitch = if (target.hasLookNode && target.pitch in 20.0f..88.0f) {
+                val toDestDistH = hypot(flightDx, flightDz)
+                val toDestDy = if (nextTarget != null) nextTarget.y - currentY else 0.0
+                val basePrePitch = if (toDestDy < -2.0 && toDestDistH >= 16.0 && target.pitch > 42.0f) {
+                    40.0f
+                } else if (target.pitch in 20.0f..88.0f) {
                     target.pitch
                 } else {
                     KinematicTrajectory.calculateOptimalBonzoPitch(
-                        distH = hypot(flightDx, flightDz),
-                        deltaY = if (nextTarget != null) nextTarget.y - currentY else 0.0,
+                        distH = toDestDistH,
+                        deltaY = toDestDy,
                         recordedPitch = target.pitch
                     )
                 }
@@ -1775,7 +1795,7 @@ object PathExecutor {
                         (segX * pz - segZ * px) / segLen
                     } else 0.0
 
-                    if (abs(crossTrack) > 0.15) {
+                    if (abs(crossTrack) > 0.35) {
                         val corridorStrafe = KinematicTrajectory.computeCorridorAirStrafe(
                             playerX = player.x,
                             playerZ = player.z,
@@ -1785,17 +1805,11 @@ object PathExecutor {
                             destX = destPoint.x,
                             destZ = destPoint.z
                         )
-                        mc.options.keyLeft.setDown(corridorStrafe > 0.12)
-                        mc.options.keyRight.setDown(corridorStrafe < -0.12)
+                        mc.options.keyLeft.setDown(corridorStrafe > 0.15)
+                        mc.options.keyRight.setDown(corridorStrafe < -0.15)
                     } else {
-                        val airGuidance = KinematicTrajectory.computeAirGuidance(
-                            playerPos = Vec3(player.x, player.y, player.z),
-                            playerVel = player.deltaMovement,
-                            playerYaw = player.yRot,
-                            destinationPos = Vec3(destPoint.x, destPoint.y, destPoint.z)
-                        )
-                        mc.options.keyLeft.setDown(airGuidance.strafe > 0.35)
-                        mc.options.keyRight.setDown(airGuidance.strafe < -0.35)
+                        mc.options.keyLeft.setDown(false)
+                        mc.options.keyRight.setDown(false)
                     }
                 } else {
                     mc.options.keyLeft.setDown(false)
