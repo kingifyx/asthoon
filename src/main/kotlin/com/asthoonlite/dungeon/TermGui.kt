@@ -9,7 +9,9 @@ import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.world.inventory.ContainerInput
+import net.minecraft.world.item.DyeColor
 import net.minecraft.world.item.ItemStack
+import net.minecraft.world.item.Items
 import org.lwjgl.glfw.GLFW
 
 /** Centered terminal grids adapted from Odin's CustomTermGui and TerminalTypes.
@@ -24,6 +26,15 @@ object TermGui {
     private const val CLICK_FLASH_MS = 220L
     private var cachedRubixTarget: Int? = null
     private var lastRubixContainerId: Int = -1
+    private var gateChecks = 0L
+    private var renderAttempts = 0L
+    private var renderEnqueues = 0L
+    private var lastGate = "not-checked"
+    private var lastGateDetails = "none"
+    private var lastRenderAt = 0L
+    private var lastTiles = 0
+    private var lastGrid = "none"
+    private var lastRenderError: String? = null
 
     data class Tile(val slot: Int, val x: Int, val y: Int)
 
@@ -56,17 +67,9 @@ object TermGui {
         return Grid((width - w * scale) / 2f, (height - h * scale) / 2f, scale, w, h, tiles(kind, melodyRows, gap, orderSlots))
     }
 
-    /**
-     * The content rows melody actually ships: 1, 2, 3.
-     *
-     * Row 0 above them is the marker strip and row 4 below them is the
-     * indicator, so anything outside this range in the data is either one of
-     * those or a stale leftover from the four-row terminal the game used to
-     * run. Filtering here rather than in each caller is what keeps a stale
-     * row from growing the grid, from adding tiles, and from raising the slot
-     * count the menu has to reach before the grid is allowed to draw.
-     */
-    private fun contentRows(melodyRows: List<Int>): List<Int> = melodyRows.filter { it in 1..3 }
+    /** Callers supply button-evidenced content rows; header, footer and inventory never become buttons. */
+    private fun contentRows(melodyRows: List<Int>): List<Int> =
+        melodyRows.filter { it in 1..TerminalSolver.MAX_MELODY_CONTENT_ROW }.distinct().sorted()
 
     /** rows, columns, and where the first one sits in the 9-wide menu list. */
     private fun shape(kind: Kind, melodyRows: List<Int>, orderSlots: List<Int>): IntArray = when (kind) {
@@ -80,8 +83,7 @@ object TermGui {
         }
         Kind.STARTS -> intArrayOf(3, 7, 1, 1)
         Kind.SELECT -> intArrayOf(4, 7, 1, 1)
-        // Marker row, the three content rows, indicator row: five rows, seven
-        // columns, starting at the left of the menu's own columns.
+        // Marker strip, detected content, then the indicator strip.
         Kind.MELODY -> intArrayOf((contentRows(melodyRows).maxOrNull() ?: 3) + 2, 7, 0, 1)
     }
 
@@ -139,14 +141,67 @@ object TermGui {
         slotCount >= requiredSlots(kind, melodyRows)
 
     fun active(screen: AbstractContainerScreen<*>): Boolean {
-        if (!Config.termGuiEnabled || QuietMode.suppressing()) return false
-        val kind = TerminalSolver.kindOf(screen.title.string) ?: return false
+        val kind = TerminalSolver.kindOf(screen.title.string)
         val slots = screen.menu.slots.size
-        return renderGate(Config.termGuiEnabled, QuietMode.suppressing(), kind, slots, requiredSlotsFor(kind, items(screen, kind)))
+        val required = kind?.let { requiredSlotsFor(it, items(screen, it)) } ?: 0
+        val enabled = Config.termGuiEnabled
+        val quiet = QuietMode.suppressing()
+        gateChecks++
+        lastGate = gateReason(enabled, quiet, kind, slots, required)
+        lastGateDetails = "kind=$kind, menu=${screen.menu.containerId}, slots=$slots, required=$required, screen=${screen.width}x${screen.height}"
+        return lastGate == "ready"
     }
 
     internal fun renderGate(enabled: Boolean, quiet: Boolean, kind: Kind?, slots: Int, required: Int): Boolean =
-        enabled && !quiet && kind != null && slots >= required
+        gateReason(enabled, quiet, kind, slots, required) == "ready"
+
+    internal fun gateReason(enabled: Boolean, quiet: Boolean, kind: Kind?, slots: Int, required: Int): String = when {
+        !enabled -> "custom-gui-disabled"
+        quiet -> "quiet-mode"
+        kind == null -> "unrecognized-title"
+        slots < required -> "menu-incomplete"
+        else -> "ready"
+    }
+
+    /** Choice terminals need their items even without solver hints, over the same neutral tiles. */
+    internal fun drawItems(kind: Kind, simulation: Boolean, solver: Boolean, empty: Boolean): Boolean =
+        !empty && (kind == Kind.SELECT || kind == Kind.STARTS || (simulation && !solver))
+
+    internal fun tileBackground(hintColor: Int?): Int = hintColor ?: NEUTRAL
+
+    /** Pane state stays readable when the player switches solver hints off. */
+    internal fun paneColor(stack: ItemStack, solver: Boolean, hintColor: Int?): Int? {
+        if (solver) return hintColor
+        val dye = when {
+            stack.`is`(Items.RED_STAINED_GLASS_PANE) -> DyeColor.RED
+            stack.`is`(Items.LIME_STAINED_GLASS_PANE) -> DyeColor.LIME
+            stack.`is`(Items.GREEN_STAINED_GLASS_PANE) -> DyeColor.GREEN
+            else -> return null
+        }
+        return 0xFF000000.toInt() or dye.textureDiffuseColor
+    }
+
+    /** Rubix's current ring state is content; the target remains a solver hint. */
+    internal fun rubixTileColor(current: Int?, wanted: Int?, solver: Boolean): Int? {
+        if (current == null || current !in 0..4) return null
+        if (solver) return if (wanted != null && current != wanted) 0xCC55FFFF.toInt() else null
+        val dye = when (current) {
+            0 -> DyeColor.ORANGE
+            1 -> DyeColor.YELLOW
+            2 -> DyeColor.LIME
+            3 -> DyeColor.LIGHT_BLUE
+            else -> DyeColor.RED
+        }
+        return 0xFF000000.toInt() or dye.textureDiffuseColor
+    }
+
+    /** On-demand gate and extraction evidence, independent of solver colours. */
+    fun diagnosticReport(): String {
+        val screen = Minecraft.getInstance().screen as? AbstractContainerScreen<*>
+        if (screen != null) active(screen)
+        return "terminal gui: enabled=${Config.termGuiEnabled}, solver=${Config.terminalSolverEnabled}, quiet=${QuietMode.suppressing()}, currentContainer=${screen != null}, gate=${if (screen == null) "no-container" else lastGate}, lastGateDetails=($lastGateDetails)\n" +
+            "terminal gui extraction: gateChecks=$gateChecks, attempts=$renderAttempts, gridsEnqueued=$renderEnqueues, latestAt=$lastRenderAt, tiles=$lastTiles, grid=$lastGrid, error=${lastRenderError ?: "none"}"
+    }
 
     /** Melody's rows as the menu currently shows them; nothing else asks. */
     private fun liveMelodyRows(screen: AbstractContainerScreen<*>, kind: Kind): List<Int> =
@@ -167,6 +222,23 @@ object TermGui {
     private fun items(screen: AbstractContainerScreen<*>, kind: Kind) = screen.menu.slots.take(kind.slotCount).map { it.item }
 
     fun render(screen: AbstractContainerScreen<*>, graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int) {
+        renderAttempts++
+        lastTiles = 0
+        try {
+            renderGrid(screen, graphics, mouseX, mouseY)
+            if (lastTiles > 0) {
+                renderEnqueues++
+                lastRenderAt = System.currentTimeMillis()
+                lastRenderError = null
+            }
+        } catch (t: Throwable) {
+            lastRenderError = "${t.javaClass.simpleName}: ${t.message}"
+            TerminalCursor.release("terminal-grid-extraction-error")
+            throw t
+        }
+    }
+
+    private fun renderGrid(screen: AbstractContainerScreen<*>, graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int) {
         val grid = gridFor(screen) ?: return
         // MixinScreen owns the background once, before the grid and screen events.
         val kind = TerminalSolver.kindOf(screen.title.string) ?: return
@@ -182,7 +254,7 @@ object TermGui {
             cachedRubixTarget = null
             lastRubixContainerId = -1
         }
-        val target = if (kind == Kind.RUBIX) (AutoTerminal.rubixTargetOrNull() ?: cachedRubixTarget) else null
+        val target = if (kind == Kind.RUBIX) rubixTargetFor(all) else null
         val next = if (Config.terminalSolverEnabled && (kind == Kind.ORDER || kind == Kind.MELODY))
             TerminalSolver.nextClickSlot(title, all, AutoTerminal.unsettledSlots(), target,
                 AutoTerminal.lastClickedSlot(), Config.autoTerminalClickOrder) else null
@@ -195,6 +267,7 @@ object TermGui {
         val originY = grid.originY
         val scale = grid.scale
         val roundness = Config.termGuiRoundness.coerceIn(0, 8)
+        lastGrid = "origin=(${grid.originX},${grid.originY}), size=${grid.width}x${grid.height}, scale=${grid.scale}"
 
         // Background panel rendered in true screen pixels
         val bgPad = (4 * scale).toInt()
@@ -218,11 +291,14 @@ object TermGui {
             val stack = slotObj?.item ?: ItemStack.EMPTY
             val color = if (kind == Kind.MELODY) {
                 TerminalSolver.melodyColor(tile.slot, stack, all)
-            } else if (kind == Kind.RUBIX && Config.terminalSolverEnabled) {
+            } else if (kind == Kind.PANES) {
+                paneColor(stack, Config.terminalSolverEnabled,
+                    TerminalSolver.colorFor(title, tile.slot, stack, all, target))
+            } else if (kind == Kind.RUBIX) {
                 val current = AutoTerminal.rubixPredicted(tile.slot)
                     ?: TerminalHelper.rubixColorIndex(stack).takeIf { it >= 0 }
                 val wanted = target ?: cachedRubixTarget ?: TerminalSolver.optimalRubixTarget(all)
-                if (wanted != null && current != null && current != wanted) 0xCC55FFFF.toInt() else null
+                rubixTileColor(current, wanted, Config.terminalSolverEnabled)
             } else {
                 TerminalSolver.colorFor(title, tile.slot, stack, all, target)
             }
@@ -234,17 +310,20 @@ object TermGui {
                 fillRoundedRect(graphics, sx0 - borderThickness, sy0 - borderThickness,
                     sx1 + borderThickness, sy1 + borderThickness, borderCol, bRadius)
             }
-            fillRoundedRect(graphics, sx0, sy0, sx1, sy1, color ?: NEUTRAL, tileRadius)
+            fillRoundedRect(graphics, sx0, sy0, sx1, sy1, tileBackground(color), tileRadius)
 
-            if (simulation && kind != Kind.SELECT && kind != Kind.STARTS && !Config.terminalSolverEnabled && !stack.isEmpty) {
+            val showItem = drawItems(kind, simulation, Config.terminalSolverEnabled, stack.isEmpty)
+            if (showItem) {
                 graphics.pose().pushMatrix()
-                graphics.pose().translate(sx0.toFloat(), sy0.toFloat())
-                graphics.pose().scale(scale, scale)
-                graphics.item(stack, 1, 1)
-                graphics.pose().popMatrix()
+                try {
+                    graphics.pose().translate(sx0.toFloat(), sy0.toFloat())
+                    graphics.pose().scale(scale, scale)
+                    graphics.item(stack, 1, 1)
+                } finally {
+                    graphics.pose().popMatrix()
+                }
             }
-            if (simulation && tile.slot == hovered && !stack.isEmpty &&
-                (kind == Kind.SELECT || kind == Kind.STARTS || !Config.terminalSolverEnabled)) {
+            if (showItem && tile.slot == hovered) {
                 graphics.setTooltipForNextFrame(font, stack.hoverName, curX.toInt(), curY.toInt())
             }
 
@@ -290,12 +369,33 @@ object TermGui {
                 }
             }
         }
+        lastTiles = grid.tiles.size
     }
 
     /** Both live and practice clicks take the shortest direction (positive or negative). */
     internal fun rubixLabel(current: Int, wanted: Int, simulation: Boolean = false): String? {
         val clicks = TerminalSolver.rubixDistance(current, wanted)
         return clicks.takeIf { it > 0 }?.toString()
+    }
+
+    /** Manual direction and drawing share the terminal's fixed target. */
+    internal fun rubixTargetFor(
+        all: List<ItemStack>,
+        committed: Int? = AutoTerminal.rubixTargetOrNull(),
+        cached: Int? = cachedRubixTarget
+    ): Int? = committed ?: cached ?: TerminalSolver.optimalRubixTarget(all)
+
+    internal data class RubixClickPlan(val button: Int, val nextColor: Int?)
+
+    /** PICKUP can empty the live slot before returning, so capture its next colour first. */
+    internal fun rubixClickPlan(
+        stack: ItemStack, predicted: Int?, target: Int?, requestedButton: Int
+    ): RubixClickPlan {
+        val current = predicted?.takeIf { it in 0..4 }
+            ?: TerminalHelper.rubixColorIndex(stack).takeIf { it >= 0 }
+        val button = if (requestedButton == 0 && current != null && target != null && target in 0..4)
+            TerminalSolver.rubixButton(current, target) else requestedButton
+        return RubixClickPlan(button, current?.let { TerminalSolver.rubixAdvance(it, button) })
     }
 
     /** Gaps and padding consume input, but never become hidden vanilla slot clicks. */
@@ -308,19 +408,11 @@ object TermGui {
         val mc = Minecraft.getInstance()
         val player = mc.player ?: return
 
-        val effectiveButton = if (kind == Kind.RUBIX) {
-            val slotObj = screen.menu.slots.getOrNull(slot)
-            val currentIdx = AutoTerminal.rubixPredicted(slot)
-                ?: TerminalHelper.rubixColorIndex(slotObj?.item ?: ItemStack.EMPTY).takeIf { it >= 0 }
-            val target = AutoTerminal.rubixTargetOrNull() ?: cachedRubixTarget ?: TerminalSolver.optimalRubixTarget(all)
-            when (button) {
-                0 -> if (currentIdx != null && target != null && currentIdx in 0..4 && target in 0..4) {
-                    TerminalSolver.rubixButton(currentIdx, target)
-                } else 0
-                1 -> 1
-                else -> 2
-            }
-        } else if (simulation) button else 2
+        val rubixPlan = if (kind == Kind.RUBIX) rubixClickPlan(
+            all.getOrNull(slot) ?: ItemStack.EMPTY, AutoTerminal.rubixPredicted(slot), rubixTargetFor(all), button
+        ) else null
+        val effectiveButton = rubixPlan?.button ?: if (simulation) button else 2
+        val nextColor = rubixPlan?.nextColor
 
         // Same door the clicker uses: the player's window sends the packet, a
         // screen holding its own menu gets the click through slotClicked —
@@ -335,12 +427,8 @@ object TermGui {
         if (!sent) return
         screen.menu.carried = ItemStack.EMPTY
         if (!simulation) player.containerMenu.carried = ItemStack.EMPTY
-        if (kind == Kind.RUBIX && !simulation) {
+        if (nextColor != null && !simulation) {
             val slotObj = screen.menu.slots.getOrNull(slot)
-            val currentIdx = AutoTerminal.rubixPredicted(slot)
-                ?: TerminalHelper.rubixColorIndex(slotObj?.item ?: ItemStack.EMPTY).takeIf { it >= 0 }
-                ?: 0
-            val nextColor = TerminalSolver.rubixAdvance(currentIdx, effectiveButton)
             AutoTerminal.setRubixPredicted(slot, nextColor)
             val nextItem = when (nextColor) {
                 0 -> net.minecraft.world.item.Items.ORANGE_STAINED_GLASS_PANE
@@ -356,9 +444,21 @@ object TermGui {
         }
     }
 
-    internal fun canClick(kind: Kind, title: String, all: List<ItemStack>, slot: Int): Boolean =
-        if (kind == Kind.MELODY) TerminalSolver.melodyRows(all).any { it.buttonSlot == slot && !it.completed }
-        else slot in TerminalSolver.clickCandidates(title, all, rubixTarget = AutoTerminal.rubixTargetOrNull())
+    /** Manual input follows interactive content, independently of the solver's next candidate. */
+    internal fun canClick(kind: Kind, title: String, all: List<ItemStack>, slot: Int): Boolean {
+        if (TerminalSolver.kindOf(title) != kind || slot !in 0 until kind.slotCount) return false
+        val stack = all.getOrNull(slot) ?: return false
+        if (stack.isEmpty || stack.`is`(Items.BLACK_STAINED_GLASS_PANE)) return false
+        return when (kind) {
+            Kind.ORDER -> slot in TerminalSolver.numberSlots(all)
+            Kind.RUBIX -> slot in TerminalSolver.RUBIX_SLOTS && TerminalHelper.rubixColorIndex(stack) in 0..4
+            Kind.PANES -> tiles(kind).any { it.slot == slot } &&
+                (stack.`is`(Items.RED_STAINED_GLASS_PANE) || stack.`is`(Items.LIME_STAINED_GLASS_PANE) ||
+                    stack.`is`(Items.GREEN_STAINED_GLASS_PANE))
+            Kind.SELECT, Kind.STARTS -> tiles(kind).any { it.slot == slot }
+            Kind.MELODY -> TerminalSolver.melodyRows(all).any { it.buttonSlot == slot }
+        }
+    }
 
     fun keyPressed(screen: AbstractContainerScreen<*>, event: KeyEvent) {
         val mc = Minecraft.getInstance()
