@@ -287,4 +287,46 @@ object KinematicTrajectory {
 
         return AirControl(fwdInput, strafeInput)
     }
+
+    /**
+     * Computes the lateral air strafe command (-1.0 to +1.0) to steer an airborne player
+     * back toward the center line of a flight corridor (from [originX, originZ] to [destX, destZ]).
+     *
+     * In Minecraft movement input conventions:
+     * - Positive value (> 0) means the player must strafe LEFT (press keyLeft / A).
+     * - Negative value (< 0) means the player must strafe RIGHT (press keyRight / D).
+     */
+    fun computeCorridorAirStrafe(
+        playerX: Double,
+        playerZ: Double,
+        playerYaw: Float,
+        originX: Double,
+        originZ: Double,
+        destX: Double,
+        destZ: Double
+    ): Double {
+        val segX = destX - originX
+        val segZ = destZ - originZ
+        val segLen = hypot(segX, segZ)
+        if (segLen <= 0.01) return 0.0
+
+        val px = playerX - originX
+        val pz = playerZ - originZ
+
+        // Normal vector pointing to the RIGHT of the route segment: R = (-segZ / segLen, segX / segLen)
+        // crossTrack > 0 means player is displaced to the RIGHT of the route line.
+        val crossTrack = (segX * pz - segZ * px) / segLen
+
+        // Vector C points from player back towards corridor centerline:
+        // C = -crossTrack * R = (crossTrack * segZ / segLen, -crossTrack * segX / segLen)
+        val cx = crossTrack * (segZ / segLen)
+        val cz = -crossTrack * (segX / segLen)
+
+        // Project C onto player's local strafe axis (+1 is LEFT, -1 is RIGHT):
+        val rad = Math.toRadians(playerYaw.toDouble())
+        val cosYaw = cos(rad)
+        val sinYaw = sin(rad)
+        return cosYaw * cx + sinYaw * cz
+    }
 }
+

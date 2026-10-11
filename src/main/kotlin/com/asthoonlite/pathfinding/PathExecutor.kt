@@ -221,6 +221,7 @@ object PathExecutor {
         targetYaw: Float,
         targetPitch: Float,
         prevTarget: Vec3?,
+        nextTarget: Vec3? = null,
         playerPos: Vec3,
         playerYaw: Float,
         playerPitch: Float,
@@ -235,13 +236,15 @@ object PathExecutor {
 
         var crossTrack = 0.0
         var alongTrack = 0.0
-        if (prevTarget != null) {
-            val segX = target.x - prevTarget.x
-            val segZ = target.z - prevTarget.z
+        val segStart = prevTarget ?: target
+        val segEnd = if (prevTarget != null) target else nextTarget
+        if (segEnd != null) {
+            val segX = segEnd.x - segStart.x
+            val segZ = segEnd.z - segStart.z
             val segLen = hypot(segX, segZ)
             if (segLen > 0.01) {
-                val vx = playerPos.x - prevTarget.x
-                val vz = playerPos.z - prevTarget.z
+                val vx = playerPos.x - segStart.x
+                val vz = playerPos.z - segStart.z
                 crossTrack = (segX * vz - segZ * vx) / segLen
                 alongTrack = (vx * segX + vz * segZ) / segLen
             }
@@ -279,6 +282,7 @@ object PathExecutor {
         if (currentNodeIndex !in preset.points.indices) return null
         val target = preset.points[currentNodeIndex]
         val prevTarget = preset.points.getOrNull(currentNodeIndex - 1)
+        val nextTarget = preset.points.getOrNull(currentNodeIndex + 1)
         val bpsH = player.deltaMovement.horizontalDistance() * 20.0
 
         return computeRouteOffset(
@@ -289,6 +293,7 @@ object PathExecutor {
             targetYaw = target.yaw,
             targetPitch = target.pitch,
             prevTarget = if (prevTarget != null) Vec3(prevTarget.x, prevTarget.y, prevTarget.z) else null,
+            nextTarget = if (nextTarget != null) Vec3(nextTarget.x, nextTarget.y, nextTarget.z) else null,
             playerPos = Vec3(player.x, player.y, player.z),
             playerYaw = player.yRot,
             playerPitch = player.xRot,
@@ -538,19 +543,20 @@ object PathExecutor {
                 flightYaw
             }
 
-            val effectiveLaunchPitch = if (target.hasLookNode && target.pitch in 20.0f..88.0f) {
+            val baseLaunchPitch = if (target.hasLookNode && target.pitch in 20.0f..88.0f) {
                 target.pitch
-            } else if (target.pitch in 42.0f..75.0f) {
+            } else if (target.pitch in 60.0f..85.0f) {
                 target.pitch
             } else {
-                55.0f
+                78.0f
             }
 
-            val hasGroundImpact = run {
-                val clipVec = player.eyePosition.add(Vec3.directionFromRotation(effectiveLaunchPitch, effectiveShotYaw).scale(6.0))
-                val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
-                hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 5.5
-            }
+            val (hasGroundImpact, effectiveLaunchPitch) = resolveBonzoLaunchGround(
+                level = level,
+                player = player,
+                launchYaw = effectiveShotYaw,
+                basePitch = baseLaunchPitch
+            )
 
             // Reserve the jump only once on the launch platform, not while climbing its approach.
             isBonzoRunway = player.onGround() && nextTarget != null && canReserveBonzoJump(player.y - target.y, hasGroundImpact)
@@ -1059,6 +1065,34 @@ object PathExecutor {
     internal fun canReserveBonzoJump(heightAboveNode: Double, groundImpact: Boolean): Boolean =
         groundImpact && heightAboveNode in -0.3..0.6
 
+    internal fun resolveBonzoLaunchGround(
+        level: Level,
+        player: LocalPlayer,
+        launchYaw: Float,
+        basePitch: Float
+    ): Pair<Boolean, Float> {
+        val testPitches = if (basePitch in 65.0f..85.0f) {
+            listOf(basePitch, 75.0f, 79.0f, 82.0f)
+        } else {
+            listOf(basePitch, 70.0f, 75.0f, 79.0f, 82.0f)
+        }
+        for (p in testPitches) {
+            val clipVec = player.eyePosition.add(Vec3.directionFromRotation(p, launchYaw).scale(5.5))
+            val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
+            if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 5.0) {
+                return true to p
+            }
+        }
+        if (player.onGround()) {
+            val downVec = player.eyePosition.add(0.0, -2.5, 0.0)
+            val downHit = level.clip(ClipContext(player.eyePosition, downVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
+            if (downHit.type == HitResult.Type.BLOCK) {
+                return true to 79.0f
+            }
+        }
+        return false to basePitch
+    }
+
     internal data class BonzoLaunchParams(
         val isRedirection: Boolean,
         val shotYaw: Float,
@@ -1305,13 +1339,14 @@ object PathExecutor {
                 } else {
                     flightYaw
                 }
-                val prePitch = if (target.hasLookNode && target.pitch in 20.0f..88.0f) {
+                val basePrePitch = if (target.hasLookNode && target.pitch in 20.0f..88.0f) {
                     target.pitch
-                } else if (target.pitch in 42.0f..75.0f) {
+                } else if (target.pitch in 60.0f..85.0f) {
                     target.pitch
                 } else {
-                    55.0f
+                    78.0f
                 }
+                val (_, prePitch) = resolveBonzoLaunchGround(level, player, preYaw, basePrePitch)
                 val t = ((1.0 - distH) / 1.0).toFloat().coerceIn(0f, 1f)
                 goalYaw = preYaw
                 goalPitch = Mth.lerp(t, 15.0f, prePitch)
@@ -1645,12 +1680,18 @@ object PathExecutor {
                         (segX * pz - segZ * px) / segLen
                     } else 0.0
 
-                    if (abs(crossTrack) > 0.20) {
-                        // Explicit corridor cross-track error:
-                        // Facing along corridor: crossTrack > 0 means left of corridor -> strafe right
-                        // crossTrack < 0 means right of corridor -> strafe left
-                        mc.options.keyLeft.setDown(crossTrack < -0.20)
-                        mc.options.keyRight.setDown(crossTrack > 0.20)
+                    if (abs(crossTrack) > 0.15) {
+                        val corridorStrafe = KinematicTrajectory.computeCorridorAirStrafe(
+                            playerX = player.x,
+                            playerZ = player.z,
+                            playerYaw = player.yRot,
+                            originX = originX,
+                            originZ = originZ,
+                            destX = destPoint.x,
+                            destZ = destPoint.z
+                        )
+                        mc.options.keyLeft.setDown(corridorStrafe > 0.12)
+                        mc.options.keyRight.setDown(corridorStrafe < -0.12)
                     } else {
                         val airGuidance = KinematicTrajectory.computeAirGuidance(
                             playerPos = Vec3(player.x, player.y, player.z),

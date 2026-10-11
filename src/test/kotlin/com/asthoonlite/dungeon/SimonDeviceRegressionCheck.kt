@@ -909,7 +909,35 @@ internal fun simonDeviceRegressionChecks() {
     check(Math.abs(telemetry.dz - 0.5) < 0.01) { "dz should be +0.5" }
     check(Math.abs(telemetry.yawErr - 0.5f) < 0.1f) { "yawErr should be +0.5°" }
     check(Math.abs(telemetry.crossTrack - 0.3) < 0.01) { "crossTrack lateral error should be +0.3" }
+
+    // 37. Corridor air guidance strafe sign convention
+    // Heading West (from [51.5, 139.0] to [33.5, 139.0], yaw = 90°):
+    // Player drifted North to Z = 135.0 (right of route). Must strafe LEFT (+).
+    val strafeWest = KinematicTrajectory.computeCorridorAirStrafe(
+        playerX = 40.0,
+        playerZ = 135.0,
+        playerYaw = 90.0f,
+        originX = 51.5,
+        originZ = 139.0,
+        destX = 33.5,
+        destZ = 139.0
+    )
+    check(strafeWest > 0.5) { "Drifting North when flying West must output positive strafe (keyLeft) to steer back South, got $strafeWest" }
+
+    // Heading East (from [54.5, 47.0] to [72.5, 47.0], yaw = -90°):
+    // Player drifted South to Z = 52.0 (right of route). Must strafe LEFT (+).
+    val strafeEast = KinematicTrajectory.computeCorridorAirStrafe(
+        playerX = 60.0,
+        playerZ = 52.0,
+        playerYaw = -90.0f,
+        originX = 54.5,
+        originZ = 47.0,
+        destX = 72.5,
+        destZ = 47.0
+    )
+    check(strafeEast > 0.5) { "Drifting South when flying East must output positive strafe (keyLeft) to steer back North, got $strafeEast" }
 }
+
 
 
 
