@@ -156,8 +156,8 @@ object KinematicTrajectory {
         val minPitch = if (isRedirection) 35.0f else 28.0f
         val boundedPitch = calcPitch.coerceIn(minPitch, maxPitchForRange)
 
-        // If recorded pitch is provided and physically covers the required distance, preserve it
-        if (recordedPitch in minPitch..maxPitchForRange) {
+        // If recorded pitch is provided, preserve it
+        if (recordedPitch in 20.0f..88.0f) {
             return recordedPitch
         }
         return boundedPitch
@@ -222,22 +222,10 @@ object KinematicTrajectory {
         val computedPitch = (-Math.toDegrees(atan2(aimDy, aimDistH.coerceAtLeast(0.2)))).toFloat().coerceIn(45.0f, 75.0f)
 
         val deltaY = destinationPos.y - playerPos.y
-        val finalPitch = if (isRedirection) {
-            if (recordedPitch in 25.0f..88.0f) {
-                if (destDistH >= 17.0 && deltaY >= 0.0 && recordedPitch > 38.0f) 38.0f
-                else if (destDistH >= 18.0 && deltaY < 0.0 && recordedPitch > 54.15f) 54.15f
-                else recordedPitch
-            } else {
-                computedPitch
-            }
-        } else if (recordedPitch in 25.0f..88.0f) {
-            if (destDistH >= 17.0 && deltaY >= 0.0 && recordedPitch > 38.0f) {
-                38.0f
-            } else if (destDistH >= 18.0 && deltaY < 0.0 && recordedPitch > 54.15f) {
-                54.15f
-            } else {
-                recordedPitch
-            }
+        val finalPitch = if (recordedPitch in 20.0f..88.0f) {
+            recordedPitch
+        } else if (isRedirection) {
+            computedPitch
         } else {
             calculateOptimalBonzoPitch(
                 distH = destDistH,

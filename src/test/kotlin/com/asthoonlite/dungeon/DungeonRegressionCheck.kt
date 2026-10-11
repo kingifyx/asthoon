@@ -1223,15 +1223,20 @@ fun main() {
             "Shot yaw without look node must align precisely with destination yaw (${planAutoS2.destYaw}°), got ${planAutoS2.shotYaw}"
         }
 
-        // Test optimal pitch clamping for long/uphill ranges (e.g. niggap3 Node 2 -> Node 3 17.89m +1.0m rise)
+        // User recorded pitch must be preserved without artificial clamping
         val optPitchP3 = KinematicTrajectory.calculateOptimalBonzoPitch(distH = 17.89, deltaY = 1.0, recordedPitch = 63.78f)
-        check(optPitchP3 <= 38.0f) {
-            "Pitch for 17.89m uphill jump must be clamped to <= 38° to prevent undershooting, got $optPitchP3"
+        check(optPitchP3 == 63.78f) {
+            "Explicit user recorded pitch must be preserved without clamping, got $optPitchP3"
         }
         // Test optimal pitch for niggaS2 Node 1 -> Node 2 (18.01m downhill -1.5m)
         val optPitchS2 = KinematicTrajectory.calculateOptimalBonzoPitch(distH = 18.01, deltaY = -1.5, recordedPitch = 61.05f)
-        check(optPitchS2 <= 42.0f) {
-            "Pitch for 18m downhill jump must be clamped to <= 42° to guarantee reach, got $optPitchS2"
+        check(optPitchS2 == 61.05f) {
+            "Explicit user recorded pitch for downhill jump must be preserved, got $optPitchS2"
+        }
+        // Fallback pitch calculation when no user pitch is recorded
+        val optPitchAuto = KinematicTrajectory.calculateOptimalBonzoPitch(distH = 18.0, deltaY = 0.0, recordedPitch = 0f)
+        check(optPitchAuto in 28.0f..45.0f) {
+            "Fallback calculation without recorded pitch must produce flat launch angle, got $optPitchAuto"
         }
     }
 

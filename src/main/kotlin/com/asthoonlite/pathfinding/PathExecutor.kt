@@ -533,7 +533,7 @@ object PathExecutor {
                 flightYaw
             }
 
-            val baseLaunchPitch = if (target.hasLookNode && target.pitch in 20.0f..88.0f) {
+            val baseLaunchPitch = if (target.pitch in 20.0f..88.0f) {
                 target.pitch
             } else {
                 launchParams.shotPitch
@@ -747,7 +747,7 @@ object PathExecutor {
             } else {
                 flightYaw
             }
-            val prePitch = if (target.hasLookNode && target.pitch in 20.0f..88.0f) {
+            val prePitch = if (target.pitch in 20.0f..88.0f) {
                 target.pitch
             } else {
                 KinematicTrajectory.calculateOptimalBonzoPitch(
