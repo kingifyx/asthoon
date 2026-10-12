@@ -620,7 +620,7 @@ object PathExecutor {
         }
 
         // 3. Specialized Stationary Nodes: Simon Says, Arrows Align, Timeout
-        if (nodeType == RouteNodeType.SIMON_SAYS && (isSettled || (player.onGround() && distH <= 0.50))) {
+        if (nodeType == RouteNodeType.SIMON_SAYS && distY <= 1.5 && (isSettled || (player.onGround() && distH <= 0.50))) {
             releaseAllMovementKeys()
             player.setSprinting(false)
             jumpTicksRemaining = 0
@@ -633,7 +633,7 @@ object PathExecutor {
             return
         }
 
-        if (nodeType == RouteNodeType.ARROWS_ALIGN && (isSettled || (player.onGround() && distH <= 0.50))) {
+        if (nodeType == RouteNodeType.ARROWS_ALIGN && distY <= 1.5 && (isSettled || (player.onGround() && distH <= 0.50))) {
             releaseAllMovementKeys()
             player.setSprinting(false)
             jumpTicksRemaining = 0
@@ -646,7 +646,7 @@ object PathExecutor {
             return
         }
 
-        if (nodeType == RouteNodeType.TIMEOUT && (isSettled || (player.onGround() && distH <= 0.50))) {
+        if (nodeType == RouteNodeType.TIMEOUT && distY <= 1.5 && (isSettled || (player.onGround() && distH <= 0.50))) {
             releaseAllMovementKeys()
             player.setSprinting(false)
             jumpTicksRemaining = 0
@@ -812,7 +812,7 @@ object PathExecutor {
             val aimDz = aimZ - player.z
             val aimDistH = sqrt(aimDx * aimDx + aimDz * aimDz)
 
-            val destYaw = if (nextTarget == null && distH <= 0.8 && prevNode != null && hypot(target.x - prevNode.x, target.z - prevNode.z) > 0.05 && !target.hasLookNode) {
+            val destYaw = if (nextTarget == null && distH <= 2.0 && prevNode != null && hypot(target.x - prevNode.x, target.z - prevNode.z) > 0.05 && !target.hasLookNode) {
                 (-Math.toDegrees(atan2(target.x - prevNode.x, target.z - prevNode.z))).toFloat()
             } else {
                 (-Math.toDegrees(atan2(aimDx, aimDz))).toFloat()
@@ -822,7 +822,7 @@ object PathExecutor {
             val pitchDistH = aimDistH.coerceAtLeast(0.5)
             val minP = if (nodeType == RouteNodeType.BREAK || isApproachingBreak) -89.0f else -25.0f
             val maxP = if (nodeType == RouteNodeType.BREAK || isApproachingBreak) 89.0f else 25.0f
-            val destPitch = if (nextTarget == null && distH <= 0.8 && !target.hasLookNode && nodeType != RouteNodeType.BREAK) {
+            val destPitch = if (nextTarget == null && distH <= 2.0 && !target.hasLookNode && nodeType != RouteNodeType.BREAK) {
                 0.0f
             } else {
                 (-Math.toDegrees(atan2(aimDy, pitchDistH))).toFloat().coerceIn(minP, maxP)
@@ -1143,8 +1143,7 @@ object PathExecutor {
         val distH = offset.horizontalDistance()
         val speed = horizontalVelocity.horizontalDistance()
 
-        // 1. Deadzone: right on the node. Cut all movement inputs completely.
-        if (distH <= 0.40) {
+        if (distH < 0.25 && speed <= 0.08) {
             return Vec3.ZERO
         }
 
@@ -1161,7 +1160,18 @@ object PathExecutor {
             }
             return dir
         }
-        val correction = offset.subtract(horizontalVelocity.scale(8.0))
+
+        // When distH >= 1.4:
+        // Lead the stopping position along the approach vector
+        // by 8 ticks of forward momentum before reaching the platform.
+        val dir = offset.normalize()
+        val vToward = horizontalVelocity.dot(dir)
+        val forwardLead = distH - vToward * 8.0
+        val forwardMotion = dir.scale(forwardLead)
+        // For lateral velocity, damp gently without throwing the player sideways off catwalks
+        val lateralVel = horizontalVelocity.subtract(dir.scale(vToward))
+        val lateralDamping = lateralVel.scale(-1.5)
+        val correction = forwardMotion.add(lateralDamping)
         return if (correction.horizontalDistance() < 0.1) Vec3.ZERO else correction
     }
 
@@ -1518,14 +1528,6 @@ object PathExecutor {
                 goalPitch = Mth.lerp(t, 15.0f, prePitch)
                 isFastAim = true
             }
-            currentNodeIndex == points.size - 1 && !isDeviceNode && nodeType != RouteNodeType.TIMEOUT && distH <= 1.5 -> {
-                val prevNode = points.getOrNull(currentNodeIndex - 1)
-                val approachDx = target.x - (prevNode?.x ?: currentX)
-                val approachDz = target.z - (prevNode?.z ?: currentZ)
-                goalYaw = if (hypot(approachDx, approachDz) > 0.05) (-Math.toDegrees(atan2(approachDx, approachDz))).toFloat() else target.yaw
-                goalPitch = 0.0f
-                isFastAim = false
-            }
             target.hasLookNode && (!isDeviceNode || isSettled) -> {
                 val ldx = target.lookX - currentX
                 val ldy = target.lookY - currentEyeY
@@ -1535,7 +1537,7 @@ object PathExecutor {
                 goalPitch = (-Math.toDegrees(atan2(ldy, ldistH))).toFloat().coerceIn(-89f, 89f)
                 isFastAim = false
             }
-            nodeType == RouteNodeType.SIMON_SAYS && isSettled -> {
+            nodeType == RouteNodeType.SIMON_SAYS && Config.autoSimonSaysEnabled && isSettled -> {
                 val simonPos = Vec3(110.5, 121.5, 93.5)
                 val sdx = simonPos.x - currentX
                 val sdy = simonPos.y - currentEyeY
@@ -1553,6 +1555,14 @@ object PathExecutor {
                 val adistH = sqrt(adx * adx + adz * adz)
                 goalYaw = (-Math.toDegrees(atan2(adx, adz))).toFloat()
                 goalPitch = (-Math.toDegrees(atan2(ady, adistH))).toFloat().coerceIn(-89f, 89f)
+                isFastAim = false
+            }
+            currentNodeIndex == points.size - 1 && distH <= 2.0 -> {
+                val prevNode = points.getOrNull(currentNodeIndex - 1)
+                val approachDx = if (prevNode != null) target.x - prevNode.x else target.x - currentX
+                val approachDz = if (prevNode != null) target.z - prevNode.z else target.z - currentZ
+                goalYaw = if (hypot(approachDx, approachDz) > 0.05) (-Math.toDegrees(atan2(approachDx, approachDz))).toFloat() else target.yaw
+                goalPitch = 0.0f
                 isFastAim = false
             }
             else -> {
@@ -1998,21 +2008,6 @@ object PathExecutor {
     private fun finishRoute(preset: PathPreset) {
         val mc = Minecraft.getInstance()
         val player = mc.player
-        val points = preset.points
-        val lastNode = points.lastOrNull()
-        val prevNode = points.getOrNull(points.size - 2)
-
-        val finalYaw = if (lastNode != null && lastNode.hasLookNode) {
-            val ldx = lastNode.lookX - (player?.x ?: lastNode.x)
-            val ldz = lastNode.lookZ - (player?.z ?: lastNode.z)
-            (-Math.toDegrees(atan2(ldx, ldz))).toFloat()
-        } else if (lastNode != null && prevNode != null && hypot(lastNode.x - prevNode.x, lastNode.z - prevNode.z) > 0.05) {
-            val adx = lastNode.x - prevNode.x
-            val adz = lastNode.z - prevNode.z
-            (-Math.toDegrees(atan2(adx, adz))).toFloat()
-        } else {
-            player?.yRot ?: 0f
-        }
 
         stop()
         if (Config.activePathfindingPresetId == preset.id) {
@@ -2020,13 +2015,9 @@ object PathExecutor {
             Config.save()
         }
 
+        cameraYawVelocity = 0f
+        cameraPitchVelocity = 0f
         if (player != null) {
-            player.yRot = finalYaw
-            player.yRotO = finalYaw
-            player.xRot = 0.0f
-            player.xRotO = 0.0f
-            cameraYawVelocity = 0f
-            cameraPitchVelocity = 0f
             mc.options.keyUp.setDown(false)
             mc.options.keyDown.setDown(false)
             mc.options.keyLeft.setDown(false)
