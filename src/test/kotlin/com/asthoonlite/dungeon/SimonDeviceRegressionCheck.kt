@@ -1108,6 +1108,46 @@ internal fun simonDeviceRegressionChecks() {
     val autoSimonDisabled = false
     val isSpecialWhenDisabled = (RouteNodeType.SIMON_SAYS == RouteNodeType.SIMON_SAYS && autoSimonDisabled)
     check(!isSpecialWhenDisabled) { "SIMON_SAYS must not be treated as a waiting special stationary solver node when auto solver is off" }
+
+    // 40. Bonzo approach chasm jumping vs launch pad grounded stance
+    val bonzoChasmShouldJump = PathExecutor.shouldAutoJump(
+        nodeType = RouteNodeType.BONZO_STAFF,
+        isStationaryDest = false,
+        onGround = true,
+        isLedge = true,
+        distH = 6.4,
+        isCrouchNode = false,
+        isObstacleCollision = false,
+        isElevationStep = false,
+        isMiningObstacle = false,
+        isExitingBreakDoorway = false,
+        isDescending = false
+    )
+    check(bonzoChasmShouldJump) { "Approaching a Bonzo node across a chasm (distH=6.4 > 1.8) with isLedge must trigger auto jump" }
+
+    val bonzoPadShouldJump = PathExecutor.shouldAutoJump(
+        nodeType = RouteNodeType.BONZO_STAFF,
+        isStationaryDest = false,
+        onGround = true,
+        isLedge = true,
+        distH = 1.2,
+        isCrouchNode = false,
+        isObstacleCollision = false,
+        isElevationStep = false,
+        isMiningObstacle = false,
+        isExitingBreakDoorway = false,
+        isDescending = false
+    )
+    check(!bonzoPadShouldJump) { "On the Bonzo launch pad (distH=1.2 <= 1.8), auto ledge jump must be suppressed to preserve grounded stance" }
+
+    // Terminal orientation preserves approach vector without 180 flip
+    val termTargetPos = Vec3(2.5, 109.0, 100.5)
+    val termPrevPos = Vec3(2.5, 109.0, 104.5)
+    val slightOvershoot = Vec3(2.57, 109.0, 100.24)
+    val approachYaw = (-Math.toDegrees(Math.atan2(termTargetPos.x - termPrevPos.x, termTargetPos.z - termPrevPos.z))).toFloat()
+    val rawAimYaw = (-Math.toDegrees(Math.atan2(termTargetPos.x - slightOvershoot.x, termTargetPos.z - slightOvershoot.z))).toFloat()
+    check(Math.abs(Mth.wrapDegrees(approachYaw - 180f)) < 0.1f) { "Approach heading moving North must be 180 degrees" }
+    check(Math.abs(Mth.wrapDegrees(rawAimYaw - approachYaw)) > 90f) { "Raw target aim vector flips around 180 degrees backwards upon slight terminal overshoot" }
 }
 
 

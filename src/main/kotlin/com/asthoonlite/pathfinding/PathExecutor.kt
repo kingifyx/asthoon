@@ -412,6 +412,7 @@ object PathExecutor {
 
         val target = points[currentNodeIndex]
         val nodeType = target.nodeType()
+        val prevNode = points.getOrNull(currentNodeIndex - 1)
         val nextTarget = points.getOrNull(currentNodeIndex + 1)
 
         val dx = target.x - player.x
@@ -470,9 +471,9 @@ object PathExecutor {
             // Auto-select Bonzo's Staff
             selectBonzoStaff()
 
-            // Keep player firmly grounded during arrival at Bonzo launch point;
-            // allows clean sprinting across the runway without jumping into the void
-            if (!isAirborneBonzo && bonzoState == BonzoState.IDLE && player.onGround()) {
+            // Keep player firmly grounded on the Bonzo launch pad (distH <= 1.8);
+            // preserves grounded stance so staff blast can propel cleanly, while allowing approach gap jumps
+            if (!isAirborneBonzo && bonzoState == BonzoState.IDLE && player.onGround() && distH <= 1.8) {
                 jumpTicksRemaining = 0
                 mc.options.keyJump.setDown(false)
             }
@@ -649,7 +650,13 @@ object PathExecutor {
             releaseAllMovementKeys()
             player.setSprinting(false)
             jumpTicksRemaining = 0
-            aimTowards(player, target, null)
+            if (target.hasLookNode) {
+                aimTowards(player, target, null)
+            } else if (prevNode != null && hypot(target.x - prevNode.x, target.z - prevNode.z) > 0.05) {
+                val adx = target.x - prevNode.x
+                val adz = target.z - prevNode.z
+                aimRotation(player, (-Math.toDegrees(atan2(adx, adz))).toFloat(), 0.0f)
+            }
             if (timeoutTicksRemaining < 0) {
                 val duration = if (target.timeoutSeconds > 0.0) target.timeoutSeconds else 1.0
                 timeoutTicksRemaining = (duration * 20.0).toInt().coerceAtLeast(1)
@@ -739,7 +746,6 @@ object PathExecutor {
         }
 
         val isFinalNode = currentNodeIndex == points.size - 1
-        val prevNode = points.getOrNull(currentNodeIndex - 1)
         val approachDx = target.x - (prevNode?.x ?: player.x)
         val approachDz = target.z - (prevNode?.z ?: player.z)
         val approachYaw = if (hypot(approachDx, approachDz) > 0.05) (-Math.toDegrees(atan2(approachDx, approachDz))).toFloat() else target.yaw
@@ -806,13 +812,21 @@ object PathExecutor {
             val aimDz = aimZ - player.z
             val aimDistH = sqrt(aimDx * aimDx + aimDz * aimDz)
 
-            val destYaw = (-Math.toDegrees(atan2(aimDx, aimDz))).toFloat()
+            val destYaw = if (nextTarget == null && distH <= 0.8 && prevNode != null && hypot(target.x - prevNode.x, target.z - prevNode.z) > 0.05 && !target.hasLookNode) {
+                (-Math.toDegrees(atan2(target.x - prevNode.x, target.z - prevNode.z))).toFloat()
+            } else {
+                (-Math.toDegrees(atan2(aimDx, aimDz))).toFloat()
+            }
             val targetEyeY = if (nodeType == RouteNodeType.BREAK) target.y + 0.5 else target.y + 1.2
             val aimDy = targetEyeY - (player.y + player.eyeHeight)
             val pitchDistH = aimDistH.coerceAtLeast(0.5)
             val minP = if (nodeType == RouteNodeType.BREAK || isApproachingBreak) -89.0f else -25.0f
             val maxP = if (nodeType == RouteNodeType.BREAK || isApproachingBreak) 89.0f else 25.0f
-            val destPitch = (-Math.toDegrees(atan2(aimDy, pitchDistH))).toFloat().coerceIn(minP, maxP)
+            val destPitch = if (nextTarget == null && distH <= 0.8 && !target.hasLookNode && nodeType != RouteNodeType.BREAK) {
+                0.0f
+            } else {
+                (-Math.toDegrees(atan2(aimDy, pitchDistH))).toFloat().coerceIn(minP, maxP)
+            }
 
             aimRotation(player, destYaw, destPitch)
         }
@@ -832,7 +846,7 @@ object PathExecutor {
         val targetYaw = (-Math.toDegrees(atan2(toTargetDx, toTargetDz))).toFloat()
         val isDescending = target.y < player.y - 0.5
         val maxLedgeDist = (distH - 0.4).coerceAtLeast(0.5)
-        val isLedge = !isDescending && !isStationaryDest && nodeType != RouteNodeType.BONZO_STAFF &&
+        val isLedge = !isDescending && !isStationaryDest && (nodeType != RouteNodeType.BONZO_STAFF || distH > 1.8) &&
             (isLedgeOrGapAhead(level, player, targetYaw, maxLedgeDist) ||
              KinematicTrajectory.shouldPredictiveLedgeJump(level, Vec3(player.x, player.y, player.z), player.deltaMovement, Vec3(target.x, target.y, target.z), player.onGround()))
 
@@ -949,8 +963,8 @@ object PathExecutor {
         }
 
         // Jump handling: auto-jump on elevation step-up, obstacle collision, gap/ledge detection
-        // Auto gap jump: trigger on WALK nodes over chasms!
-        val canAutoGapJump = nodeType == RouteNodeType.WALK && player.onGround() && isLedge && distH > 0.4 && !isCrouchNode && !isDescending
+        // Auto gap jump: trigger on WALK nodes or approach across chasms to Bonzo launch pads!
+        val canAutoGapJump = (nodeType == RouteNodeType.WALK || (nodeType == RouteNodeType.BONZO_STAFF && distH > 1.8)) && player.onGround() && isLedge && distH > 0.4 && !isCrouchNode && !isDescending
         val isObstacleCollision = !isDescending && player.horizontalCollision && player.onGround() && nodeType != RouteNodeType.BREAK && !isApproachingBreak
         val isElevationStep = !isDescending && target.y > player.y + 0.35 && distH < 2.5 && player.onGround() && nodeType != RouteNodeType.BREAK && !isApproachingBreak
 
@@ -980,11 +994,11 @@ object PathExecutor {
             isDescending = isDescending
         )
 
-        if (!isApproaching || isBonzoRunway || nodeType == RouteNodeType.BONZO_STAFF || (isStationaryDest && landingSupport)) {
+        if (!isApproaching || isBonzoRunway || (nodeType == RouteNodeType.BONZO_STAFF && distH <= 1.8) || (isStationaryDest && landingSupport)) {
             jumpTicksRemaining = 0
         } else {
             jumpTicksRemaining = nextAutoJumpPulse(shouldAutoJump, jumpTicksRemaining, mc.options.keyJump.isDown)
-            if (shouldAutoJump && isCrossingGapToStationary && jumpTicksRemaining > 0) {
+            if (shouldAutoJump && ((nodeType == RouteNodeType.BONZO_STAFF && distH > 1.8 && isLedge) || isCrossingGapToStationary) && jumpTicksRemaining > 0) {
                 jumpTicksRemaining = 3
             }
         }
