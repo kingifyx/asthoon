@@ -37,6 +37,7 @@ import com.asthoonlite.pathfinding.PathPoint
 import com.asthoonlite.pathfinding.PathExecutor
 import com.asthoonlite.pathfinding.KinematicTrajectory
 import net.minecraft.world.phys.Vec3
+import net.minecraft.util.Mth
 import com.google.gson.Gson
 import kotlin.math.*
 
@@ -1223,6 +1224,26 @@ fun main() {
             "Shot yaw without look node must align precisely with destination yaw (${planAutoS2.destYaw}°), got ${planAutoS2.shotYaw}"
         }
 
+        // Test redirection Bonzo aim for niggaS2 Node 12 -> Node 13 (15.5° turn with lateral drift)
+        val planRedirS2 = KinematicTrajectory.calculateBonzoAimPlan(
+            playerPos = Vec3(7.776, 115.062, 123.527),
+            playerVel = Vec3(0.1352, -0.0784, -0.8093),
+            playerEyeY = 116.682,
+            destinationPos = Vec3(2.5, 109.0, 104.5),
+            recordedPitch = 54.15f,
+            recordedYaw = 0.0f,
+            hasLookNode = false
+        )
+        check(planRedirS2.isRedirection) {
+            "Bonzo aim with 15.5° turn and eastward velocity must trigger isRedirection"
+        }
+        check(planRedirS2.shotPitch == 54.15f) {
+            "Explicit user recorded pitch (54.15°) must be preserved during redirection, got ${planRedirS2.shotPitch}"
+        }
+        check(abs(Mth.wrapDegrees(planRedirS2.shotYaw - planRedirS2.destYaw)) > 5.0f) {
+            "Shot yaw during redirection must counteract lateral drift and differ from destYaw, got shot=${planRedirS2.shotYaw}, dest=${planRedirS2.destYaw}"
+        }
+
         // User recorded pitch must be preserved without artificial clamping
         val optPitchP3 = KinematicTrajectory.calculateOptimalBonzoPitch(distH = 17.89, deltaY = 1.0, recordedPitch = 63.78f)
         check(optPitchP3 == 63.78f) {
@@ -1320,6 +1341,31 @@ fun main() {
         )
         check(shouldJumpApproachGap) {
             "Must auto-gap-jump across chasms on approach runway to reach the Bonzo launch pad"
+        }
+
+        // 6. Stationary destination chasm jump: crossing a gap to a stationary node must auto-jump
+        val shouldJumpStationaryGap = PathExecutor.shouldAutoJump(
+            nodeType = com.asthoonlite.pathfinding.RouteNodeType.SIMON_SAYS,
+            isStationaryDest = true,
+            onGround = true,
+            isLedge = true,
+            distH = 2.8,
+            isCrouchNode = false,
+            isObstacleCollision = false,
+            isElevationStep = false,
+            isMiningObstacle = false,
+            isExitingBreakDoorway = false
+        )
+        check(shouldJumpStationaryGap) {
+            "Must auto-gap-jump across chasm when approaching stationary destination (e.g. Simon Says catwalk)"
+        }
+
+        // 7. Bonzo runway motion blend check within 1.8m zone
+        val straightOffset = Vec3(0.0, 0.0, -10.0)
+        val nextOffset = Vec3(-6.0, 0.0, -18.0)
+        val blendedMotion = PathExecutor.bonzoRunwayMotion(straightOffset, nextOffset, 1.0)
+        check(blendedMotion.x < -0.05) {
+            "Runway motion within 1.8m blend zone must steer towards flight direction, got dx=${blendedMotion.x}"
         }
     }
 

@@ -202,7 +202,7 @@ object KinematicTrajectory {
         val impulseLen = requiredImpulse.horizontalDistance()
         val impulseDir = if (impulseLen > 0.01) requiredImpulse.scale(1.0 / impulseLen) else destDir
 
-        val isRedirection = abs(turnAngle) >= 45.0f || (impulseLen > 0.5 && abs(turnAngle) >= 35.0f)
+        val isRedirection = abs(turnAngle) >= 20.0f || (impulseLen > 0.5 && abs(turnAngle) >= 15.0f)
 
         // Predicted player position at detonation (2 ticks ahead)
         val predDetonationPos = playerPos.add(playerVel.x * BONZO_DETONATION_TICKS, 0.0, playerVel.z * BONZO_DETONATION_TICKS)
@@ -222,12 +222,10 @@ object KinematicTrajectory {
         val computedPitch = (-Math.toDegrees(atan2(aimDy, aimDistH.coerceAtLeast(0.2)))).toFloat().coerceIn(45.0f, 75.0f)
 
         val deltaY = destinationPos.y - playerPos.y
-        val finalPitch = if (hasLookNode && recordedPitch in 20.0f..88.0f) {
+        val finalPitch = if (recordedPitch in 20.0f..88.0f) {
             recordedPitch
         } else if (isRedirection) {
             computedPitch
-        } else if (recordedPitch in 20.0f..88.0f) {
-            recordedPitch
         } else {
             calculateOptimalBonzoPitch(
                 distH = destDistH,

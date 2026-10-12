@@ -758,8 +758,8 @@ object PathExecutor {
             aimTowardsVec(player, Vec3.atCenterOf(breakBlockPos))
         } else if (nextTarget?.nodeType() == RouteNodeType.BREAK && !isBlockBroken(level, nextTarget) && distH < 3.5) {
             aimTowardsVec(player, Vec3.atCenterOf(BlockPos.containing(nextTarget.x, nextTarget.y, nextTarget.z)))
-        } else if (nodeType == RouteNodeType.BONZO_STAFF && distH <= 1.0) {
-            // Smoothly pre-aim launch yaw and pitch in the final meter before Bonzo launch
+        } else if (nodeType == RouteNodeType.BONZO_STAFF && distH <= 2.0) {
+            // Smoothly pre-aim launch yaw and pitch in the final meters before Bonzo launch
             val flightDx = if (nextTarget != null) nextTarget.x - player.x else target.x - player.x
             val flightDz = if (nextTarget != null) nextTarget.z - player.z else target.z - player.z
             val flightYaw = if (hypot(flightDx, flightDz) > 0.05) (-Math.toDegrees(atan2(flightDx, flightDz))).toFloat() else target.yaw
@@ -768,7 +768,7 @@ object PathExecutor {
                 (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat()
             } else flightYaw
             val turnAngle = abs(Mth.wrapDegrees(flightYaw - currentHeadingYaw))
-            val isTurnRedirection = turnAngle >= 35.0f
+            val isTurnRedirection = turnAngle >= 15.0f
 
             val preAimPlan = if (isTurnRedirection) {
                 calculateKinematicBonzoAim(
@@ -804,7 +804,7 @@ object PathExecutor {
                     recordedPitch = target.pitch
                 )
             }
-            val t = ((1.0 - distH) / 1.0).toFloat().coerceIn(0f, 1f)
+            val t = ((2.0 - distH) / 2.0).toFloat().coerceIn(0f, 1f)
             val smoothPitch = Mth.lerp(t, 15.0f, prePitch)
             aimRotation(player, preYaw, smoothPitch, launching = true)
         } else {
@@ -846,12 +846,10 @@ object PathExecutor {
         val targetYaw = (-Math.toDegrees(atan2(toTargetDx, toTargetDz))).toFloat()
         val isDescending = target.y < player.y - 0.5
         val maxLedgeDist = (distH - 0.4).coerceAtLeast(0.5)
-        val isLedge = !isDescending && !isStationaryDest && (nodeType != RouteNodeType.BONZO_STAFF || distH > 1.8) &&
+        val hasLedgeAhead = !isDescending && (nodeType != RouteNodeType.BONZO_STAFF || distH > 1.8) &&
             (isLedgeOrGapAhead(level, player, targetYaw, maxLedgeDist) ||
              KinematicTrajectory.shouldPredictiveLedgeJump(level, Vec3(player.x, player.y, player.z), player.deltaMovement, Vec3(target.x, target.y, target.z), player.onGround()))
 
-        val landingFloor = BlockPos.containing(player.x, target.y - 0.1, player.z)
-        val landingSupport = isStationaryDest && player.onGround() && (abs(player.y - target.y) <= 0.8 || !level.getBlockState(landingFloor).getCollisionShape(level, landingFloor).isEmpty)
         val hasGapToTarget = isStationaryDest && run {
             val count = (distH / 0.8).toInt().coerceIn(1, 5)
             (1..count).any { i ->
@@ -862,7 +860,11 @@ object PathExecutor {
                 (s1.isAir || s1.`is`(Blocks.LAVA) || s1.`is`(Blocks.WATER)) && (s2.isAir || s2.`is`(Blocks.LAVA) || s2.`is`(Blocks.WATER))
             }
         }
-        val isCrossingGapToStationary = isStationaryDest && !landingSupport && (isLedge || hasGapToTarget) && distH >= 0.4
+        val isCrossingGapToStationary = isStationaryDest && (hasLedgeAhead || hasGapToTarget) && distH >= 0.4
+        val isLedge = hasLedgeAhead || isCrossingGapToStationary
+
+        val landingFloor = BlockPos.containing(player.x, target.y - 0.1, player.z)
+        val landingSupport = isStationaryDest && player.onGround() && !isCrossingGapToStationary && (abs(player.y - target.y) <= 0.8 || !level.getBlockState(landingFloor).getCollisionShape(level, landingFloor).isEmpty)
         val stationaryMotion = if (isStationaryDest && !isCrossingGapToStationary) {
             stationaryMovement(offset, player.deltaMovement, player.y - target.y, landingSupport)
         } else null
@@ -984,7 +986,7 @@ object PathExecutor {
             nodeType = nodeType,
             isStationaryDest = isStationaryDest,
             onGround = player.onGround(),
-            isLedge = if (isStationaryDest && landingSupport) false else isLedge,
+            isLedge = if (isStationaryDest && landingSupport && !isCrossingGapToStationary) false else isLedge,
             distH = distH,
             isCrouchNode = isCrouchNode,
             isObstacleCollision = isObstacleCollision,
@@ -994,7 +996,7 @@ object PathExecutor {
             isDescending = isDescending
         )
 
-        if (!isApproaching || isBonzoRunway || (nodeType == RouteNodeType.BONZO_STAFF && distH <= 1.8) || (isStationaryDest && landingSupport)) {
+        if (!isApproaching || isBonzoRunway || (nodeType == RouteNodeType.BONZO_STAFF && distH <= 1.8) || (isStationaryDest && landingSupport && !isCrossingGapToStationary)) {
             jumpTicksRemaining = 0
         } else {
             jumpTicksRemaining = nextAutoJumpPulse(shouldAutoJump, jumpTicksRemaining, mc.options.keyJump.isDown)
@@ -1486,7 +1488,7 @@ object PathExecutor {
                     (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat()
                 } else flightYaw
                 val turnAngle = abs(Mth.wrapDegrees(flightYaw - currentHeadingYaw))
-                val isTurnRedirection = turnAngle >= 35.0f
+                val isTurnRedirection = turnAngle >= 15.0f
 
                 val preAimPlan = if (isTurnRedirection) {
                     calculateKinematicBonzoAim(
