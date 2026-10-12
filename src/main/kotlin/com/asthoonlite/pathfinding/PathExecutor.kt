@@ -1208,11 +1208,13 @@ object PathExecutor {
         launchYaw: Float,
         basePitch: Float
     ): Pair<Boolean, Float> {
-        val testPitches = if (basePitch in 25.0f..85.0f) {
-            listOf(basePitch, (basePitch + 6.0f).coerceAtMost(80f), 55.0f, 70.0f)
-        } else {
-            listOf(55.0f, 70.0f, 79.0f)
+        if (basePitch in 20.0f..88.0f) {
+            val clipVec = player.eyePosition.add(Vec3.directionFromRotation(basePitch, launchYaw).scale(18.0))
+            val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
+            val hasImpact = (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 16.0) || player.onGround()
+            return hasImpact to basePitch
         }
+        val testPitches = listOf(55.0f, 70.0f, 79.0f)
         for (p in testPitches) {
             val clipVec = player.eyePosition.add(Vec3.directionFromRotation(p, launchYaw).scale(18.0))
             val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
@@ -1227,7 +1229,7 @@ object PathExecutor {
                 return true to basePitch
             }
         }
-        return (basePitch in 25.0f..88.0f) to basePitch
+        return false to (if (basePitch in 20.0f..88.0f) basePitch else 55.0f)
     }
 
     internal data class BonzoLaunchParams(
