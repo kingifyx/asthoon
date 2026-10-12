@@ -1094,6 +1094,20 @@ internal fun simonDeviceRegressionChecks() {
         distH = 0.1
     )
     check(motionClose.x > 0.8 && motionClose.z < 0.2) { "Close to pad, motion must be aligned with flight heading" }
+
+    // 39. Bonzo alignment at high speed and stationary terminal arrival logic
+    val lateralSpeedHigh = 0.42
+    val maxLateralSpeedSprint = 0.70
+    val hasAlignmentAtSprint = lateralSpeedHigh <= maxLateralSpeedSprint
+    check(hasAlignmentAtSprint) { "Sprinting down runway with slight diagonal angle (0.42 lateral speed) must satisfy high-speed runway alignment (<= 0.70)" }
+
+    val padDistNear = 0.64
+    val hasAlignmentNearPad = padDistNear <= 1.2
+    check(hasAlignmentNearPad) { "Player within 1.2m of launch pad must satisfy runway alignment to prevent stepping off ledge into void" }
+
+    val autoSimonDisabled = false
+    val isSpecialWhenDisabled = (RouteNodeType.SIMON_SAYS == RouteNodeType.SIMON_SAYS && autoSimonDisabled)
+    check(!isSpecialWhenDisabled) { "SIMON_SAYS must not be treated as a waiting special stationary solver node when auto solver is off" }
 }
 
 

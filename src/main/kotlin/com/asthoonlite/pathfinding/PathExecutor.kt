@@ -472,7 +472,7 @@ object PathExecutor {
 
             // Keep player firmly grounded during arrival at Bonzo launch point;
             // allows clean sprinting across the runway without jumping into the void
-            if (!isAirborneBonzo && bonzoState == BonzoState.IDLE && distH <= 2.5) {
+            if (!isAirborneBonzo && bonzoState == BonzoState.IDLE && player.onGround()) {
                 jumpTicksRemaining = 0
                 mc.options.keyJump.setDown(false)
             }
@@ -568,7 +568,8 @@ object PathExecutor {
                 hypot(perpVx, perpVz)
             } else 0.0
 
-            val hasRunwayAlignment = lateralSpeed <= 0.35 || distH <= 0.5 || isAirborneBonzo
+            val maxLateralSpeed = if (currentBpsH >= 10.0) 0.70 else if (currentBpsH >= 6.0) 0.50 else 0.35
+            val hasRunwayAlignment = launchParams.isRedirection || lateralSpeed <= maxLateralSpeed || distH <= 1.2 || isAirborneBonzo
 
             val destDx = if (nextTarget != null) nextTarget.x - player.x else 0.0
             val destDz = if (nextTarget != null) nextTarget.z - player.z else 0.0
@@ -623,7 +624,7 @@ object PathExecutor {
             player.setSprinting(false)
             jumpTicksRemaining = 0
             aimTowards(player, target, Vec3(110.5, 121.5, 93.5))
-            if (F7Devices.isSimonCompleted()) {
+            if (!Config.autoSimonSaysEnabled || F7Devices.isSimonCompleted()) {
                 currentNodeIndex++
                 resetSpecialNodeState()
                 if (currentNodeIndex >= points.size) finishRoute(preset)
@@ -831,11 +832,12 @@ object PathExecutor {
         val targetYaw = (-Math.toDegrees(atan2(toTargetDx, toTargetDz))).toFloat()
         val isDescending = target.y < player.y - 0.5
         val maxLedgeDist = (distH - 0.4).coerceAtLeast(0.5)
-        val isLedge = !isDescending && (isLedgeOrGapAhead(level, player, targetYaw, maxLedgeDist) ||
-            KinematicTrajectory.shouldPredictiveLedgeJump(level, Vec3(player.x, player.y, player.z), player.deltaMovement, Vec3(target.x, target.y, target.z), player.onGround()))
+        val isLedge = !isDescending && !isStationaryDest && nodeType != RouteNodeType.BONZO_STAFF &&
+            (isLedgeOrGapAhead(level, player, targetYaw, maxLedgeDist) ||
+             KinematicTrajectory.shouldPredictiveLedgeJump(level, Vec3(player.x, player.y, player.z), player.deltaMovement, Vec3(target.x, target.y, target.z), player.onGround()))
 
         val landingFloor = BlockPos.containing(player.x, target.y - 0.1, player.z)
-        val landingSupport = isStationaryDest && player.onGround() && !level.getBlockState(landingFloor).getCollisionShape(level, landingFloor).isEmpty
+        val landingSupport = isStationaryDest && player.onGround() && (abs(player.y - target.y) <= 0.8 || !level.getBlockState(landingFloor).getCollisionShape(level, landingFloor).isEmpty)
         val hasGapToTarget = isStationaryDest && run {
             val count = (distH / 0.8).toInt().coerceIn(1, 5)
             (1..count).any { i ->
@@ -947,8 +949,8 @@ object PathExecutor {
         }
 
         // Jump handling: auto-jump on elevation step-up, obstacle collision, gap/ledge detection
-        // Auto gap jump: trigger on WALK nodes, destination platforms, or approach across chasms to Bonzo nodes!
-        val canAutoGapJump = (nodeType == RouteNodeType.WALK || isStationaryDest || (nodeType == RouteNodeType.BONZO_STAFF && distH > 1.8)) && player.onGround() && isLedge && distH > 0.4 && !isCrouchNode && !isDescending
+        // Auto gap jump: trigger on WALK nodes over chasms!
+        val canAutoGapJump = nodeType == RouteNodeType.WALK && player.onGround() && isLedge && distH > 0.4 && !isCrouchNode && !isDescending
         val isObstacleCollision = !isDescending && player.horizontalCollision && player.onGround() && nodeType != RouteNodeType.BREAK && !isApproachingBreak
         val isElevationStep = !isDescending && target.y > player.y + 0.35 && distH < 2.5 && player.onGround() && nodeType != RouteNodeType.BREAK && !isApproachingBreak
 
@@ -978,11 +980,11 @@ object PathExecutor {
             isDescending = isDescending
         )
 
-        if (!isApproaching || isBonzoRunway || (nodeType == RouteNodeType.BONZO_STAFF && distH <= 1.8) || (isStationaryDest && landingSupport)) {
+        if (!isApproaching || isBonzoRunway || nodeType == RouteNodeType.BONZO_STAFF || (isStationaryDest && landingSupport)) {
             jumpTicksRemaining = 0
         } else {
             jumpTicksRemaining = nextAutoJumpPulse(shouldAutoJump, jumpTicksRemaining, mc.options.keyJump.isDown)
-            if (shouldAutoJump && (isCrossingGapToStationary || (nodeType == RouteNodeType.BONZO_STAFF && distH > 1.8 && isLedge)) && jumpTicksRemaining > 0) {
+            if (shouldAutoJump && isCrossingGapToStationary && jumpTicksRemaining > 0) {
                 jumpTicksRemaining = 3
             }
         }
@@ -1054,12 +1056,10 @@ object PathExecutor {
         val hasArrived = distH < arrivalDist || (passedAlongTrack && nodeType == RouteNodeType.WALK)
 
         // If at final node and landed/settled on ground, complete route cleanly (device nodes finish via solver completion)
-        val isSpecialStationary = nodeType in setOf(
-            RouteNodeType.SIMON_SAYS,
-            RouteNodeType.ARROWS_ALIGN,
-            RouteNodeType.TERMINAL,
-            RouteNodeType.TIMEOUT
-        )
+        val isSpecialStationary = (nodeType == RouteNodeType.SIMON_SAYS && Config.autoSimonSaysEnabled) ||
+            nodeType == RouteNodeType.ARROWS_ALIGN ||
+            nodeType == RouteNodeType.TERMINAL ||
+            nodeType == RouteNodeType.TIMEOUT
         if (currentNodeIndex == points.size - 1 && !isSpecialStationary && player.onGround() && canArriveElevation && (distH <= 0.85 || passedAlongTrack || isSettled)) {
             finishRoute(preset)
             return
@@ -1453,7 +1453,7 @@ object PathExecutor {
                 isFastAim = true
                 isBreakAim = true
             }
-            nodeType == RouteNodeType.BONZO_STAFF && distH <= 1.0 -> {
+            nodeType == RouteNodeType.BONZO_STAFF && distH <= 2.0 -> {
                 val flightDx = if (nextTarget != null) nextTarget.x - currentX else target.x - currentX
                 val flightDz = if (nextTarget != null) nextTarget.z - currentZ else target.z - currentZ
                 val flightYaw = if (hypot(flightDx, flightDz) > 0.05) (-Math.toDegrees(atan2(flightDx, flightDz))).toFloat() else target.yaw
@@ -1499,7 +1499,7 @@ object PathExecutor {
                     )
                 }
                 val (_, prePitch) = resolveBonzoLaunchGround(level, player, preYaw, basePrePitch)
-                val t = ((1.0 - distH) / 1.0).toFloat().coerceIn(0f, 1f)
+                val t = ((2.0 - distH) / 2.0).toFloat().coerceIn(0f, 1f)
                 goalYaw = preYaw
                 goalPitch = Mth.lerp(t, 15.0f, prePitch)
                 isFastAim = true
