@@ -420,7 +420,7 @@ object PathExecutor {
         val distH = sqrt(dx * dx + dz * dz)
         val distY = abs(target.y - player.y)
         val isDeviceNode = nodeType == RouteNodeType.SIMON_SAYS || nodeType == RouteNodeType.ARROWS_ALIGN
-        val isStationaryDest = isDeviceNode || nodeType == RouteNodeType.TIMEOUT || currentNodeIndex == points.size - 1
+        val isStationaryDest = isDeviceNode || nodeType == RouteNodeType.TIMEOUT
         val isSettled = isSettledAtNode(distH, distY, player.onGround(), player.deltaMovement.horizontalDistance())
         var isBonzoRunway = false
 
@@ -518,7 +518,8 @@ object PathExecutor {
             val launchDistanceThreshold = when {
                 isAirborneBonzo && currentBpsH >= 12.0 -> 2.2
                 isAirborneBonzo -> 1.8
-                currentBpsH >= 12.0 -> 1.0
+                currentBpsH >= 10.0 -> 1.6
+                currentBpsH >= 6.0 -> 1.2
                 else -> 0.8
             }
             val isArrivedOnPlatform = if (isAirborneBonzo) {
@@ -531,15 +532,17 @@ object PathExecutor {
                 val ldx = target.lookX - player.x
                 val ldz = target.lookZ - player.z
                 (-Math.toDegrees(atan2(ldx, ldz))).toFloat()
-            } else if (target.yaw != 0f && launchParams.isRedirection) {
-                target.yaw
             } else if (launchParams.isRedirection) {
                 launchParams.shotYaw
             } else {
                 flightYaw
             }
 
-            val baseLaunchPitch = if (target.pitch in 20.0f..88.0f) {
+            val baseLaunchPitch = if (target.hasLookNode && target.pitch in 20.0f..88.0f) {
+                target.pitch
+            } else if (launchParams.isRedirection) {
+                launchParams.shotPitch
+            } else if (target.pitch in 20.0f..88.0f) {
                 target.pitch
             } else {
                 launchParams.shotPitch
@@ -586,7 +589,7 @@ object PathExecutor {
                     shotPitch = effectiveLaunchPitch,
                     shotYaw = effectiveShotYaw,
                     destYaw = flightYaw,
-                    jumpOnFire = player.onGround() && (!launchParams.isRedirection || destDistH >= 12.0)
+                    jumpOnFire = player.onGround() && !launchParams.isRedirection
                 )
                 initiateBonzoLaunch(points, isHighSpeed, finalLaunchParams)
                 return
@@ -734,8 +737,16 @@ object PathExecutor {
             target.z
         }
 
+        val isFinalNode = currentNodeIndex == points.size - 1
+        val prevNode = points.getOrNull(currentNodeIndex - 1)
+        val approachDx = target.x - (prevNode?.x ?: player.x)
+        val approachDz = target.z - (prevNode?.z ?: player.z)
+        val approachYaw = if (hypot(approachDx, approachDz) > 0.05) (-Math.toDegrees(atan2(approachDx, approachDz))).toFloat() else target.yaw
+
         if (target.hasLookNode && (!isDeviceNode || isSettled)) {
             aimTowardsVec(player, Vec3(target.lookX, target.lookY, target.lookZ))
+        } else if (isFinalNode && !isDeviceNode && nodeType != RouteNodeType.TIMEOUT && distH <= 1.5) {
+            aimRotation(player, approachYaw, 0.0f)
         } else if (isBreakNode && breakBlockPos != null && isBreakBlockSolid) {
             aimTowardsVec(player, Vec3.atCenterOf(breakBlockPos))
         } else if (nextTarget?.nodeType() == RouteNodeType.BREAK && !isBlockBroken(level, nextTarget) && distH < 3.5) {
@@ -746,17 +757,38 @@ object PathExecutor {
             val flightDz = if (nextTarget != null) nextTarget.z - player.z else target.z - player.z
             val flightYaw = if (hypot(flightDx, flightDz) > 0.05) (-Math.toDegrees(atan2(flightDx, flightDz))).toFloat() else target.yaw
 
-            val isTurnRedirection = target.yaw != 0f && abs(Mth.wrapDegrees(flightYaw - target.yaw)) >= 30.0f
+            val currentHeadingYaw = if (player.deltaMovement.horizontalDistance() > 0.04) {
+                (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat()
+            } else flightYaw
+            val turnAngle = abs(Mth.wrapDegrees(flightYaw - currentHeadingYaw))
+            val isTurnRedirection = turnAngle >= 35.0f
+
+            val preAimPlan = if (isTurnRedirection) {
+                calculateKinematicBonzoAim(
+                    playerPos = Vec3(player.x, player.y, player.z),
+                    playerVel = player.deltaMovement,
+                    playerEyeY = player.eyePosition.y,
+                    destinationPos = if (nextTarget != null) Vec3(nextTarget.x, nextTarget.y, nextTarget.z) else Vec3(target.x, target.y, target.z),
+                    recordedPitch = target.pitch,
+                    recordedYaw = target.yaw,
+                    hasLookNode = target.hasLookNode
+                )
+            } else null
+
             val preYaw = if (target.hasLookNode) {
                 val ldx = target.lookX - player.x
                 val ldz = target.lookZ - player.z
                 (-Math.toDegrees(atan2(ldx, ldz))).toFloat()
-            } else if (target.yaw != 0f && isTurnRedirection) {
-                target.yaw
+            } else if (preAimPlan != null) {
+                preAimPlan.shotYaw
             } else {
                 flightYaw
             }
-            val prePitch = if (target.pitch in 20.0f..88.0f) {
+            val prePitch = if (target.hasLookNode && target.pitch in 20.0f..88.0f) {
+                target.pitch
+            } else if (preAimPlan != null) {
+                preAimPlan.shotPitch
+            } else if (target.pitch in 20.0f..88.0f) {
                 target.pitch
             } else {
                 KinematicTrajectory.calculateOptimalBonzoPitch(
@@ -929,7 +961,6 @@ object PathExecutor {
             else -> null
         }
         val isMiningObstacle = isApproachingBreak || isCurrentBreakSolid || (targetBreakPos != null && distH < 3.5)
-        val prevNode = points.getOrNull(currentNodeIndex - 1)
         val isExitingBreakDoorway = prevNode?.nodeType() == RouteNodeType.BREAK &&
             hypot(player.x - prevNode.x, player.z - prevNode.z) < 1.5 && nodeType != RouteNodeType.BREAK
 
@@ -1014,19 +1045,6 @@ object PathExecutor {
         val canAdvanceBreak = isBreakNode && !isBreakBlockSolid
         val arrivalDist = if (canAdvanceBreak) (if (isHighSpeed) 2.2 else 1.6) else arrivalThreshold
 
-        // If at final node and landed/settled on ground, complete route cleanly (device nodes finish via solver completion)
-        val isSpecialStationary = nodeType in setOf(
-            RouteNodeType.SIMON_SAYS,
-            RouteNodeType.ARROWS_ALIGN,
-            RouteNodeType.TERMINAL,
-            RouteNodeType.TIMEOUT
-        )
-        if (currentNodeIndex == points.size - 1 && !isSpecialStationary && player.onGround() && canArriveElevation && (distH <= 0.60 || isSettled)) {
-            releaseAllMovementKeys()
-            finishRoute(preset)
-            return
-        }
-
         val passedAlongTrack = hasPassedWaypointAlongRoute(
             playerPos = Vec3(player.x, player.y, player.z),
             current = target,
@@ -1034,6 +1052,18 @@ object PathExecutor {
             arrivalDist = arrivalDist
         )
         val hasArrived = distH < arrivalDist || (passedAlongTrack && nodeType == RouteNodeType.WALK)
+
+        // If at final node and landed/settled on ground, complete route cleanly (device nodes finish via solver completion)
+        val isSpecialStationary = nodeType in setOf(
+            RouteNodeType.SIMON_SAYS,
+            RouteNodeType.ARROWS_ALIGN,
+            RouteNodeType.TERMINAL,
+            RouteNodeType.TIMEOUT
+        )
+        if (currentNodeIndex == points.size - 1 && !isSpecialStationary && player.onGround() && canArriveElevation && (distH <= 0.85 || passedAlongTrack || isSettled)) {
+            finishRoute(preset)
+            return
+        }
 
         if ((advancesOnArrival(nodeType) || canAdvanceBreak) &&
             hasArrived && canArriveElevation &&
@@ -1428,17 +1458,38 @@ object PathExecutor {
                 val flightDz = if (nextTarget != null) nextTarget.z - currentZ else target.z - currentZ
                 val flightYaw = if (hypot(flightDx, flightDz) > 0.05) (-Math.toDegrees(atan2(flightDx, flightDz))).toFloat() else target.yaw
 
-                val isTurnRedirection = target.yaw != 0f && abs(Mth.wrapDegrees(flightYaw - target.yaw)) >= 30.0f
+                val currentHeadingYaw = if (player.deltaMovement.horizontalDistance() > 0.04) {
+                    (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat()
+                } else flightYaw
+                val turnAngle = abs(Mth.wrapDegrees(flightYaw - currentHeadingYaw))
+                val isTurnRedirection = turnAngle >= 35.0f
+
+                val preAimPlan = if (isTurnRedirection) {
+                    calculateKinematicBonzoAim(
+                        playerPos = Vec3(currentX, currentY, currentZ),
+                        playerVel = player.deltaMovement,
+                        playerEyeY = currentEyeY,
+                        destinationPos = if (nextTarget != null) Vec3(nextTarget.x, nextTarget.y, nextTarget.z) else Vec3(target.x, target.y, target.z),
+                        recordedPitch = target.pitch,
+                        recordedYaw = target.yaw,
+                        hasLookNode = target.hasLookNode
+                    )
+                } else null
+
                 val preYaw = if (target.hasLookNode) {
                     val ldx = target.lookX - currentX
                     val ldz = target.lookZ - currentZ
                     (-Math.toDegrees(atan2(ldx, ldz))).toFloat()
-                } else if (target.yaw != 0f && isTurnRedirection) {
-                    target.yaw
+                } else if (preAimPlan != null) {
+                    preAimPlan.shotYaw
                 } else {
                     flightYaw
                 }
-                val basePrePitch = if (target.pitch in 20.0f..88.0f) {
+                val basePrePitch = if (target.hasLookNode && target.pitch in 20.0f..88.0f) {
+                    target.pitch
+                } else if (preAimPlan != null) {
+                    preAimPlan.shotPitch
+                } else if (target.pitch in 20.0f..88.0f) {
                     target.pitch
                 } else {
                     KinematicTrajectory.calculateOptimalBonzoPitch(
@@ -1452,6 +1503,14 @@ object PathExecutor {
                 goalYaw = preYaw
                 goalPitch = Mth.lerp(t, 15.0f, prePitch)
                 isFastAim = true
+            }
+            currentNodeIndex == points.size - 1 && !isDeviceNode && nodeType != RouteNodeType.TIMEOUT && distH <= 1.5 -> {
+                val prevNode = points.getOrNull(currentNodeIndex - 1)
+                val approachDx = target.x - (prevNode?.x ?: currentX)
+                val approachDz = target.z - (prevNode?.z ?: currentZ)
+                goalYaw = if (hypot(approachDx, approachDz) > 0.05) (-Math.toDegrees(atan2(approachDx, approachDz))).toFloat() else target.yaw
+                goalPitch = 0.0f
+                isFastAim = false
             }
             target.hasLookNode && (!isDeviceNode || isSettled) -> {
                 val ldx = target.lookX - currentX
@@ -1925,10 +1984,44 @@ object PathExecutor {
     private fun finishRoute(preset: PathPreset) {
         val mc = Minecraft.getInstance()
         val player = mc.player
+        val points = preset.points
+        val lastNode = points.lastOrNull()
+        val prevNode = points.getOrNull(points.size - 2)
+
+        val finalYaw = if (lastNode != null && lastNode.hasLookNode) {
+            val ldx = lastNode.lookX - (player?.x ?: lastNode.x)
+            val ldz = lastNode.lookZ - (player?.z ?: lastNode.z)
+            (-Math.toDegrees(atan2(ldx, ldz))).toFloat()
+        } else if (lastNode != null && prevNode != null && hypot(lastNode.x - prevNode.x, lastNode.z - prevNode.z) > 0.05) {
+            val adx = lastNode.x - prevNode.x
+            val adz = lastNode.z - prevNode.z
+            (-Math.toDegrees(atan2(adx, adz))).toFloat()
+        } else {
+            player?.yRot ?: 0f
+        }
+
         stop()
         if (Config.activePathfindingPresetId == preset.id) {
             Config.activePathfindingPresetId = ""
             Config.save()
+        }
+
+        if (player != null) {
+            player.yRot = finalYaw
+            player.yRotO = finalYaw
+            player.xRot = 0.0f
+            player.xRotO = 0.0f
+            cameraYawVelocity = 0f
+            cameraPitchVelocity = 0f
+            mc.options.keyUp.setDown(false)
+            mc.options.keyDown.setDown(false)
+            mc.options.keyLeft.setDown(false)
+            mc.options.keyRight.setDown(false)
+            mc.options.keyJump.setDown(false)
+            mc.options.keyShift.setDown(false)
+            mc.options.keySprint.setDown(false)
+            player.setSprinting(false)
+            player.deltaMovement = Vec3(0.0, player.deltaMovement.y, 0.0)
         }
 
         player?.sendSystemMessage(
