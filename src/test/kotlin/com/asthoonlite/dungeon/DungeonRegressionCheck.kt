@@ -1233,12 +1233,12 @@ fun main() {
         check(optPitchS2 == 61.05f) {
             "Explicit user recorded pitch for downhill jump must be preserved, got $optPitchS2"
         }
-        // Test optimal pitch for steep downhill jump (niggaS2 Node 12 -> Node 13: 18.97m downhill -6.0m)
-        val optPitchDownhillSteep = KinematicTrajectory.calculateOptimalBonzoPitch(distH = 18.97, deltaY = -6.0, recordedPitch = 54.15f)
-        check(optPitchDownhillSteep <= 42.0f) {
-            "Steep downhill long jump pitch must be capped to <= 42° to guarantee reach, got $optPitchDownhillSteep"
+        // Test optimal pitch for downhill jump with explicit user recorded pitch
+        val optPitchDownhillUser = KinematicTrajectory.calculateOptimalBonzoPitch(distH = 18.97, deltaY = -6.0, recordedPitch = 54.15f)
+        check(optPitchDownhillUser == 54.15f) {
+            "Explicit user recorded pitch must be preserved, got $optPitchDownhillUser"
         }
-        // Fallback pitch calculation when no user pitch is recorded
+        // Fallback pitch calculation when no user pitch is recorded (bounded to <= 42° for reach)
         val optPitchAuto = KinematicTrajectory.calculateOptimalBonzoPitch(distH = 18.0, deltaY = 0.0, recordedPitch = 0f)
         check(optPitchAuto in 28.0f..45.0f) {
             "Fallback calculation without recorded pitch must produce flat launch angle, got $optPitchAuto"

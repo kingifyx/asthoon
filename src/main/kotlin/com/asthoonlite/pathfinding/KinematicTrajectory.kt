@@ -156,12 +156,6 @@ object KinematicTrajectory {
         val minPitch = if (isRedirection) 35.0f else 28.0f
         val boundedPitch = calcPitch.coerceIn(minPitch, maxPitchForRange)
 
-        // Downhill long jumps (deltaY < -2.0m, distH >= 16.0m) require flat launch angle (<= 42°)
-        // so forward blast velocity is sufficient to reach the landing platform.
-        if (deltaY < -2.0 && distH >= 16.0 && recordedPitch > 42.0f) {
-            return 40.0f
-        }
-
         // If recorded pitch is provided, preserve it
         if (recordedPitch in 20.0f..88.0f) {
             return recordedPitch
@@ -228,9 +222,7 @@ object KinematicTrajectory {
         val computedPitch = (-Math.toDegrees(atan2(aimDy, aimDistH.coerceAtLeast(0.2)))).toFloat().coerceIn(45.0f, 75.0f)
 
         val deltaY = destinationPos.y - playerPos.y
-        val finalPitch = if (deltaY < -2.0 && destDistH >= 16.0 && recordedPitch > 42.0f) {
-            40.0f
-        } else if (recordedPitch in 20.0f..88.0f) {
+        val finalPitch = if (recordedPitch in 20.0f..88.0f) {
             recordedPitch
         } else if (isRedirection) {
             computedPitch

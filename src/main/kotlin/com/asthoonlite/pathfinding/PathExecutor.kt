@@ -531,17 +531,15 @@ object PathExecutor {
                 val ldx = target.lookX - player.x
                 val ldz = target.lookZ - player.z
                 (-Math.toDegrees(atan2(ldx, ldz))).toFloat()
-            } else if (target.yaw != 0f && abs(Mth.wrapDegrees(target.yaw - flightYaw)) <= 35.0f) {
+            } else if (target.yaw != 0f && launchParams.isRedirection) {
                 target.yaw
+            } else if (launchParams.isRedirection) {
+                launchParams.shotYaw
             } else {
                 flightYaw
             }
 
-            val toDestDistH = if (nextTarget != null) hypot(destinationPos.x - player.x, destinationPos.z - player.z) else 15.0
-            val deltaY = destinationPos.y - player.y
-            val baseLaunchPitch = if (deltaY < -2.0 && toDestDistH >= 16.0 && target.pitch > 42.0f) {
-                40.0f
-            } else if (target.pitch in 20.0f..88.0f) {
+            val baseLaunchPitch = if (target.pitch in 20.0f..88.0f) {
                 target.pitch
             } else {
                 launchParams.shotPitch
@@ -748,25 +746,22 @@ object PathExecutor {
             val flightDz = if (nextTarget != null) nextTarget.z - player.z else target.z - player.z
             val flightYaw = if (hypot(flightDx, flightDz) > 0.05) (-Math.toDegrees(atan2(flightDx, flightDz))).toFloat() else target.yaw
 
+            val isTurnRedirection = target.yaw != 0f && abs(Mth.wrapDegrees(flightYaw - target.yaw)) >= 30.0f
             val preYaw = if (target.hasLookNode) {
                 val ldx = target.lookX - player.x
                 val ldz = target.lookZ - player.z
                 (-Math.toDegrees(atan2(ldx, ldz))).toFloat()
-            } else if (target.yaw != 0f && abs(Mth.wrapDegrees(target.yaw - flightYaw)) <= 35.0f) {
+            } else if (target.yaw != 0f && isTurnRedirection) {
                 target.yaw
             } else {
                 flightYaw
             }
-            val toDestDistH = hypot(flightDx, flightDz)
-            val toDestDy = if (nextTarget != null) nextTarget.y - player.y else 0.0
-            val prePitch = if (toDestDy < -2.0 && toDestDistH >= 16.0 && target.pitch > 42.0f) {
-                40.0f
-            } else if (target.pitch in 20.0f..88.0f) {
+            val prePitch = if (target.pitch in 20.0f..88.0f) {
                 target.pitch
             } else {
                 KinematicTrajectory.calculateOptimalBonzoPitch(
-                    distH = toDestDistH,
-                    deltaY = toDestDy,
+                    distH = hypot(flightDx, flightDz),
+                    deltaY = if (nextTarget != null) nextTarget.y - player.y else 0.0,
                     recordedPitch = target.pitch
                 )
             }
@@ -1433,25 +1428,22 @@ object PathExecutor {
                 val flightDz = if (nextTarget != null) nextTarget.z - currentZ else target.z - currentZ
                 val flightYaw = if (hypot(flightDx, flightDz) > 0.05) (-Math.toDegrees(atan2(flightDx, flightDz))).toFloat() else target.yaw
 
+                val isTurnRedirection = target.yaw != 0f && abs(Mth.wrapDegrees(flightYaw - target.yaw)) >= 30.0f
                 val preYaw = if (target.hasLookNode) {
                     val ldx = target.lookX - currentX
                     val ldz = target.lookZ - currentZ
                     (-Math.toDegrees(atan2(ldx, ldz))).toFloat()
-                } else if (target.yaw != 0f && abs(Mth.wrapDegrees(target.yaw - flightYaw)) <= 35.0f) {
+                } else if (target.yaw != 0f && isTurnRedirection) {
                     target.yaw
                 } else {
                     flightYaw
                 }
-                val toDestDistH = hypot(flightDx, flightDz)
-                val toDestDy = if (nextTarget != null) nextTarget.y - currentY else 0.0
-                val basePrePitch = if (toDestDy < -2.0 && toDestDistH >= 16.0 && target.pitch > 42.0f) {
-                    40.0f
-                } else if (target.pitch in 20.0f..88.0f) {
+                val basePrePitch = if (target.pitch in 20.0f..88.0f) {
                     target.pitch
                 } else {
                     KinematicTrajectory.calculateOptimalBonzoPitch(
-                        distH = toDestDistH,
-                        deltaY = toDestDy,
+                        distH = hypot(flightDx, flightDz),
+                        deltaY = if (nextTarget != null) nextTarget.y - currentY else 0.0,
                         recordedPitch = target.pitch
                     )
                 }
