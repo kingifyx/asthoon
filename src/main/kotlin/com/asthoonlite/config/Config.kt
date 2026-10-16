@@ -185,6 +185,7 @@ object Config {
         var autoNucleusWarpMaxSec   : Double  = 0.7,
 
         // ── Funny ─────────────────────────────────────────────────────────
+        // Unwired / removed: right-click autoclicker. Retained for on-disk config backward compatibility.
         var autoClickerEnabled      : Boolean = false,
         var autoClickerCps          : Int     = 10,
         var autoClickerKey           : Int     = -1,
@@ -1100,13 +1101,11 @@ object Config {
 
     // ── Funny ─────────────────────────────────────────────────────────────
 
+    // Unwired / removed: right-click autoclicker was removed; retained for binary compatibility.
     var autoClickerEnabled: Boolean
         get() = data.autoClickerEnabled
         set(v) { data.autoClickerEnabled = v; save() }
 
-    // Up to 500 clicks/sec. Above 20 (1 per client tick) this fires more
-    // than once per tick to actually reach the requested rate — see
-    // AutoClicker.tick()'s fractional accumulator.
     var autoClickerCps: Int
         get() = data.autoClickerCps
         set(v) { data.autoClickerCps = v.coerceIn(1, 500); save() }

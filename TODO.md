@@ -87,9 +87,7 @@ main-source files. Easiest wins first — all pure, no game needed:
 - [ ] `dungeon/api/Coordinates.kt` — `isValid`, `isValidRoom`, `toWorld`.
       `ARCHITECTURE.md:160-162` calls this "a good place to unit-test" and it
       has never been done.
-- [ ] `funny/AutoClicker.kt` — the fractional click accumulator (:47-55),
-      the thing that makes 500 CPS work and the thing `Config.kt:845-847`
-      points at. Pure arithmetic.
+- [x] `funny/AutoClicker.kt` — removed completely. Right-click autoclicker deleted.
 - [ ] `dungeon/TerminalHelper.kt` — `isSelected` (:19), `matchesColor` (:35),
       `rubixColorIndex` (:141). The harness already bootstraps registries and
       builds `ItemStack`s (:50-56), so this is directly addable.

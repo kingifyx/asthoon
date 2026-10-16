@@ -23,7 +23,6 @@ import com.asthoonlite.dungeon.WeirdosSolver
 import com.asthoonlite.dungeon.map.DungeonMapScanner
 import com.asthoonlite.dungeon.map.DungeonScanner
 import com.asthoonlite.fishing.FishBiteAlert
-import com.asthoonlite.funny.AutoClicker
 import com.asthoonlite.funny.InventoryAutoClicker
 import com.asthoonlite.funny.WeaponAutoClicker
 import com.asthoonlite.hud.AlertHud
@@ -123,7 +122,6 @@ object AsthoonLite : ClientModInitializer {
         AutoNucleusWarp.register()
 
         // ── Funny ─────────────────────────────────────────────────────────────
-        AutoClicker.register()
         WeaponAutoClicker.register()
         InventoryAutoClicker.register()
 

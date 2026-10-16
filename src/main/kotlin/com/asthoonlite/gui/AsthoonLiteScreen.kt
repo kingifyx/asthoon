@@ -158,8 +158,6 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
     private var extraWidgets: MutableList<Pair<AbstractWidget, Int>> = mutableListOf()
     private lateinit var btnClose: ModernButton
     private lateinit var btnDone: ModernButton
-    private lateinit var btnAutoClickerKey: ModernButton
-    private var listeningForAutoClickerKey = false
     private lateinit var btnInventoryAutoClickerKey: ModernButton
     private var listeningForInventoryAutoClickerKey = false
     private lateinit var btnQuietModeKey: ModernButton
@@ -332,7 +330,6 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
         dungeonSectionButtons.clear()
         pathfindingSectionButtons.forEach { removeWidget(it) }
         pathfindingSectionButtons.clear()
-        listeningForAutoClickerKey = false
         listeningForInventoryAutoClickerKey = false
         listeningForQuietModeKey = false
         listeningForGoldorRouteKey = false
@@ -496,7 +493,6 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
         dungeonSectionButtons.clear()
         pathfindingSectionButtons.forEach { removeWidget(it) }
         pathfindingSectionButtons.clear()
-        listeningForAutoClickerKey = false
         listeningForInventoryAutoClickerKey = false
         listeningForQuietModeKey = false
         listeningForGoldorRouteKey = false
@@ -992,20 +988,6 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 }),
             )
             Tab.FUNNY -> listOf(
-                SectionHeader("Right-Click Autoclicker"),
-                ToggleRow("Autoclicker", "Right-click autoclicker at configured CPS",
-                    { Config.autoClickerEnabled }, { Config.autoClickerEnabled = it }),
-                WidgetRow(run {
-                    btnAutoClickerKey = ModernButton(subX, 0, subW, 24, Component.literal(autoClickerKeyLabel())) {
-                        listeningForAutoClickerKey = true
-                        btnAutoClickerKey.message = Component.literal("Press a key (ESC = NONE)")
-                    }
-                    btnAutoClickerKey
-                }),
-                WidgetRow(IntSlider(subX, 0, subW, 24, 1, 500, Config.autoClickerCps, "Autoclicker CPS: ", " CPS") {
-                    Config.autoClickerCps = it
-                }),
-
                 SectionHeader("Weapon Left-Click Macro"),
                 ToggleRow("Weapon Left-Click", "Simulates ~7 CPS left clicks when holding left click with Terminator, Claymore, Hyperion, or Slayer weapons",
                     { Config.weaponAutoClickerEnabled }, { Config.weaponAutoClickerEnabled = it }),
@@ -1049,7 +1031,6 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                     btnGoldorRouteKey = ModernButton(subX, 0, subW, 24, Component.literal(goldorRouteKeyLabel())) {
                         listeningForGoldorRouteKey = true
                         listeningForQuietModeKey = false
-                        listeningForAutoClickerKey = false
                         listeningForInventoryAutoClickerKey = false
                         btnGoldorRouteKey.message = Component.literal("Press a key (ESC = NONE)")
                     }
@@ -1763,14 +1744,6 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
     private fun terminalModeLabel(): String =
         "Terminal Mode: ${TerminalMode.modeName(Config.autoTerminalMode)}"
 
-    private fun autoClickerKeyLabel(): String {
-        if (listeningForAutoClickerKey) return "Press a key (ESC = NONE)"
-        val key = Config.autoClickerKey
-        if (key == InputConstants.UNKNOWN.value || key == GLFW.GLFW_KEY_UNKNOWN || key < 0) return "Autoclicker Keybind: NONE"
-        if (key in 0..7) return "Autoclicker Keybind: MOUSE $key"
-        return "Autoclicker Keybind: ${InputConstants.Type.KEYSYM.getOrCreate(key).displayName.string.uppercase()}"
-    }
-
     private fun inventoryAutoClickerKeyLabel(): String {
         if (listeningForInventoryAutoClickerKey) return "Press a key (ESC = NONE)"
         val key = Config.inventoryAutoClickerKey
@@ -1812,19 +1785,6 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
             listeningForQuietModeKey = false
             if (::btnQuietModeKey.isInitialized) {
                 btnQuietModeKey.message = Component.literal(quietModeKeyLabel())
-            }
-            return true
-        }
-        if (listeningForAutoClickerKey) {
-            val keyCode = event.key()
-            Config.autoClickerKey = if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
-                InputConstants.UNKNOWN.value
-            } else {
-                keyCode
-            }
-            listeningForAutoClickerKey = false
-            if (::btnAutoClickerKey.isInitialized) {
-                btnAutoClickerKey.message = Component.literal(autoClickerKeyLabel())
             }
             return true
         }
@@ -1879,14 +1839,6 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
             listeningForQuietModeKey = false
             if (::btnQuietModeKey.isInitialized) {
                 btnQuietModeKey.message = Component.literal(quietModeKeyLabel())
-            }
-            return true
-        }
-        if (listeningForAutoClickerKey && event.button() != 0) {
-            Config.autoClickerKey = event.button()
-            listeningForAutoClickerKey = false
-            if (::btnAutoClickerKey.isInitialized) {
-                btnAutoClickerKey.message = Component.literal(autoClickerKeyLabel())
             }
             return true
         }
