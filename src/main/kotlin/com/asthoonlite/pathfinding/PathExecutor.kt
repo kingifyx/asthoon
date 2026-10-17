@@ -861,9 +861,11 @@ object PathExecutor {
         val toTargetDz = aimTarget.z - player.z
         val targetYaw = (-Math.toDegrees(atan2(toTargetDx, toTargetDz))).toFloat()
         val isDescending = target.y < player.y - 0.5
-        val maxLedgeDist = (distH - 0.4).coerceAtLeast(0.0)
+        val maxLedgeDist = (player.deltaMovement.horizontalDistance() + 0.15).coerceIn(0.35, 0.65)
+        val moveSpeedH = player.deltaMovement.horizontalDistance()
+        val moveYaw = if (moveSpeedH > 0.15) (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat() else targetYaw
         val hasLedgeAhead = !isDescending && (nodeType != RouteNodeType.BONZO_STAFF || distH > 1.8) && distH > 0.6 &&
-            (isLedgeOrGapAhead(level, player, targetYaw, maxLedgeDist) ||
+            (isLedgeOrGapAhead(level, player, moveYaw, maxLedgeDist) ||
              KinematicTrajectory.shouldPredictiveLedgeJump(level, Vec3(player.x, player.y, player.z), player.deltaMovement, Vec3(target.x, target.y, target.z), player.onGround()))
 
         val hasGapToTarget = isStationaryDest && run {
@@ -1611,7 +1613,7 @@ object PathExecutor {
                 val approachDx = if (prevNode != null) target.x - prevNode.x else target.x - currentX
                 val approachDz = if (prevNode != null) target.z - prevNode.z else target.z - currentZ
                 goalYaw = if (hypot(approachDx, approachDz) > 0.05) (-Math.toDegrees(atan2(approachDx, approachDz))).toFloat() else target.yaw
-                goalPitch = 0.0f
+                goalPitch = player.xRot.coerceIn(-15.0f, 15.0f)
                 isFastAim = false
             }
             else -> {
@@ -1658,7 +1660,7 @@ object PathExecutor {
             isPropelling -> 1.5
             isBreakAim -> 2.5
             isFastAim -> 0.45
-            else -> 0.30
+            else -> 0.25
         }
         val alpha = (1.0 - exp(-rate * dtTicks.toDouble())).toFloat().coerceIn(0.01f, 0.95f)
         val deltaYaw = Mth.wrapDegrees(goalYaw - player.yRot)
@@ -1668,7 +1670,7 @@ object PathExecutor {
             isPropelling -> 80.0f * dtTicks
             isBreakAim -> 60.0f * dtTicks
             isFastAim -> 18.0f * dtTicks
-            else -> 12.0f * dtTicks
+            else -> 6.5f * dtTicks
         }
         val maxFramePitchStep = when {
             isPropelling -> 60.0f * dtTicks
@@ -1800,8 +1802,8 @@ object PathExecutor {
             state.isAir || state.`is`(Blocks.LAVA) || state.`is`(Blocks.WATER)
         }
 
-        // Probe ahead along movement line with fine sub-block resolution up to maxDist
-        for (dist in listOf(0.35, 0.7, 1.2, 1.8, 2.5)) {
+        // Probe ahead along movement line with fine sub-block resolution up to maxDist (immediate step only)
+        for (dist in listOf(0.35, 0.55, 0.75)) {
             if (dist > maxDist) break
             val probeX = player.x + nx * dist
             val probeZ = player.z + nz * dist
