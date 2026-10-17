@@ -279,8 +279,7 @@ object KinematicTrajectory {
         val maxProbe = (distToTarget - 0.4).coerceAtLeast(0.5)
 
         for (step in 1..4) {
-            val dist = step * currentSpeedH
-            if (dist > maxProbe) break
+            val dist = (step * currentSpeedH).coerceAtMost(maxProbe)
             val probeX = playerPos.x + velDir.x * dist
             val probeZ = playerPos.z + velDir.z * dist
             val probePos = BlockPos(floor(probeX).toInt(), floorY, floor(probeZ).toInt())

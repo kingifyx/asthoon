@@ -728,8 +728,11 @@ object PathExecutor {
         val breakBlockPos = if (isBreakNode) BlockPos.containing(target.x, target.y, target.z) else null
         val isBreakBlockSolid = breakBlockPos != null && !isBlockBroken(level, target)
 
-        val lookaheadBlend = if (distH < 1.8 && nextTarget != null && (nodeType == RouteNodeType.WALK || (isBreakNode && !isBreakBlockSolid))) {
-            ((1.8 - distH) / 1.8 * 0.25).coerceIn(0.0, 0.25)
+        val currentBpsH = player.deltaMovement.horizontalDistance() * 20.0
+        val lookaheadDist = (currentBpsH * 0.30).coerceIn(1.8, 5.0)
+        val lookaheadBlend = if (distH < lookaheadDist && nextTarget != null && (nodeType == RouteNodeType.WALK || (isBreakNode && !isBreakBlockSolid))) {
+            val t = ((lookaheadDist - distH) / lookaheadDist).coerceIn(0.0, 1.0)
+            t * t * (3.0 - 2.0 * t) * 0.35
         } else {
             0.0
         }
@@ -873,12 +876,15 @@ object PathExecutor {
             !player.isInLava && !player.isInWater &&
             distH <= 2.5 && player.y >= target.y - 1.5 && player.y <= target.y + 2.5
 
-        if (isStationaryDest && distH <= 0.45 && player.onGround()) {
+        val stoppingDist = (player.deltaMovement.horizontalDistance() * 20.0 * 0.12).coerceIn(0.5, 3.0)
+        val isSettledStationary = isStationaryDest && distH <= 0.30 && player.deltaMovement.horizontalDistance() <= 0.08
+        if (isSettledStationary && player.onGround()) {
             releaseAllMovementKeys()
             player.setSprinting(false)
         } else if (stationaryMotion != null) {
             // Steer and coast in world coordinates without reverse key bang-bang oscillation
-            moveInDirection(player, stationaryMotion, !isCrouchNode && isApproaching && (isAirborne || distH > 2.0), isCrouchNode && !isAirborne)
+            val wantsSprint = !isCrouchNode && isApproaching && (isAirborne || distH > (stoppingDist + 0.8))
+            moveInDirection(player, stationaryMotion, wantsSprint, isCrouchNode && !isAirborne)
         } else if (isAirborne) {
             moveInDirection(player, airborneMovement(offset, player.deltaMovement), true)
         } else if ((isBonzoRunway || isApproachingBonzoRunway) && nodeType == RouteNodeType.BONZO_STAFF) {
@@ -919,7 +925,21 @@ object PathExecutor {
             val targetMoveX = if (lookaheadBlend > 0.0 && nextTarget != null) aimX else target.x
             val targetMoveZ = if (lookaheadBlend > 0.0 && nextTarget != null) aimZ else target.z
             val moveYaw = (-Math.toDegrees(atan2(targetMoveX - player.x, targetMoveZ - player.z))).toFloat()
-            val angleDiff = Mth.wrapDegrees(moveYaw - player.yRot)
+            val cteCorrection = if (prevNode != null && !target.hasLookNode) {
+                val segX = target.x - prevNode.x
+                val segZ = target.z - prevNode.z
+                val segLen = hypot(segX, segZ)
+                if (segLen > 0.2) {
+                    val vx = player.x - prevNode.x
+                    val vz = player.z - prevNode.z
+                    val crossTrack = (segX * vz - segZ * vx) / segLen
+                    if (abs(crossTrack) > 0.08) {
+                        (atan2(-crossTrack * 1.5, 1.0) * 180.0 / Math.PI).toFloat().coerceIn(-25f, 25f)
+                    } else 0f
+                } else 0f
+            } else 0f
+            val effectiveMoveYaw = Mth.wrapDegrees(moveYaw + cteCorrection)
+            val angleDiff = Mth.wrapDegrees(effectiveMoveYaw - player.yRot)
             val rad = Math.toRadians(angleDiff.toDouble())
             val forward = cos(rad)
             val strafe = -sin(rad)
@@ -1092,7 +1112,8 @@ object PathExecutor {
             val oldIdx = currentNodeIndex
             currentNodeIndex++
             resetSpecialNodeState()
-            AsthoonLite.LOGGER.info("[ASL-ROUTE-OFFSET] Completed node $oldIdx(${points[oldIdx].action}) -> advanced to node $currentNodeIndex")
+            val advanceReason = if (isSettled) "SETTLED" else if (passedAlongTrack) "ALONG_TRACK" else "ARRIVAL_DIST"
+            AsthoonLite.LOGGER.info("[ASL-ROUTE-OFFSET] Completed node $oldIdx(${points[oldIdx].action}) -> advanced to node $currentNodeIndex, reason=$advanceReason, distH=${"%.2f".format(Locale.ROOT, distH)}m, bpsH=${"%.2f".format(Locale.ROOT, currentBpsH)}")
             if (currentNodeIndex >= points.size) {
                 finishRoute(preset)
             }
@@ -1572,9 +1593,11 @@ object PathExecutor {
             else -> {
                 val isBreakNode = nodeType == RouteNodeType.BREAK
                 val breakAir = isBreakNode && level.getBlockState(BlockPos.containing(target.x, target.y, target.z)).isAir
-                val lookaheadBlend = if (distH < 1.8 && nextTarget != null && (nodeType == RouteNodeType.WALK || breakAir)) {
-                    val t = ((1.8 - distH) / 1.8).coerceIn(0.0, 1.0)
-                    t * t * (3.0 - 2.0 * t) * 0.25
+                val currentBpsH = player.deltaMovement.horizontalDistance() * 20.0
+                val lookaheadDist = (currentBpsH * 0.30).coerceIn(1.8, 5.0)
+                val lookaheadBlend = if (distH < lookaheadDist && nextTarget != null && (nodeType == RouteNodeType.WALK || breakAir)) {
+                    val t = ((lookaheadDist - distH) / lookaheadDist).coerceIn(0.0, 1.0)
+                    t * t * (3.0 - 2.0 * t) * 0.35
                 } else {
                     0.0
                 }
@@ -1753,8 +1776,8 @@ object PathExecutor {
             state.isAir || state.`is`(Blocks.LAVA) || state.`is`(Blocks.WATER)
         }
 
-        // Probe ahead along movement line up to maxDist
-        for (dist in listOf(0.8, 1.4, 2.0, 2.6)) {
+        // Probe ahead along movement line with fine sub-block resolution up to maxDist
+        for (dist in listOf(0.35, 0.7, 1.2, 1.8, 2.5)) {
             if (dist > maxDist) break
             val probeX = player.x + nx * dist
             val probeZ = player.z + nz * dist

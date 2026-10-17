@@ -487,7 +487,10 @@ object PathfindCapture {
             append(""""yaw":${formatNumber(player.yRot, 2)},"pitch":${formatNumber(player.xRot, 2)},""")
             append(""""vx":${formatNumber(vx, 4)},"vy":${formatNumber(vy, 4)},"vz":${formatNumber(vz, 4)},""")
             append(""""bpsH":${formatNumber(bpsH, 2)},"bps3D":${formatNumber(bps3D, 2)},"attrSpeed":${formatNumber(speedAttr, 4)},""")
-            append(""""ground":$onGround,"inLava":$inLava,"crouch":$isCrouching,"sprint":$isSprinting,"fall":${formatNumber(fallDist, 2)},""")
+            val feetBlock = level.getBlockState(player.blockPosition().below()).block.descriptionId.removePrefix("block.minecraft.")
+            val hCollision = player.horizontalCollision
+            val vCollision = player.verticalCollision
+            append(""""ground":$onGround,"inLava":$inLava,"crouch":$isCrouching,"sprint":$isSprinting,"fall":${formatNumber(fallDist, 2)},"blockFeet":"$feetBlock","col":{"h":$hCollision,"v":$vCollision},""")
             append(""""keys":{"w":$fwd,"s":$back,"a":$left,"d":$right,"jump":$jump,"shift":$shift,"sprint":$sprint},""")
             append(""""mouse":{"l":$leftClick,"r":$rightClick},"hit":{"type":"$hitTargetType","target":"$hitInfo"},""")
             append(""""items":{"main":"$mainName","boots":"$bootsName"}""")
