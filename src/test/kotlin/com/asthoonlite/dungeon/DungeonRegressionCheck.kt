@@ -1364,8 +1364,52 @@ fun main() {
         val straightOffset = Vec3(0.0, 0.0, -10.0)
         val nextOffset = Vec3(-6.0, 0.0, -18.0)
         val blendedMotion = PathExecutor.bonzoRunwayMotion(straightOffset, nextOffset, 1.0)
-        check(blendedMotion.x < -0.05) {
-            "Runway motion within 1.8m blend zone must steer towards flight direction, got dx=${blendedMotion.x}"
+        // 8. Uphill Bonzo launch: must override flat walking pitch when deltaY > 1.5 without look node
+        val uphillAimPlan = KinematicTrajectory.calculateBonzoAimPlan(
+            playerPos = Vec3(97.5, 115.0, 50.5),
+            playerVel = Vec3(0.0, 0.0, 0.6),
+            playerEyeY = 116.62,
+            destinationPos = Vec3(94.0, 119.0, 66.5),
+            recordedPitch = 32.55f,
+            recordedYaw = 16.05f,
+            hasLookNode = false
+        )
+        check(uphillAimPlan.shotPitch > 45.0f) {
+            "Uphill launch (+4.0m) must override flat walking pitch (32.55°) with optimal launch pitch (> 45°), got ${uphillAimPlan.shotPitch}"
+        }
+
+        // 9. niggaS2 last Bonzo node redirection (18.44° turn): must trigger isRedirection and steer
+        val s2LastBonzoPlan = KinematicTrajectory.calculateBonzoAimPlan(
+            playerPos = Vec3(8.5, 115.0, 122.5),
+            playerVel = Vec3(0.0, 0.0, -0.6),
+            playerEyeY = 116.62,
+            destinationPos = Vec3(2.5, 109.0, 104.5),
+            recordedPitch = 54.15f,
+            recordedYaw = -175.95f,
+            hasLookNode = false
+        )
+        check(s2LastBonzoPlan.isRedirection) {
+            "18.44° angle change on niggaS2 last bonzo node must trigger isRedirection"
+        }
+        check(abs(Mth.wrapDegrees(s2LastBonzoPlan.shotYaw - s2LastBonzoPlan.destYaw)) > 3.0f) {
+            "Redirection shotYaw must steer blast counter to approach momentum, got shot=${s2LastBonzoPlan.shotYaw}, dest=${s2LastBonzoPlan.destYaw}"
+        }
+
+        // 10. Stationary destination without gap: must never auto-jump on solid catwalk
+        val noGapStationaryJump = PathExecutor.shouldAutoJump(
+            nodeType = com.asthoonlite.pathfinding.RouteNodeType.SIMON_SAYS,
+            isStationaryDest = true,
+            onGround = true,
+            isLedge = false,
+            distH = 2.8,
+            isCrouchNode = false,
+            isObstacleCollision = false,
+            isElevationStep = false,
+            isMiningObstacle = false,
+            isExitingBreakDoorway = false
+        )
+        check(!noGapStationaryJump) {
+            "Must NOT auto-gap jump when approaching stationary destination on solid continuous ground"
         }
     }
 

@@ -147,13 +147,18 @@ object KinematicTrajectory {
         val calcPitch = Math.toDegrees(Math.acos(cosTheta)).toFloat()
 
         val maxPitchForRange = when {
+            deltaY > 1.5 -> 65.0f
             distH >= 17.0 -> if (deltaY > 0.0) 38.0f else 42.0f
             distH >= 14.0 -> if (deltaY > 0.0) 44.0f else 48.0f
             distH >= 11.0 -> if (deltaY > 0.0) 52.0f else 56.0f
             distH >= 8.0 -> 64.0f
             else -> 75.0f
         }
-        val minPitch = if (isRedirection) 35.0f else 28.0f
+        val minPitch = when {
+            deltaY > 1.5 -> (48.0f + deltaY.toFloat() * 2.0f).coerceIn(52.0f, 62.0f)
+            isRedirection -> 35.0f
+            else -> 28.0f
+        }
         val boundedPitch = calcPitch.coerceIn(minPitch, maxPitchForRange)
 
         // If recorded pitch is provided, preserve it
@@ -202,7 +207,7 @@ object KinematicTrajectory {
         val impulseLen = requiredImpulse.horizontalDistance()
         val impulseDir = if (impulseLen > 0.01) requiredImpulse.scale(1.0 / impulseLen) else destDir
 
-        val isRedirection = abs(turnAngle) >= 20.0f || (impulseLen > 0.5 && abs(turnAngle) >= 15.0f)
+        val isRedirection = abs(turnAngle) >= 15.0f || (impulseLen > 0.55 && abs(turnAngle) >= 13.0f)
 
         // Predicted player position at detonation (2 ticks ahead)
         val predDetonationPos = playerPos.add(playerVel.x * BONZO_DETONATION_TICKS, 0.0, playerVel.z * BONZO_DETONATION_TICKS)
@@ -222,7 +227,14 @@ object KinematicTrajectory {
         val computedPitch = (-Math.toDegrees(atan2(aimDy, aimDistH.coerceAtLeast(0.2)))).toFloat().coerceIn(45.0f, 75.0f)
 
         val deltaY = destinationPos.y - playerPos.y
-        val finalPitch = if (recordedPitch in 20.0f..88.0f) {
+        val finalPitch = if (deltaY > 1.5 && recordedPitch in 20.0f..40.0f && !hasLookNode) {
+            calculateOptimalBonzoPitch(
+                distH = destDistH,
+                deltaY = deltaY,
+                recordedPitch = 0f,
+                isRedirection = isRedirection
+            )
+        } else if (recordedPitch in 20.0f..88.0f) {
             recordedPitch
         } else if (isRedirection) {
             computedPitch
@@ -271,17 +283,22 @@ object KinematicTrajectory {
         val currentSpeedH = playerVel.horizontalDistance()
         if (currentSpeedH < 0.15) return false
 
+        val distToTarget = hypot(targetPos.x - playerPos.x, targetPos.z - playerPos.z)
+        if (distToTarget <= 0.6) return false
+        val maxProbe = (distToTarget - 0.4).coerceAtLeast(0.1)
+
         val floorY = floor(playerPos.y - 0.1).toInt()
         val velDir = Vec3(playerVel.x, 0.0, playerVel.z).normalize()
+        val toTargetDir = Vec3(targetPos.x - playerPos.x, 0.0, targetPos.z - playerPos.z).normalize()
+        // Blend probe direction mostly towards target to prevent lateral drift on narrow catwalks from falsely probing off-edge
+        val probeDir = velDir.scale(0.3).add(toTargetDir.scale(0.7)).normalize()
         var dropDetectedAtTick = -1
-
-        val distToTarget = hypot(targetPos.x - playerPos.x, targetPos.z - playerPos.z)
-        val maxProbe = (distToTarget - 0.4).coerceAtLeast(0.5)
 
         for (step in 1..4) {
             val dist = (step * currentSpeedH).coerceAtMost(maxProbe)
-            val probeX = playerPos.x + velDir.x * dist
-            val probeZ = playerPos.z + velDir.z * dist
+            if (dist > maxProbe) break
+            val probeX = playerPos.x + probeDir.x * dist
+            val probeZ = playerPos.z + probeDir.z * dist
             val probePos = BlockPos(floor(probeX).toInt(), floorY, floor(probeZ).toInt())
             val stateAtFloor = level.getBlockState(probePos)
             val stateBelow = level.getBlockState(probePos.below())
