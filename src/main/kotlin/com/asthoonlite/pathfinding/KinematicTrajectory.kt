@@ -86,7 +86,8 @@ object KinematicTrajectory {
         yaw: Float = 0f,
         maxTicks: Int = 30
     ): Triple<Vec3, Vec3, Int> {
-        val effectiveTargetY = if (targetY > startPos.y) startPos.y else targetY
+        val maxJumpReach = startPos.y + if (startVel.y > 0.0) (startVel.y * 5.0) else 0.0
+        val effectiveTargetY = if (targetY <= maxJumpReach) targetY else startPos.y
         var cur = State(startPos.x, startPos.y, startPos.z, startVel.x, startVel.y, startVel.z, onGround = false)
         for (tick in 1..maxTicks) {
             val nxt = stepAirborne(cur, forwardInput, strafeInput, yaw)
@@ -338,7 +339,7 @@ object KinematicTrajectory {
         playerYaw: Float,
         destinationPos: Vec3
     ): AirControl {
-        val (projLand, _, _) = predictAirFlight(playerPos, playerVel, destinationPos.y, yaw = playerYaw)
+        val (projLand, _, _) = predictAirFlight(playerPos, playerVel, destinationPos.y, forwardInput = 0.0, yaw = playerYaw)
 
         val errX = destinationPos.x - projLand.x
         val errZ = destinationPos.z - projLand.z
@@ -351,14 +352,14 @@ object KinematicTrajectory {
         val localStrafe = cos * errX + sin * errZ
 
         val fwdInput = when {
-            localForward > 0.15 -> 1.0
-            localForward < -0.15 -> -1.0
-            else -> 1.0
+            localForward > 0.20 -> 1.0
+            localForward < -0.20 -> -1.0
+            else -> 0.0
         }
 
         val strafeInput = when {
-            localStrafe > 0.15 -> 1.0
-            localStrafe < -0.15 -> -1.0
+            localStrafe > 0.20 -> 1.0
+            localStrafe < -0.20 -> -1.0
             else -> 0.0
         }
 

@@ -1476,6 +1476,33 @@ fun main() {
         check(overshootingAirGuidance.forward < 0.0) {
             "Airborne trajectory overshooting target must output negative forward guidance (air brake), got ${overshootingAirGuidance.forward}"
         }
+
+        val undershootingAirGuidance = KinematicTrajectory.computeAirGuidance(
+            playerPos = Vec3(27.79, 131.75, 137.91),
+            playerVel = Vec3(-0.05, 0.25, 0.0),
+            playerYaw = 90.0f,
+            destinationPos = Vec3(24.50, 131.00, 137.50)
+        )
+        check(undershootingAirGuidance.forward > 0.0) {
+            "Airborne trajectory undershooting target must output positive forward guidance (push forward), got ${undershootingAirGuidance.forward}"
+        }
+
+        val (projLand, _, _) = KinematicTrajectory.predictAirFlight(
+            startPos = Vec3(27.79, 131.75, 137.91),
+            startVel = Vec3(-0.557, 0.25, 0.0),
+            targetY = 131.00,
+            forwardInput = 0.0,
+            yaw = 90.0f
+        )
+        val onTargetAirGuidance = KinematicTrajectory.computeAirGuidance(
+            playerPos = Vec3(27.79, 131.75, 137.91),
+            playerVel = Vec3(-0.557, 0.25, 0.0),
+            playerYaw = 90.0f,
+            destinationPos = Vec3(projLand.x, 131.00, 137.91)
+        )
+        check(onTargetAirGuidance.forward == 0.0) {
+            "Airborne trajectory precisely on target must output neutral guidance (coast), projLand=$projLand, got ${onTargetAirGuidance.forward}"
+        }
     }
 
     println("Dungeon regression checks passed: scoreboard detection, terminal timing, terminal identification, candidates and click order, melody row selection, custom terminal grid, map dimensions/bounds, mob categories, tictactoe solver, secret hitbox expansion geometry, map overlay canvas, map decoration binding, legit map base, terminal pointer flight timing, terminal motion and gui, terminal pointer motion, cursor trail fade, rounded tile arcs, real cursor handback, pointer linger, and pathfinding preset taxonomy.")

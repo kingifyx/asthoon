@@ -872,8 +872,8 @@ object PathExecutor {
             (isLedgeOrGapAhead(level, player, moveYaw, maxLedgeDist) ||
              KinematicTrajectory.shouldPredictiveLedgeJump(level, Vec3(player.x, player.y, player.z), player.deltaMovement, Vec3(target.x, target.y, target.z), player.onGround()))
 
-        val hasGapToTarget = isStationaryDest && run {
-            val count = (distH / 0.8).toInt().coerceIn(1, 5)
+        val hasGapToTarget = run {
+            val count = (distH / 0.8).toInt().coerceIn(1, 6)
             (1..count).any { i ->
                 val frac = i.toDouble() / (count + 1)
                 val checkPos = BlockPos(floor(player.x + dx * frac).toInt(), floor(player.y - 0.1).toInt(), floor(player.z + dz * frac).toInt())
@@ -883,7 +883,7 @@ object PathExecutor {
             }
         }
         val isCrossingGapToStationary = isStationaryDest && hasGapToTarget && distH >= 1.2
-        val isLedge = if (isStationaryDest) hasGapToTarget else hasLedgeAhead
+        val isLedge = if (isStationaryDest) hasGapToTarget else (hasLedgeAhead || hasGapToTarget)
 
         val landingFloor = BlockPos.containing(player.x, target.y - 0.1, player.z)
         val landingSupport = isStationaryDest && player.onGround() && !isCrossingGapToStationary && (abs(player.y - target.y) <= 0.8 || !level.getBlockState(landingFloor).getCollisionShape(level, landingFloor).isEmpty)
@@ -900,12 +900,54 @@ object PathExecutor {
         if (isSettledStationary && player.onGround()) {
             releaseAllMovementKeys()
             player.setSprinting(false)
+        } else if (isAirborne) {
+            val isBonzoActive = bonzoState != BonzoState.IDLE || bonzoAirborneSinceKnockback
+            val shouldApplyAirGuidance = !isBonzoActive && (
+                isCrossingGap || hasGapToTarget || isStationaryDest || isApproachingBreak ||
+                nextTarget?.nodeType() in setOf(RouteNodeType.BREAK, RouteNodeType.BONZO_STAFF, RouteNodeType.SIMON_SAYS, RouteNodeType.TERMINAL)
+            )
+            if (shouldApplyAirGuidance) {
+                val airControl = KinematicTrajectory.computeAirGuidance(
+                    playerPos = Vec3(player.x, player.y, player.z),
+                    playerVel = player.deltaMovement,
+                    playerYaw = player.yRot,
+                    destinationPos = Vec3(target.x, target.y, target.z)
+                )
+                val options = mc.options
+                if (airControl.forward < -0.15) {
+                    options.keyUp.setDown(false)
+                    options.keySprint.setDown(false)
+                    options.keyDown.setDown(true)
+                    player.setSprinting(false)
+                } else if (airControl.forward > 0.15) {
+                    options.keyUp.setDown(true)
+                    options.keyDown.setDown(false)
+                    val currentSpeedH = player.deltaMovement.horizontalDistance() * 20.0
+                    val wantsSprint = !isHighSpeed || currentSpeedH < 12.0
+                    options.keySprint.setDown(wantsSprint)
+                    player.setSprinting(wantsSprint)
+                } else {
+                    options.keyUp.setDown(false)
+                    options.keyDown.setDown(false)
+                    options.keySprint.setDown(false)
+                    player.setSprinting(false)
+                }
+
+                if (abs(airControl.strafe) > 0.15) {
+                    options.keyLeft.setDown(airControl.strafe > 0.15)
+                    options.keyRight.setDown(airControl.strafe < -0.15)
+                } else {
+                    options.keyLeft.setDown(false)
+                    options.keyRight.setDown(false)
+                }
+            } else {
+                moveInDirection(player, airborneMovement(offset, player.deltaMovement), true)
+            }
         } else if (stationaryMotion != null) {
             // Steer and coast in world coordinates without reverse key bang-bang oscillation
-            val wantsSprint = !isCrouchNode && isApproaching && (isAirborne || distH > (stoppingDist + 0.8))
-            moveInDirection(player, stationaryMotion, wantsSprint, isCrouchNode && !isAirborne)
-        } else if (isAirborne) {
-            moveInDirection(player, airborneMovement(offset, player.deltaMovement), true)
+            val wantsSprint = !isCrouchNode && isApproaching && distH > (stoppingDist + 0.8) &&
+                (!isHighSpeed || distH > (stoppingDist + 2.0))
+            moveInDirection(player, stationaryMotion, wantsSprint, isCrouchNode)
         } else if ((isBonzoRunway || isApproachingBonzoRunway) && nodeType == RouteNodeType.BONZO_STAFF) {
             val destinationPos = if (nextTarget != null) Vec3(nextTarget.x, nextTarget.y, nextTarget.z) else Vec3(target.x, target.y, target.z)
             val bonzoParams = calculateKinematicBonzoAim(
@@ -994,35 +1036,11 @@ object PathExecutor {
                     mc.options.keySprint.setDown(false)
                 } else {
                     mc.options.keyShift.setDown(false)
-                    val wantsSprint = forward > 0.2 || !isSharpTurn
+                    val wantsSprint = (forward > 0.2 || !isSharpTurn) &&
+                        (!isHighSpeed || !(hasGapToTarget || isLedge || (isStationaryDest && distH <= stoppingDist + 1.5)))
                     mc.options.keySprint.setDown(wantsSprint)
                     if (wantsSprint && !player.isSprinting) {
                         player.setSprinting(true)
-                    }
-                }
-
-                if (isAirborne && bonzoState == BonzoState.IDLE && !bonzoAirborneSinceKnockback) {
-                    val shouldApplyAirGuidance = isCrossingGap || isStationaryDest ||
-                        nextTarget?.nodeType() in setOf(RouteNodeType.BREAK, RouteNodeType.BONZO_STAFF, RouteNodeType.SIMON_SAYS, RouteNodeType.TERMINAL)
-                    if (shouldApplyAirGuidance) {
-                        val airControl = KinematicTrajectory.computeAirGuidance(
-                            playerPos = Vec3(player.x, player.y, player.z),
-                            playerVel = player.deltaMovement,
-                            playerYaw = player.yRot,
-                            destinationPos = Vec3(target.x, target.y, target.z)
-                        )
-                        if (airControl.forward < 0.0) {
-                            mc.options.keyUp.setDown(false)
-                            mc.options.keySprint.setDown(false)
-                            mc.options.keyDown.setDown(true)
-                        } else {
-                            mc.options.keyUp.setDown(true)
-                            mc.options.keyDown.setDown(false)
-                        }
-                        if (abs(airControl.strafe) > 0.15) {
-                            mc.options.keyLeft.setDown(airControl.strafe > 0.15)
-                            mc.options.keyRight.setDown(airControl.strafe < -0.15)
-                        }
                     }
                 }
             }
@@ -1068,7 +1086,7 @@ object PathExecutor {
         if (shouldAutoJump && isLedge) {
             isCrossingGap = true
         }
-        if (isAirborne && isLedge) {
+        if (isAirborne && (isLedge || hasGapToTarget)) {
             isCrossingGap = true
         }
 
@@ -1084,7 +1102,8 @@ object PathExecutor {
 
         if (jumpTicksRemaining > 0) {
             mc.options.keyJump.setDown(true)
-            if (!isCrouchNode) {
+            val shouldSprintJump = !isCrouchNode && (!isHighSpeed || !(hasGapToTarget || isLedge))
+            if (shouldSprintJump) {
                 player.setSprinting(true)
             }
             jumpTicksRemaining--
