@@ -1411,6 +1411,71 @@ fun main() {
         check(!noGapStationaryJump) {
             "Must NOT auto-gap jump when approaching stationary destination on solid continuous ground"
         }
+
+        // 11. Touchdown gating for BREAK, BONZO_STAFF, and gap crossing
+        check(!PathExecutor.waypointTouchdownAllowsAdvance(false, com.asthoonlite.pathfinding.RouteNodeType.BREAK, false)) {
+            "Approaching BREAK node must require touchdown before advancement"
+        }
+        check(PathExecutor.waypointTouchdownAllowsAdvance(false, com.asthoonlite.pathfinding.RouteNodeType.BREAK, true)) {
+            "Grounded arrival at BREAK node must allow advancement"
+        }
+        check(!PathExecutor.waypointTouchdownAllowsAdvance(false, com.asthoonlite.pathfinding.RouteNodeType.BONZO_STAFF, false)) {
+            "Approaching BONZO_STAFF node must require touchdown before advancement"
+        }
+        check(!PathExecutor.waypointTouchdownAllowsAdvance(false, com.asthoonlite.pathfinding.RouteNodeType.WALK, false, isCrossingGap = true)) {
+            "Crossing gap to WALK node must require touchdown before advancement"
+        }
+        check(PathExecutor.waypointTouchdownAllowsAdvance(false, com.asthoonlite.pathfinding.RouteNodeType.WALK, true, isCrossingGap = true)) {
+            "Landing on ground after crossing gap must allow advancement"
+        }
+        check(!PathExecutor.waypointTouchdownAllowsAdvance(false, com.asthoonlite.pathfinding.RouteNodeType.WALK, false, currentType = com.asthoonlite.pathfinding.RouteNodeType.BREAK)) {
+            "Advancing from BREAK node must require grounded stance"
+        }
+
+        // 12. Gap jump heading alignment: long chasms (distH >= 2.5) require heading alignment before takeoff
+        val misalignedGapJump = PathExecutor.shouldAutoJump(
+            nodeType = com.asthoonlite.pathfinding.RouteNodeType.WALK,
+            isStationaryDest = false,
+            onGround = true,
+            isLedge = true,
+            distH = 3.5,
+            isCrouchNode = false,
+            isObstacleCollision = false,
+            isElevationStep = false,
+            isMiningObstacle = false,
+            isExitingBreakDoorway = false,
+            isHeadingAligned = false
+        )
+        check(!misalignedGapJump) {
+            "Misaligned gap jump heading across chasm must wait for heading alignment before takeoff"
+        }
+        val alignedGapJump = PathExecutor.shouldAutoJump(
+            nodeType = com.asthoonlite.pathfinding.RouteNodeType.WALK,
+            isStationaryDest = false,
+            onGround = true,
+            isLedge = true,
+            distH = 3.5,
+            isCrouchNode = false,
+            isObstacleCollision = false,
+            isElevationStep = false,
+            isMiningObstacle = false,
+            isExitingBreakDoorway = false,
+            isHeadingAligned = true
+        )
+        check(alignedGapJump) {
+            "Aligned gap jump heading across chasm must trigger takeoff"
+        }
+
+        // 13. Kinematic air guidance braking: overshooting trajectory must output negative forward guidance
+        val overshootingAirGuidance = KinematicTrajectory.computeAirGuidance(
+            playerPos = Vec3(27.79, 131.75, 137.91),
+            playerVel = Vec3(-0.85, 0.25, 0.0),
+            playerYaw = 90.0f,
+            destinationPos = Vec3(24.50, 131.00, 137.50)
+        )
+        check(overshootingAirGuidance.forward < 0.0) {
+            "Airborne trajectory overshooting target must output negative forward guidance (air brake), got ${overshootingAirGuidance.forward}"
+        }
     }
 
     println("Dungeon regression checks passed: scoreboard detection, terminal timing, terminal identification, candidates and click order, melody row selection, custom terminal grid, map dimensions/bounds, mob categories, tictactoe solver, secret hitbox expansion geometry, map overlay canvas, map decoration binding, legit map base, terminal pointer flight timing, terminal motion and gui, terminal pointer motion, cursor trail fade, rounded tile arcs, real cursor handback, pointer linger, and pathfinding preset taxonomy.")
