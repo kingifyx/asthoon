@@ -861,8 +861,9 @@ object PathExecutor {
         val toTargetDz = aimTarget.z - player.z
         val targetYaw = (-Math.toDegrees(atan2(toTargetDx, toTargetDz))).toFloat()
         val isDescending = target.y < player.y - 0.5
-        val maxLedgeDist = (player.deltaMovement.horizontalDistance() + 0.15).coerceIn(0.35, 0.65)
         val moveSpeedH = player.deltaMovement.horizontalDistance()
+        val moveStride = (moveSpeedH * 1.8).coerceIn(0.40, 1.80)
+        val maxLedgeDist = (moveStride + 0.15).coerceIn(0.40, 1.95)
         val moveYaw = if (moveSpeedH > 0.15) (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat() else targetYaw
         val hasLedgeAhead = !isDescending && (nodeType != RouteNodeType.BONZO_STAFF || distH > 1.8) && distH > 0.6 &&
             (isLedgeOrGapAhead(level, player, moveYaw, maxLedgeDist) ||
@@ -1802,8 +1803,8 @@ object PathExecutor {
             state.isAir || state.`is`(Blocks.LAVA) || state.`is`(Blocks.WATER)
         }
 
-        // Probe ahead along movement line with fine sub-block resolution up to maxDist (immediate step only)
-        for (dist in listOf(0.35, 0.55, 0.75)) {
+        // Probe ahead along movement line with fine sub-block resolution up to maxDist
+        for (dist in listOf(0.35, 0.65, 1.05, 1.45, 1.85)) {
             if (dist > maxDist) break
             val probeX = player.x + nx * dist
             val probeZ = player.z + nz * dist

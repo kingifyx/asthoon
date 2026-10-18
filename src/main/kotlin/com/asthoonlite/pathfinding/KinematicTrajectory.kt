@@ -310,7 +310,7 @@ object KinematicTrajectory {
             }
         }
 
-        if (dropDetectedAtTick != 1) return false
+        if (dropDetectedAtTick !in 1..2) return false
 
         // Check if jumping on this tick clears the gap
         val jumpVel = Vec3(
@@ -322,7 +322,7 @@ object KinematicTrajectory {
         val landingBlockPos = BlockPos(floor(projectedLand.x).toInt(), floorY, floor(projectedLand.z).toInt())
         val landingState = level.getBlockState(landingBlockPos)
 
-        return !landingState.getCollisionShape(level, landingBlockPos).isEmpty || dropDetectedAtTick == 1
+        return !landingState.getCollisionShape(level, landingBlockPos).isEmpty || dropDetectedAtTick in 1..2
     }
 
     data class AirControl(val forward: Double, val strafe: Double)
