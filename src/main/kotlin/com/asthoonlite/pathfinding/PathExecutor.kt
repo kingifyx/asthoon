@@ -882,8 +882,11 @@ object PathExecutor {
                 (s1.isAir || s1.`is`(Blocks.LAVA) || s1.`is`(Blocks.WATER)) && (s2.isAir || s2.`is`(Blocks.LAVA) || s2.`is`(Blocks.WATER))
             }
         }
+        val isApproachingStationary = isStationaryDest || nextTarget?.nodeType() in setOf(
+            RouteNodeType.SIMON_SAYS, RouteNodeType.ARROWS_ALIGN, RouteNodeType.TERMINAL, RouteNodeType.TIMEOUT
+        )
         val isCrossingGapToStationary = isStationaryDest && hasGapToTarget && distH >= 1.2
-        val isLedge = if (isStationaryDest) hasGapToTarget else (hasLedgeAhead || hasGapToTarget)
+        val isLedge = if (isApproachingStationary) hasGapToTarget else (hasLedgeAhead || hasGapToTarget)
 
         val landingFloor = BlockPos.containing(player.x, target.y - 0.1, player.z)
         val landingSupport = isStationaryDest && player.onGround() && !isCrossingGapToStationary && (abs(player.y - target.y) <= 0.8 || !level.getBlockState(landingFloor).getCollisionShape(level, landingFloor).isEmpty)
@@ -1037,7 +1040,7 @@ object PathExecutor {
                 } else {
                     mc.options.keyShift.setDown(false)
                     val wantsSprint = (forward > 0.2 || !isSharpTurn) &&
-                        (!isHighSpeed || !(hasGapToTarget || isLedge || (isStationaryDest && distH <= stoppingDist + 1.5)))
+                        (!isHighSpeed || !(hasGapToTarget || isLedge || (isApproachingStationary && distH <= stoppingDist + 2.0)))
                     mc.options.keySprint.setDown(wantsSprint)
                     if (wantsSprint && !player.isSprinting) {
                         player.setSprinting(true)
@@ -1185,7 +1188,8 @@ object PathExecutor {
                 nextTarget?.nodeType(),
                 player.onGround(),
                 isCrossingGap = isCrossingGap,
-                currentType = nodeType
+                currentType = nodeType,
+                horizontalSpeed = player.deltaMovement.horizontalDistance()
             ) &&
             (!isStationaryDest || isSettled)) {
             if (isBreakNode && nextTarget?.nodeType() != RouteNodeType.BREAK) {
@@ -1488,23 +1492,30 @@ object PathExecutor {
         nextType: RouteNodeType?,
         onGround: Boolean,
         isCrossingGap: Boolean = false,
-        currentType: RouteNodeType? = null
+        currentType: RouteNodeType? = null,
+        horizontalSpeed: Double = 0.0
     ): Boolean {
         // Retain the landing target until grounded before starting a crouched, break, or Bonzo traverse,
         // or when clearing a gap/chasm to a platform.
-        val requiresTouchdown = stationaryDestination || isCrossingGap || currentType == RouteNodeType.BREAK || when (nextType) {
-            RouteNodeType.SIMON_SAYS, RouteNodeType.ARROWS_ALIGN, RouteNodeType.TERMINAL,
-            RouteNodeType.TIMEOUT, RouteNodeType.CROUCH, RouteNodeType.BREAK, RouteNodeType.BONZO_STAFF -> true
+        val isNextStationary = when (nextType) {
+            RouteNodeType.SIMON_SAYS, RouteNodeType.ARROWS_ALIGN, RouteNodeType.TERMINAL, RouteNodeType.TIMEOUT -> true
             else -> false
         }
-        return !requiresTouchdown || onGround
+        val requiresTouchdown = stationaryDestination || isCrossingGap || currentType == RouteNodeType.BREAK ||
+            isNextStationary || when (nextType) {
+                RouteNodeType.CROUCH, RouteNodeType.BREAK, RouteNodeType.BONZO_STAFF -> true
+                else -> false
+            }
+        if (requiresTouchdown && !onGround) return false
+        if (isNextStationary && horizontalSpeed > 0.20) return false
+        return true
     }
 
     internal fun hasLandedAtNode(distH: Double, distY: Double, onGround: Boolean): Boolean =
         onGround && distH < 1.4 && distY <= 0.8
 
     internal fun isSettledAtNode(distH: Double, distY: Double, onGround: Boolean, horizontalSpeed: Double): Boolean =
-        hasLandedAtNode(distH, distY, onGround) && (distH <= 0.45 || horizontalSpeed <= 0.08)
+        hasLandedAtNode(distH, distY, onGround) && horizontalSpeed <= 0.08
 
     private fun isSettledAtNode(player: LocalPlayer, node: PathPoint): Boolean =
         isSettledAtNode(hypot(node.x - player.x, node.z - player.z), abs(node.y - player.y),

@@ -1432,6 +1432,17 @@ fun main() {
             "Advancing from BREAK node must require grounded stance"
         }
 
+        // 11b. Touchdown & speed gating for stationary devices (SIMON_SAYS, ARROWS_ALIGN, TERMINAL, TIMEOUT)
+        check(!PathExecutor.waypointTouchdownAllowsAdvance(false, com.asthoonlite.pathfinding.RouteNodeType.SIMON_SAYS, false)) {
+            "Approaching SIMON_SAYS node must require touchdown before advancement"
+        }
+        check(!PathExecutor.waypointTouchdownAllowsAdvance(false, com.asthoonlite.pathfinding.RouteNodeType.SIMON_SAYS, true, horizontalSpeed = 0.50)) {
+            "High-speed approach (> 0.20 bps) to SIMON_SAYS must gate advancement until speed bleeds off"
+        }
+        check(PathExecutor.waypointTouchdownAllowsAdvance(false, com.asthoonlite.pathfinding.RouteNodeType.SIMON_SAYS, true, horizontalSpeed = 0.15)) {
+            "Grounded approach with controlled speed (<= 0.20 bps) to SIMON_SAYS must allow advancement"
+        }
+
         // 12. Gap jump heading alignment: long chasms (distH >= 2.5) require heading alignment before takeoff
         val misalignedGapJump = PathExecutor.shouldAutoJump(
             nodeType = com.asthoonlite.pathfinding.RouteNodeType.WALK,
