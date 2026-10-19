@@ -1273,6 +1273,67 @@ internal fun simonDeviceRegressionChecks() {
         isSteppingOnStairsOrSlabs = true
     )
     check(!slabStepElevationJump) { "Step elevation <= 0.6m on stairs/slabs must not trigger jump" }
+
+    // 48. Simon Says platform standing reach and settle check (niggap3 Node 4)
+    // Standing platform ends at z=91.5, buttons on wall at z=93.5 (distH ~ 3.5..4.0m)
+    val simonSettledPlatform = PathExecutor.isSettledAtNode(
+        distH = 3.86,
+        distY = 0.0,
+        onGround = true,
+        horizontalSpeed = 0.04,
+        maxDistH = 4.5
+    )
+    check(simonSettledPlatform) { "Player standing on Simon platform (distH=3.86m) must be recognized as settled with 4.5m device reach" }
+    val simonDefaultReachFails = PathExecutor.isSettledAtNode(
+        distH = 3.86,
+        distY = 0.0,
+        onGround = true,
+        horizontalSpeed = 0.04,
+        maxDistH = 1.4
+    )
+    check(!simonDefaultReachFails) { "Default 1.4m reach must fail for 3.86m Simon platform standing distance" }
+    check(PathExecutor.canUseSimonSolver(true, RouteNodeType.SIMON_SAYS, simonSettledPlatform)) {
+        "Simon solver must be permitted to execute once settled on standing platform"
+    }
+
+    // 49. Bonzo redirection aim plan calculation (niggaS4 Node 0)
+    // Redirection launch with 90° turn computes ground blast angles (aiming left/behind and down at floor)
+    val niggaS4AimPlan = KinematicTrajectory.calculateBonzoAimPlan(
+        playerPos = Vec3(54.5, 115.0, 48.716),
+        playerVel = Vec3(0.0, -0.0784, -0.5915),
+        playerEyeY = 116.62,
+        destinationPos = Vec3(72.5, 115.0, 46.5),
+        recordedPitch = 28.65f,
+        recordedYaw = 184.50f,
+        hasLookNode = false,
+        runwayHeadingYaw = null
+    )
+    check(niggaS4AimPlan.isRedirection) { "niggaS4 90-degree turn launch must be classified as redirection" }
+    check(niggaS4AimPlan.shotPitch in 45.0f..65.0f) {
+        "niggaS4 redirection blast must aim at ground blast impact point (45°-65°), got ${niggaS4AimPlan.shotPitch}"
+    }
+    check(Math.abs(niggaS4AimPlan.shotYaw - 144.14f) < 1.0f) {
+        "niggaS4 redirection blast yaw must aim behind and left (~144.14°) to propel player East, got ${niggaS4AimPlan.shotYaw}"
+    }
+
+    // 50. Gap auto-jump ledge safety (niggas2 Node 3)
+    // When running towards a gap, hasLedgeAhead must trigger auto-jump even if canChasmJump is not set
+    val gapAutoJump = PathExecutor.shouldAutoJump(
+        nodeType = RouteNodeType.WALK,
+        isStationaryDest = false,
+        onGround = true,
+        isLedge = true,
+        distH = 3.3,
+        isCrouchNode = false,
+        isObstacleCollision = false,
+        isElevationStep = false,
+        isMiningObstacle = false,
+        isExitingBreakDoorway = false,
+        isDescending = false,
+        isHeadingAligned = true,
+        isSteppingOnStairsOrSlabs = false
+    )
+    check(gapAutoJump) { "Auto-jump must be triggered when approaching a ledge across a gap" }
 }
 
 

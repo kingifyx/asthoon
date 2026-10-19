@@ -463,9 +463,10 @@ object KinematicTrajectory {
         val isLandSolid = isSolidFloor(landBlock) || (level.getBlockState(landBlock).isAir && isSolidFloor(landBlock.below()))
         if (!isLandSolid) return false
 
-        // Landing must land on or near the destination platform (within 3.2m of target)
+        // Landing must land on or near the destination platform (within 3.2m of target, or along forward route direction up to 8.0m)
         val distLandToTarget = hypot(projectedLand.x - targetPos.x, projectedLand.z - targetPos.z)
-        return distLandToTarget <= 3.2
+        val forwardProgress = (projectedLand.x - targetPos.x) * toTargetDir.x + (projectedLand.z - targetPos.z) * toTargetDir.z
+        return distLandToTarget <= 3.2 || (distLandToTarget <= 8.0 && forwardProgress >= 0.0)
     }
 
     /**

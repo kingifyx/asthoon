@@ -434,7 +434,8 @@ object PathExecutor {
         val skyblockSpeed = speedAttr * 1000.0
         val isHighSpeed = skyblockSpeed > 400.0
 
-        val isSettled = isSettledAtNode(distH, distY, player.onGround(), player.deltaMovement.horizontalDistance())
+        val maxNodeDistH = if (isDeviceNode) 4.5 else 1.4
+        val isSettled = isSettledAtNode(distH, distY, player.onGround(), player.deltaMovement.horizontalDistance(), maxDistH = maxNodeDistH)
         var isBonzoRunway = false
 
         if (tickCount % 5L == 0L || lastLoggedNodeIndex != currentNodeIndex) {
@@ -528,6 +529,7 @@ object PathExecutor {
             val passedAlongRoute = nextTarget != null && ((player.x - target.x) * routeDirX + (player.z - target.z) * routeDirZ > 0.0)
 
             val launchDistanceThreshold = when {
+                launchParams.isRedirection -> 0.8
                 isAirborneBonzo && currentBpsH >= 12.0 -> 2.2
                 isAirborneBonzo -> 1.8
                 currentBpsH >= 10.0 -> 1.6
@@ -546,6 +548,8 @@ object PathExecutor {
                 (-Math.toDegrees(atan2(ldx, ldz))).toFloat()
             } else if (launchParams.isRedirection) {
                 launchParams.shotYaw
+            } else if (target.yaw != 0f) {
+                target.normalizedYaw()
             } else {
                 flightYaw
             }
@@ -648,7 +652,7 @@ object PathExecutor {
         }
 
         // 3. Specialized Stationary Nodes: Simon Says, Arrows Align, Timeout
-        if (nodeType == RouteNodeType.SIMON_SAYS && distY <= 1.5 && (isSettled || (player.onGround() && distH <= 0.50))) {
+        if (nodeType == RouteNodeType.SIMON_SAYS && distY <= 1.5 && (isSettled || (player.onGround() && distH <= 4.5))) {
             releaseAllMovementKeys()
             player.setSprinting(false)
             jumpTicksRemaining = 0
@@ -661,7 +665,7 @@ object PathExecutor {
             return
         }
 
-        if (nodeType == RouteNodeType.ARROWS_ALIGN && distY <= 1.5 && (isSettled || (player.onGround() && distH <= 0.50))) {
+        if (nodeType == RouteNodeType.ARROWS_ALIGN && distY <= 1.5 && (isSettled || (player.onGround() && distH <= 4.5))) {
             releaseAllMovementKeys()
             player.setSprinting(false)
             jumpTicksRemaining = 0
@@ -982,19 +986,19 @@ object PathExecutor {
         val isApproachingStationary = isStationaryDest || nextTarget?.nodeType() in setOf(
             RouteNodeType.SIMON_SAYS, RouteNodeType.ARROWS_ALIGN, RouteNodeType.TERMINAL, RouteNodeType.TIMEOUT
         )
-        val isCrossingGapToStationary = isApproachingStationary && hasGapToTarget && distH >= 1.2
+        val isCrossingGapToStationary = isApproachingStationary && !isDeviceNode && hasGapToTarget && distH >= 1.2
         val isLedge = if (isApproachingStationary) {
             if (isCrossingGapToStationary) (canChasmJump || distH <= 2.5) else false
         } else {
             if (hasGapToTarget && corridorAim == null) {
-                canChasmJump
+                canChasmJump || hasLedgeAhead
             } else {
                 hasLedgeAhead
             }
         }
 
         val landingFloor = BlockPos.containing(player.x, target.y - 0.1, player.z)
-        val landingSupport = (isStationaryDest || isApproachingStationary) && player.onGround() && !isCrossingGapToStationary && (abs(player.y - target.y) <= 0.8 || !level.getBlockState(landingFloor).getCollisionShape(level, landingFloor).isEmpty)
+        val landingSupport = (isStationaryDest || isApproachingStationary) && player.onGround() && (!isCrossingGapToStationary || isDeviceNode) && (abs(player.y - target.y) <= 0.8 || !level.getBlockState(landingFloor).getCollisionShape(level, landingFloor).isEmpty)
         val stoppingDist = (player.deltaMovement.horizontalDistance() * 20.0 * 0.12).coerceIn(0.5, 3.0)
         val stationaryMotion = if ((isStationaryDest || (isApproachingStationary && distH <= stoppingDist + 2.0)) && !isCrossingGapToStationary) {
             stationaryMovement(offset, player.deltaMovement, player.y - target.y, landingSupport)
@@ -1003,7 +1007,8 @@ object PathExecutor {
         val isApproachingBonzoRunway = nodeType == RouteNodeType.BONZO_STAFF &&
             !player.isInLava && !player.isInWater &&
             distH <= 2.5 && player.y >= target.y - 1.5 && player.y <= target.y + 2.5
-        val isSettledStationary = isStationaryDest && distH <= 0.35 && player.deltaMovement.horizontalDistance() <= 0.10
+        val maxStationaryDistH = if (isDeviceNode) 4.5 else 0.35
+        val isSettledStationary = isStationaryDest && distH <= maxStationaryDistH && player.deltaMovement.horizontalDistance() <= 0.10
         if (isSettledStationary && player.onGround()) {
             releaseAllMovementKeys()
             player.setSprinting(false)
@@ -1482,9 +1487,9 @@ object PathExecutor {
     ): LaunchSurfaceResult {
         // 1. Check if basePitch strikes a solid floor collider within effective blast reach (<= 3.5m)
         if (basePitch in 20.0f..88.0f) {
-            val clipVec = player.eyePosition.add(Vec3.directionFromRotation(basePitch, launchYaw).scale(4.0))
+            val clipVec = player.eyePosition.add(Vec3.directionFromRotation(basePitch, launchYaw).scale(4.5))
             val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
-            if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 3.5) {
+            if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 4.2) {
                 return LaunchSurfaceResult(true, basePitch, launchYaw)
             }
         }
@@ -1719,8 +1724,13 @@ object PathExecutor {
         hasLandedAtNode(distH, distY, onGround, maxDistH) && horizontalSpeed <= maxSpeed
 
     private fun isSettledAtNode(player: LocalPlayer, node: PathPoint): Boolean =
-        isSettledAtNode(hypot(node.x - player.x, node.z - player.z), abs(node.y - player.y),
-            player.onGround(), player.deltaMovement.horizontalDistance())
+        isSettledAtNode(
+            hypot(node.x - player.x, node.z - player.z),
+            abs(node.y - player.y),
+            player.onGround(),
+            player.deltaMovement.horizontalDistance(),
+            maxDistH = if (node.nodeType() in setOf(RouteNodeType.SIMON_SAYS, RouteNodeType.ARROWS_ALIGN)) 4.5 else 1.4
+        )
 
     internal fun canUseSimonSolver(routeActive: Boolean, nodeType: RouteNodeType?, settled: Boolean): Boolean =
         !routeActive || (nodeType == RouteNodeType.SIMON_SAYS && settled)
