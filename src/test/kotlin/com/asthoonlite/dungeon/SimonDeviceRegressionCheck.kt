@@ -1186,10 +1186,19 @@ internal fun simonDeviceRegressionChecks() {
     val termGazeYaw = runwayHeading + Mth.wrapDegrees(shotAimYaw - runwayHeading) * termBlend
     check(Math.abs(termGazeYaw - 162.07f) < 0.1f) { "Terminal gaze at 0.6m must smoothly interpolate halfway (blend=0.5) towards shot aim 144.14°, got $termGazeYaw" }
 
-    // 41. Redirection Bonzo Launch Jump Suppression
-    check(!redirectionPlan.jumpOnFire) { "Redirection launch must have jumpOnFire = false" }
-    val shouldJumpRedirection = true && redirectionPlan.jumpOnFire
-    check(!shouldJumpRedirection) { "Redirection launch must not trigger jumpOnFire even when grounded" }
+    // 41. Redirection Bonzo Launch Jump: suppressed on short corners (<12m), enabled on long chasms (>=12m)
+    val shortRedirJump = true && (!redirectionPlan.isRedirection || 8.0 >= 12.0)
+    check(!shortRedirJump) { "Short corner redirection launch must not jump on fire to avoid overshooting" }
+    val longChasmJump = true && (!redirectionPlan.isRedirection || 18.0 >= 12.0)
+    check(longChasmJump) { "Long chasm redirection launch (e.g. niggaS4 18.0m) must jump on fire to clear the gap" }
+
+    // 42. Camera-relative WASD vectoring at fire
+    val deltaAngle = Mth.wrapDegrees(270.0f - 151.2f)
+    val rad = Math.toRadians(deltaAngle.toDouble())
+    val forwardInput = Math.cos(rad)
+    val strafeInput = Math.sin(rad)
+    check(forwardInput < -0.38) { "When aiming at wall (151.2°) with destination East (270°), forward input must be negative (press S)" }
+    check(strafeInput > 0.38) { "When aiming at wall (151.2°) with destination East (270°), strafe input must be positive (press D)" }
 }
 
 

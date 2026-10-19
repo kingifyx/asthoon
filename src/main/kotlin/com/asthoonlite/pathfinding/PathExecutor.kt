@@ -609,11 +609,13 @@ object PathExecutor {
             if (canLaunch) {
                 val ceilingHit = level.clip(ClipContext(player.eyePosition, player.eyePosition.add(0.0, 2.5, 0.0), ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
                 val hasLowCeiling = ceilingHit.type == HitResult.Type.BLOCK && ceilingHit.location.y - player.y < 2.6
+                val isLongChasm = destDistH >= 12.0
+                val shouldJumpOnFire = player.onGround() && !hasLowCeiling && (!launchParams.isRedirection || isLongChasm)
                 val finalLaunchParams = launchParams.copy(
                     shotPitch = effectiveLaunchPitch,
                     shotYaw = finalShotYaw,
                     destYaw = flightYaw,
-                    jumpOnFire = player.onGround() && !launchParams.isRedirection && !hasLowCeiling
+                    jumpOnFire = shouldJumpOnFire
                 )
                 initiateBonzoLaunch(points, isHighSpeed, finalLaunchParams)
                 return
@@ -2150,10 +2152,21 @@ object PathExecutor {
 
         // Movement keys:
         // Hold forward W and sprint immediately through launch point, jump on fire when grounded
-        mc.options.keyUp.setDown(true)
-        mc.options.keyDown.setDown(false)
-        mc.options.keyLeft.setDown(false)
-        mc.options.keyRight.setDown(false)
+        // Movement keys: project takeoff sprint and jump cleanly towards destination
+        val deltaAngle = Mth.wrapDegrees(params.destYaw - shotYaw)
+        val rad = Math.toRadians(deltaAngle.toDouble())
+        val forwardInput = cos(rad)
+        val strafeInput = sin(rad) // Positive = right, Negative = left
+
+        val pressForward = forwardInput > 0.38
+        val pressBackward = forwardInput < -0.38
+        val pressRight = strafeInput > 0.38
+        val pressLeft = strafeInput < -0.38
+
+        mc.options.keyUp.setDown(pressForward)
+        mc.options.keyDown.setDown(pressBackward)
+        mc.options.keyRight.setDown(pressRight)
+        mc.options.keyLeft.setDown(pressLeft)
         mc.options.keySprint.setDown(true)
         player.setSprinting(true)
         val shouldJump = player.onGround() && params.jumpOnFire
