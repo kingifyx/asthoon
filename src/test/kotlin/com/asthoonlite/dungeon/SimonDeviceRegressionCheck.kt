@@ -1148,6 +1148,24 @@ internal fun simonDeviceRegressionChecks() {
     val rawAimYaw = (-Math.toDegrees(Math.atan2(termTargetPos.x - slightOvershoot.x, termTargetPos.z - slightOvershoot.z))).toFloat()
     check(Math.abs(Mth.wrapDegrees(approachYaw - 180f)) < 0.1f) { "Approach heading moving North must be 180 degrees" }
     check(Math.abs(Mth.wrapDegrees(rawAimYaw - approachYaw)) > 90f) { "Raw target aim vector flips around 180 degrees backwards upon slight terminal overshoot" }
+
+    // 38. PathPoint angle normalization handling unwrapped multi-turn yaw values
+    val pointOverwrapped = PathPoint(0.0, 0.0, 0.0, yaw = 788.4358f, pitch = 28.65f)
+    check(Math.abs(pointOverwrapped.normalizedYaw() - 68.4358f) < 0.01f) { "788.4358° must normalize to +68.4358°" }
+    val pointUnderwrapped = PathPoint(0.0, 0.0, 0.0, yaw = -268.50116f, pitch = 77.85f)
+    check(Math.abs(pointUnderwrapped.normalizedYaw() - 91.49884f) < 0.01f) { "-268.50116° must normalize to +91.49884°" }
+
+    // 39. Bonzo Redirection Pitch preservation for wall bounce trajectories (e.g. niggaS4)
+    val redirectionPlan = KinematicTrajectory.calculateBonzoAimPlan(
+        playerPos = Vec3(54.5, 115.0, 48.7),
+        playerVel = Vec3(0.0, -0.078, -0.59),
+        playerEyeY = 116.62,
+        destinationPos = Vec3(72.5, 115.0, 46.5),
+        recordedPitch = 28.65f,
+        recordedYaw = 144.14f
+    )
+    check(redirectionPlan.isRedirection) { "niggaS4 launch must be identified as redirection" }
+    check(Math.abs(redirectionPlan.shotPitch - 28.65f) < 0.01f) { "Wall bounce redirection pitch 28.65° must be preserved, got ${redirectionPlan.shotPitch}" }
 }
 
 

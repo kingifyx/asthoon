@@ -101,6 +101,8 @@ data class PathPoint(
     var timeoutSeconds: Double = 1.0
 ) {
     fun nodeType(): RouteNodeType = RouteNodeType.fromString(action)
+    fun normalizedYaw(): Float = net.minecraft.util.Mth.wrapDegrees(yaw)
+    fun normalizedPitch(): Float = pitch.coerceIn(-89.9f, 89.9f)
 }
 
 /**

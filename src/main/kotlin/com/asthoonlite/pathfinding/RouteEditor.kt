@@ -112,8 +112,8 @@ object RouteEditor {
                             x = pos.x + 0.5,
                             y = ny,
                             z = pos.z + 0.5,
-                            yaw = player.yRot,
-                            pitch = player.xRot,
+                            yaw = net.minecraft.util.Mth.wrapDegrees(player.yRot),
+                            pitch = player.xRot.coerceIn(-89.9f, 89.9f),
                             action = defaultNodeType.name
                         )
                         preset.points.add(node)
@@ -198,8 +198,8 @@ object RouteEditor {
             x = (player.x * 100.0).toLong() / 100.0,
             y = (player.y * 100.0).toLong() / 100.0,
             z = (player.z * 100.0).toLong() / 100.0,
-            yaw = ((player.yRot * 10.0).toLong() / 10.0).toFloat(),
-            pitch = ((player.xRot * 10.0).toLong() / 10.0).toFloat(),
+            yaw = net.minecraft.util.Mth.wrapDegrees(((player.yRot * 10.0).toLong() / 10.0).toFloat()),
+            pitch = (((player.xRot * 10.0).toLong() / 10.0).toFloat()).coerceIn(-89.9f, 89.9f),
             action = defaultNodeType.name
         )
         preset.points.add(point)
