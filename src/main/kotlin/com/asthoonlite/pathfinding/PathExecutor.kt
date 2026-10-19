@@ -523,7 +523,6 @@ object PathExecutor {
             val passedAlongRoute = nextTarget != null && ((player.x - target.x) * routeDirX + (player.z - target.z) * routeDirZ > 0.0)
 
             val launchDistanceThreshold = when {
-                launchParams.isRedirection -> 0.7
                 isAirborneBonzo && currentBpsH >= 12.0 -> 2.2
                 isAirborneBonzo -> 1.8
                 currentBpsH >= 10.0 -> 1.6
@@ -745,8 +744,8 @@ object PathExecutor {
         }
 
         // 5. Waypoint Lookahead, Look Node Aiming & Smooth Natural Camera Control
-        val isClimbingToNode = nodeType != RouteNodeType.BREAK && target.y > player.y + 0.4
-        val arrivalThreshold = if (isClimbingToNode) 1.0 else if (isHighSpeed) 2.5 else 1.8
+        val isClimbingToNode = nodeType != RouteNodeType.BREAK && target.y > player.y + 0.6
+        val arrivalThreshold = if (isHighSpeed) 2.2 else 1.8
 
         val isBreakNode = nodeType == RouteNodeType.BREAK
         val breakBlockPos = if (isBreakNode) BlockPos.containing(target.x, target.y, target.z) else null
@@ -801,7 +800,7 @@ object PathExecutor {
 
         val currentBpsH = player.deltaMovement.horizontalDistance() * 20.0
         val lookaheadDist = (currentBpsH * 0.30).coerceIn(1.8, 5.0)
-        val lookaheadBlend = if (distH < lookaheadDist && nextTarget != null && !isClimbingToNode && (nodeType == RouteNodeType.WALK || (isBreakNode && !isBreakBlockSolid))) {
+        val lookaheadBlend = if (distH < lookaheadDist && nextTarget != null && (nodeType == RouteNodeType.WALK || (isBreakNode && !isBreakBlockSolid))) {
             val t = ((lookaheadDist - distH) / lookaheadDist).coerceIn(0.0, 1.0)
             t * t * (3.0 - 2.0 * t)
         } else {
@@ -1260,7 +1259,7 @@ object PathExecutor {
 
         // 8. Fluid Waypoint Transition: Speed-Scaled Arrival Check
         val canArriveElevation = if (isClimbingToNode) {
-            player.y >= target.y - 0.25
+            player.y >= target.y - 0.6
         } else if (isDropping) {
             val lowerY = (nextTarget?.y ?: target.y) - 1.5
             player.y <= target.y + 2.5 && player.y >= lowerY
@@ -1444,42 +1443,26 @@ object PathExecutor {
         launchYaw: Float,
         basePitch: Float
     ): LaunchSurfaceResult {
-        // 1. Check if basePitch strikes a solid collider (floor or wall bounce surface) within effective blast reach (<= 7.5m)
+        // 1. Check if basePitch strikes a solid floor collider within effective blast reach (<= 3.5m)
         if (basePitch in 20.0f..88.0f) {
-            val clipVec = player.eyePosition.add(Vec3.directionFromRotation(basePitch, launchYaw).scale(8.0))
+            val clipVec = player.eyePosition.add(Vec3.directionFromRotation(basePitch, launchYaw).scale(4.0))
             val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
-            if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 7.5) {
+            if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 3.5) {
                 return LaunchSurfaceResult(true, basePitch, launchYaw)
             }
         }
 
-        // 2. Wall bounce redirection: if basePitch is shallow (20°..40°), probe candidate yaws to find the bounce wall collider
-        if (basePitch in 20.0f..40.0f) {
-            val yawOffsets = floatArrayOf(+5f, -5f, +10f, -10f, +15f, -15f, +20f, -20f, +25f, -25f, +30f, -30f)
-            for (off in yawOffsets) {
-                val candYaw = Mth.wrapDegrees(launchYaw + off)
-                val clipVec = player.eyePosition.add(Vec3.directionFromRotation(basePitch, candYaw).scale(8.0))
-                val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
-                if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 7.5) {
-                    return LaunchSurfaceResult(true, basePitch, candYaw)
-                }
-            }
-            // For shallow wall-bounce trajectories, NEVER fall back to shooting the floor at 58° at your feet!
-            // Shooting the floor on a 90° corner launch provides no lateral knockback and kills the player.
-            return LaunchSurfaceResult(false, basePitch, launchYaw)
-        }
-
-        // 3. Ground blast trajectories (basePitch > 40°): test candidate ground pitches near feet
-        val testPitches = listOf(58.0f, 68.0f, 78.0f)
+        // 2. Test candidate ground pitches near feet (within 2.8m reach)
+        val testPitches = listOf(45.0f, 54.0f, 62.0f, 72.0f)
         for (p in testPitches) {
             val clipVec = player.eyePosition.add(Vec3.directionFromRotation(p, launchYaw).scale(3.5))
             val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
-            if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 2.5) {
+            if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 2.8) {
                 return LaunchSurfaceResult(true, p, launchYaw)
             }
         }
 
-        // 4. If launchYaw points into open air/void (e.g. edge of a catwalk), probe the solid floor directly under player's feet
+        // 3. If launchYaw points into open air/void (e.g. edge of a catwalk), probe the solid floor directly under player's feet
         if (player.onGround()) {
             val downVec = player.eyePosition.add(0.0, -2.5, 0.0)
             val downHit = level.clip(ClipContext(player.eyePosition, downVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
@@ -1488,7 +1471,7 @@ object PathExecutor {
             }
         }
 
-        return LaunchSurfaceResult(false, (if (basePitch in 20.0f..88.0f) basePitch else 65.0f), launchYaw)
+        return LaunchSurfaceResult(false, (if (basePitch in 20.0f..88.0f) basePitch else 55.0f), launchYaw)
     }
 
     internal data class BonzoLaunchParams(
@@ -1673,7 +1656,8 @@ object PathExecutor {
         }
         val requiresTouchdown = stationaryDestination || isCrossingGap || (currentType == RouteNodeType.BREAK && !isDescending) ||
             isNextStationary || when (nextType) {
-                RouteNodeType.CROUCH, RouteNodeType.BREAK, RouteNodeType.BONZO_STAFF -> true
+                RouteNodeType.CROUCH, RouteNodeType.BREAK -> true
+                RouteNodeType.BONZO_STAFF -> currentType != RouteNodeType.WALK
                 else -> false
             }
         if (requiresTouchdown && !onGround) return false

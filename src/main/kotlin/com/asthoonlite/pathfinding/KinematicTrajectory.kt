@@ -237,7 +237,7 @@ object KinematicTrajectory {
         val finalPitch = if (hasLookNode && recordedPitch in 20.0f..88.0f) {
             recordedPitch
         } else if (isRedirection) {
-            if (recordedPitch in 20.0f..88.0f) recordedPitch else computedPitch
+            if (recordedPitch in 45.0f..88.0f) recordedPitch else computedPitch
         } else if (deltaY > 1.5 && recordedPitch in 20.0f..40.0f) {
             calculateOptimalBonzoPitch(
                 distH = destDistH,

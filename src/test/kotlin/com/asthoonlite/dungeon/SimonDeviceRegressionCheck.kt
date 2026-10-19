@@ -1155,7 +1155,7 @@ internal fun simonDeviceRegressionChecks() {
     val pointUnderwrapped = PathPoint(0.0, 0.0, 0.0, yaw = -268.50116f, pitch = 77.85f)
     check(Math.abs(pointUnderwrapped.normalizedYaw() - 91.49884f) < 0.01f) { "-268.50116° must normalize to +91.49884°" }
 
-    // 39. Bonzo Redirection Pitch preservation for wall bounce trajectories (e.g. niggaS4)
+    // 39. Bonzo Redirection Pitch calculation for ground blast trajectories (e.g. niggaS4)
     val redirectionPlan = KinematicTrajectory.calculateBonzoAimPlan(
         playerPos = Vec3(54.5, 115.0, 48.7),
         playerVel = Vec3(0.0, -0.078, -0.59),
@@ -1165,7 +1165,7 @@ internal fun simonDeviceRegressionChecks() {
         recordedYaw = 144.14f
     )
     check(redirectionPlan.isRedirection) { "niggaS4 launch must be identified as redirection" }
-    check(Math.abs(redirectionPlan.shotPitch - 28.65f) < 0.01f) { "Wall bounce redirection pitch 28.65° must be preserved, got ${redirectionPlan.shotPitch}" }
+    check(redirectionPlan.shotPitch in 45.0f..65.0f) { "Redirection blast pitch must aim at ground blast impact point, got ${redirectionPlan.shotPitch}" }
 
     // 40. Bonzo Approach Runway Alignment vs Terminal Flick
     // When approaching from distH > 1.2m, gaze must remain aligned with runway (e.g. 180° for niggaS4 or -45° for niggap3)
@@ -1199,6 +1199,24 @@ internal fun simonDeviceRegressionChecks() {
     val strafeInput = Math.sin(rad)
     check(forwardInput < -0.38) { "When aiming at wall (151.2°) with destination East (270°), forward input must be negative (press S)" }
     check(strafeInput > 0.38) { "When aiming at wall (151.2°) with destination East (270°), strafe input must be positive (press D)" }
+
+    // 43. Walk node preceding Bonzo launch must allow advancement while stepping up onto catwalk (niggap3 Node 1 -> Node 2)
+    val walkToBonzoAdvance = PathExecutor.waypointTouchdownAllowsAdvance(
+        stationaryDestination = false,
+        nextType = RouteNodeType.BONZO_STAFF,
+        onGround = false,
+        currentType = RouteNodeType.WALK
+    )
+    check(walkToBonzoAdvance) { "WALK node approaching BONZO_STAFF node must allow mid-hop advancement onto catwalk without getting stuck" }
+
+    // 44. niggap3 Node 1 alongTrack passing check
+    val passedCatwalk = PathExecutor.hasPassedWaypointAlongRoute(
+        playerPos = Vec3(95.60, 118.92, 66.59),
+        current = PathPoint(94.0, 119.0, 66.5),
+        next = PathPoint(99.5, 119.0, 73.5),
+        arrivalDist = 2.2
+    )
+    check(passedCatwalk) { "Player passing Node 1 along catwalk towards Node 2 must trigger alongTrack waypoint advance" }
 }
 
 
