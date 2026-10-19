@@ -210,13 +210,19 @@ object KinematicTrajectory {
 
         val isRedirection = abs(turnAngle) >= 15.0f || (impulseLen > 0.55 && abs(turnAngle) >= 13.0f)
 
-        // Predicted player position at detonation (2 ticks ahead)
-        val predDetonationPos = playerPos.add(playerVel.x * BONZO_DETONATION_TICKS, 0.0, playerVel.z * BONZO_DETONATION_TICKS)
-
-        // Explosion center must be placed opposite to the impulse vector:
-        // BlastPos = PredPlayerPos - ImpulseDir * BlastOffset
+        // Predicted player position at detonation (accounting for forward velocity without overshooting the blast center)
         val blastOffsetDist = if (isRedirection) 1.25 else 1.15
-        val blastImpactPos = predDetonationPos.subtract(impulseDir.scale(blastOffsetDist))
+        val forwardDisp = playerVel.x * impulseDir.x + playerVel.z * impulseDir.z
+        val maxForward = blastOffsetDist - 0.45
+        val actualForward = (forwardDisp * BONZO_DETONATION_TICKS).coerceAtMost(maxForward)
+        val perpVx = playerVel.x - forwardDisp * impulseDir.x
+        val perpVz = playerVel.z - forwardDisp * impulseDir.z
+
+        val blastImpactPos = Vec3(
+            playerPos.x + perpVx * BONZO_DETONATION_TICKS + impulseDir.x * actualForward - impulseDir.x * blastOffsetDist,
+            playerPos.y,
+            playerPos.z + perpVz * BONZO_DETONATION_TICKS + impulseDir.z * actualForward - impulseDir.z * blastOffsetDist
+        )
         val groundImpactY = groundY ?: floor(playerPos.y)
 
         // Calculate aim angles from current player eye position to the target blast impact point
@@ -228,17 +234,19 @@ object KinematicTrajectory {
         val computedPitch = (-Math.toDegrees(atan2(aimDy, aimDistH.coerceAtLeast(0.2)))).toFloat().coerceIn(45.0f, 75.0f)
 
         val deltaY = destinationPos.y - playerPos.y
-        val finalPitch = if (deltaY > 1.5 && recordedPitch in 20.0f..40.0f && !hasLookNode) {
+        val finalPitch = if (hasLookNode && recordedPitch in 20.0f..88.0f) {
+            recordedPitch
+        } else if (isRedirection) {
+            if (recordedPitch in 50.0f..88.0f) recordedPitch else computedPitch
+        } else if (deltaY > 1.5 && recordedPitch in 20.0f..40.0f) {
             calculateOptimalBonzoPitch(
                 distH = destDistH,
                 deltaY = deltaY,
                 recordedPitch = 0f,
-                isRedirection = isRedirection
+                isRedirection = false
             )
         } else if (recordedPitch in 20.0f..88.0f) {
             recordedPitch
-        } else if (isRedirection) {
-            computedPitch
         } else {
             calculateOptimalBonzoPitch(
                 distH = destDistH,

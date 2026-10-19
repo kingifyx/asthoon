@@ -597,11 +597,13 @@ object PathExecutor {
                             isAtNodeElev && isArrivedOnPlatform && hasGroundImpact && hasRunwayAlignment && hasSufficientSpeed
 
             if (canLaunch) {
+                val ceilingHit = level.clip(ClipContext(player.eyePosition, player.eyePosition.add(0.0, 2.5, 0.0), ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
+                val hasLowCeiling = ceilingHit.type == HitResult.Type.BLOCK && ceilingHit.location.y - player.y < 2.6
                 val finalLaunchParams = launchParams.copy(
                     shotPitch = effectiveLaunchPitch,
                     shotYaw = effectiveShotYaw,
                     destYaw = flightYaw,
-                    jumpOnFire = player.onGround() && !launchParams.isRedirection
+                    jumpOnFire = player.onGround() && !launchParams.isRedirection && !hasLowCeiling
                 )
                 initiateBonzoLaunch(points, isHighSpeed, finalLaunchParams)
                 return
@@ -1392,28 +1394,32 @@ object PathExecutor {
         launchYaw: Float,
         basePitch: Float
     ): Pair<Boolean, Float> {
-        if (basePitch in 20.0f..88.0f) {
-            val clipVec = player.eyePosition.add(Vec3.directionFromRotation(basePitch, launchYaw).scale(18.0))
+        // 1. Check if basePitch strikes solid ground within effective blast range (<= 2.5m)
+        if (basePitch in 45.0f..88.0f) {
+            val clipVec = player.eyePosition.add(Vec3.directionFromRotation(basePitch, launchYaw).scale(4.0))
             val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
-            val hasImpact = (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 16.0) || player.onGround()
-            return hasImpact to basePitch
-        }
-        val testPitches = listOf(55.0f, 70.0f, 79.0f)
-        for (p in testPitches) {
-            val clipVec = player.eyePosition.add(Vec3.directionFromRotation(p, launchYaw).scale(18.0))
-            val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
-            if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 16.0) {
-                return true to p
-            }
-        }
-        if (player.onGround()) {
-            val downVec = player.eyePosition.add(0.0, -3.0, 0.0)
-            val downHit = level.clip(ClipContext(player.eyePosition, downVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
-            if (downHit.type == HitResult.Type.BLOCK) {
+            if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 2.5) {
                 return true to basePitch
             }
         }
-        return false to (if (basePitch in 20.0f..88.0f) basePitch else 55.0f)
+        // 2. If basePitch is shallow or missed solid floor, test steeper candidate pitches aimed at ground near feet
+        val testPitches = listOf(58.0f, 68.0f, 78.0f)
+        for (p in testPitches) {
+            val clipVec = player.eyePosition.add(Vec3.directionFromRotation(p, launchYaw).scale(3.5))
+            val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
+            if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 2.5) {
+                return true to p
+            }
+        }
+        // 3. If launchYaw points into open air/void (e.g. edge of a catwalk), probe the solid floor directly under player's feet
+        if (player.onGround()) {
+            val downVec = player.eyePosition.add(0.0, -2.5, 0.0)
+            val downHit = level.clip(ClipContext(player.eyePosition, downVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
+            if (downHit.type == HitResult.Type.BLOCK) {
+                return true to 76.0f
+            }
+        }
+        return false to (if (basePitch in 50.0f..88.0f) basePitch else 65.0f)
     }
 
     internal data class BonzoLaunchParams(
@@ -2081,48 +2087,54 @@ object PathExecutor {
         when (bonzoState) {
             BonzoState.POST_FIRE_PROPEL -> {
                 val destPoint = points.getOrNull(bonzoTargetNextIndex)
-                mc.options.keyUp.setDown(true)
-                mc.options.keyDown.setDown(false)
-                mc.options.keySprint.setDown(true)
-                player.setSprinting(true)
 
                 if (!player.onGround() || player.deltaMovement.y > 0.20) {
                     bonzoAirborneSinceKnockback = true
                 }
 
-                if (destPoint != null && bonzoAirborneSinceKnockback && !player.onGround()) {
+                // Determine target travel direction in the world towards destination
+                val targetTravelYaw = if (destPoint != null) {
+                    val sdx = destPoint.x - player.x
+                    val sdz = destPoint.z - player.z
+                    if (hypot(sdx, sdz) > 0.05) (-Math.toDegrees(atan2(sdx, sdz))).toFloat() else bonzoLaunchYaw
+                } else {
+                    bonzoLaunchYaw
+                }
+
+                // If cross-track drift is present, adjust the target travel direction to steer back towards the corridor line
+                val effectiveTravelYaw = if (destPoint != null && bonzoAirborneSinceKnockback && !player.onGround()) {
                     val originPoint = points.getOrNull(bonzoTargetNextIndex - 1) ?: points.getOrNull(0)
                     val originX = originPoint?.x ?: (player.x - player.deltaMovement.x)
                     val originZ = originPoint?.z ?: (player.z - player.deltaMovement.z)
                     val segX = destPoint.x - originX
                     val segZ = destPoint.z - originZ
                     val segLen = hypot(segX, segZ)
-                    val crossTrack = if (segLen > 0.1) {
+                    if (segLen > 0.1) {
                         val px = player.x - originX
                         val pz = player.z - originZ
-                        (segX * pz - segZ * px) / segLen
-                    } else 0.0
+                        val crossTrack = (segX * pz - segZ * px) / segLen
+                        val corrAngle = (-Math.toDegrees(atan2(crossTrack, 4.0))).toFloat().coerceIn(-25.0f, 25.0f)
+                        Mth.wrapDegrees(targetTravelYaw + corrAngle)
+                    } else targetTravelYaw
+                } else targetTravelYaw
 
-                    if (abs(crossTrack) > 0.35) {
-                        val corridorStrafe = KinematicTrajectory.computeCorridorAirStrafe(
-                            playerX = player.x,
-                            playerZ = player.z,
-                            playerYaw = player.yRot,
-                            originX = originX,
-                            originZ = originZ,
-                            destX = destPoint.x,
-                            destZ = destPoint.z
-                        )
-                        mc.options.keyLeft.setDown(corridorStrafe > 0.15)
-                        mc.options.keyRight.setDown(corridorStrafe < -0.15)
-                    } else {
-                        mc.options.keyLeft.setDown(false)
-                        mc.options.keyRight.setDown(false)
-                    }
-                } else {
-                    mc.options.keyLeft.setDown(false)
-                    mc.options.keyRight.setDown(false)
-                }
+                // Dynamic camera-relative WASD vectoring: projects thrust toward destination regardless of camera pan
+                val deltaAngle = Mth.wrapDegrees(effectiveTravelYaw - player.yRot)
+                val rad = Math.toRadians(deltaAngle.toDouble())
+                val forwardInput = cos(rad)
+                val strafeInput = sin(rad) // Positive = right, Negative = left
+
+                val pressForward = forwardInput > 0.38
+                val pressBackward = forwardInput < -0.38
+                val pressRight = strafeInput > 0.38
+                val pressLeft = strafeInput < -0.38
+
+                mc.options.keyUp.setDown(pressForward)
+                mc.options.keyDown.setDown(pressBackward)
+                mc.options.keyRight.setDown(pressRight)
+                mc.options.keyLeft.setDown(pressLeft)
+                mc.options.keySprint.setDown(pressForward)
+                player.setSprinting(pressForward)
 
                 // Manage jump pulse cleanly so player never bunny hops on landing
                 if (jumpTicksRemaining > 0) {
