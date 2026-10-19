@@ -182,7 +182,8 @@ object KinematicTrajectory {
         recordedYaw: Float = 0f,
         targetLaunchBps: Double = 24.0,
         groundY: Double? = null,
-        hasLookNode: Boolean = false
+        hasLookNode: Boolean = false,
+        runwayHeadingYaw: Float? = null
     ): BonzoAimPlan {
         val destDx = destinationPos.x - playerPos.x
         val destDz = destinationPos.z - playerPos.z
@@ -208,7 +209,8 @@ object KinematicTrajectory {
         val impulseLen = requiredImpulse.horizontalDistance()
         val impulseDir = if (impulseLen > 0.01) requiredImpulse.scale(1.0 / impulseLen) else destDir
 
-        val isRedirection = abs(turnAngle) >= 15.0f || (impulseLen > 0.55 && abs(turnAngle) >= 13.0f)
+        val isStraightRunway = runwayHeadingYaw != null && abs(Mth.wrapDegrees(destYaw - runwayHeadingYaw)) < 15.0f
+        val isRedirection = !isStraightRunway && (abs(turnAngle) >= 15.0f || (impulseLen > 0.55 && abs(turnAngle) >= 13.0f))
 
         // Predicted player position at detonation (accounting for forward velocity without overshooting the blast center)
         val blastOffsetDist = if (isRedirection) 1.25 else 1.15

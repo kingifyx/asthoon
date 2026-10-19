@@ -16,6 +16,7 @@ import net.minecraft.core.Direction
 import net.minecraft.network.chat.Component
 import net.minecraft.sounds.SoundEvents
 import net.minecraft.sounds.SoundSource
+import net.minecraft.tags.BlockTags
 import net.minecraft.util.Mth
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.item.ItemStack
@@ -503,6 +504,9 @@ object PathExecutor {
                 player.yRot
             }
             val destinationPos = if (nextTarget != null) Vec3(nextTarget.x, nextTarget.y, nextTarget.z) else Vec3(target.x, target.y, target.z)
+            val runwayHeadingYaw = if (prevNode != null && hypot(target.x - prevNode.x, target.z - prevNode.z) > 0.2) {
+                (-Math.toDegrees(atan2(target.x - prevNode.x, target.z - prevNode.z))).toFloat()
+            } else null
             val launchParams = calculateKinematicBonzoAim(
                 playerPos = Vec3(player.x, player.y, player.z),
                 playerVel = player.deltaMovement,
@@ -511,7 +515,8 @@ object PathExecutor {
                 recordedPitch = target.pitch,
                 recordedYaw = target.normalizedYaw(),
                 groundY = if (player.onGround()) player.y else null,
-                hasLookNode = target.hasLookNode
+                hasLookNode = target.hasLookNode,
+                runwayHeadingYaw = runwayHeadingYaw
             )
 
             val toTargetHx = target.x - player.x
@@ -848,7 +853,15 @@ object PathExecutor {
                 (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat()
             } else flightYaw
             val turnAngle = abs(Mth.wrapDegrees(flightYaw - currentHeadingYaw))
-            val isTurnRedirection = turnAngle >= 14.0f
+
+            val runwayDx = target.x - player.x
+            val runwayDz = target.z - player.z
+            val runwayYaw = if (hypot(runwayDx, runwayDz) > 0.08) (-Math.toDegrees(atan2(runwayDx, runwayDz))).toFloat() else flightYaw
+            val runwayHeadingYaw = if (prevNode != null && hypot(target.x - prevNode.x, target.z - prevNode.z) > 0.2) {
+                (-Math.toDegrees(atan2(target.x - prevNode.x, target.z - prevNode.z))).toFloat()
+            } else runwayYaw
+            val isStraightRunway = abs(Mth.wrapDegrees(flightYaw - runwayHeadingYaw)) < 15.0f
+            val isTurnRedirection = !isStraightRunway && turnAngle >= 14.0f
 
             val preAimPlan = if (isTurnRedirection) {
                 calculateKinematicBonzoAim(
@@ -858,13 +871,10 @@ object PathExecutor {
                     destinationPos = if (nextTarget != null) Vec3(nextTarget.x, nextTarget.y, nextTarget.z) else Vec3(target.x, target.y, target.z),
                     recordedPitch = target.pitch,
                     recordedYaw = target.normalizedYaw(),
-                    hasLookNode = target.hasLookNode
+                    hasLookNode = target.hasLookNode,
+                    runwayHeadingYaw = runwayHeadingYaw
                 )
             } else null
-
-            val runwayDx = target.x - player.x
-            val runwayDz = target.z - player.z
-            val runwayYaw = if (hypot(runwayDx, runwayDz) > 0.08) (-Math.toDegrees(atan2(runwayDx, runwayDz))).toFloat() else flightYaw
 
             val preYaw = if (target.hasLookNode) {
                 val ldx = target.lookX - player.x
@@ -1049,6 +1059,9 @@ object PathExecutor {
             moveInDirection(player, stationaryMotion, wantsSprint, wantsCrouch)
         } else if ((isBonzoRunway || isApproachingBonzoRunway) && nodeType == RouteNodeType.BONZO_STAFF) {
             val destinationPos = if (nextTarget != null) Vec3(nextTarget.x, nextTarget.y, nextTarget.z) else Vec3(target.x, target.y, target.z)
+            val runwayHeadingYaw = if (prevNode != null && hypot(target.x - prevNode.x, target.z - prevNode.z) > 0.2) {
+                (-Math.toDegrees(atan2(target.x - prevNode.x, target.z - prevNode.z))).toFloat()
+            } else null
             val bonzoParams = calculateKinematicBonzoAim(
                 playerPos = Vec3(player.x, player.y, player.z),
                 playerVel = player.deltaMovement,
@@ -1057,7 +1070,8 @@ object PathExecutor {
                 recordedPitch = target.pitch,
                 recordedYaw = target.normalizedYaw(),
                 groundY = if (player.onGround()) player.y else null,
-                hasLookNode = target.hasLookNode
+                hasLookNode = target.hasLookNode,
+                runwayHeadingYaw = runwayHeadingYaw
             )
             val currentBpsH = player.deltaMovement.horizontalDistance() * 20.0
 
@@ -1152,10 +1166,32 @@ object PathExecutor {
         }
 
         // Jump handling: auto-jump on elevation step-up, obstacle collision, gap/ledge detection
+        // Suppress elevation step jump when climbing stairs or slabs so horizontal sprint momentum is preserved
+        val playerBlockPos = BlockPos.containing(player.x, player.y, player.z)
+        val groundBlockPos = BlockPos.containing(player.x, player.y - 0.2, player.z)
+        val stateAtFeet = level.getBlockState(playerBlockPos)
+        val stateUnderFeet = level.getBlockState(groundBlockPos)
+        val moveYawRad = Math.toRadians(player.yRot.toDouble())
+        val aheadBlockPos = BlockPos.containing(
+            player.x - sin(moveYawRad) * 0.5,
+            player.y,
+            player.z + cos(moveYawRad) * 0.5
+        )
+        val stateAhead = level.getBlockState(aheadBlockPos)
+        val stateAheadAbove = level.getBlockState(aheadBlockPos.above())
+        val stateAheadBelow = level.getBlockState(aheadBlockPos.below())
+        val stateGroundBelow = level.getBlockState(groundBlockPos.below())
+        val isSteppingOnStairsOrSlabs = stateAtFeet.`is`(BlockTags.STAIRS) || stateAtFeet.`is`(BlockTags.SLABS) ||
+            stateUnderFeet.`is`(BlockTags.STAIRS) || stateUnderFeet.`is`(BlockTags.SLABS) ||
+            stateAhead.`is`(BlockTags.STAIRS) || stateAhead.`is`(BlockTags.SLABS) ||
+            stateAheadAbove.`is`(BlockTags.STAIRS) || stateAheadAbove.`is`(BlockTags.SLABS) ||
+            stateAheadBelow.`is`(BlockTags.STAIRS) || stateAheadBelow.`is`(BlockTags.SLABS) ||
+            stateGroundBelow.`is`(BlockTags.STAIRS) || stateGroundBelow.`is`(BlockTags.SLABS)
+
         // Auto gap jump: trigger on WALK nodes or approach across chasms to Bonzo launch pads!
         val canAutoGapJump = (nodeType == RouteNodeType.WALK || (nodeType == RouteNodeType.BONZO_STAFF && distH > 1.8)) && player.onGround() && isLedge && distH > 0.4 && !isCrouchNode && !isDescending
-        val isObstacleCollision = !isDescending && player.horizontalCollision && player.onGround() && nodeType != RouteNodeType.BREAK && !isApproachingBreak
-        val isElevationStep = !isDescending && target.y > player.y + 0.35 && distH < 2.5 && player.onGround() && nodeType != RouteNodeType.BREAK && !isApproachingBreak
+        val isObstacleCollision = !isDescending && player.horizontalCollision && player.onGround() && nodeType != RouteNodeType.BREAK && !isApproachingBreak && !isSteppingOnStairsOrSlabs
+        val isElevationStep = !isDescending && !isSteppingOnStairsOrSlabs && target.y > player.y + 0.60 && distH < 2.5 && player.onGround() && nodeType != RouteNodeType.BREAK && !isApproachingBreak
 
         // Break Node handling for jump suppression
         val isCurrentBreakSolid = nodeType == RouteNodeType.BREAK && !isBlockBroken(level, target)
@@ -1182,7 +1218,8 @@ object PathExecutor {
             isMiningObstacle = isMiningObstacle,
             isExitingBreakDoorway = isExitingBreakDoorway,
             isDescending = isDescending,
-            isHeadingAligned = isHeadingAligned
+            isHeadingAligned = isHeadingAligned,
+            isSteppingOnStairsOrSlabs = isSteppingOnStairsOrSlabs
         )
 
         if (player.onGround()) {
@@ -1535,7 +1572,8 @@ object PathExecutor {
         recordedPitch: Float = 0f,
         recordedYaw: Float = 0f,
         groundY: Double? = null,
-        hasLookNode: Boolean = false
+        hasLookNode: Boolean = false,
+        runwayHeadingYaw: Float? = null
     ): BonzoLaunchParams {
         val plan = KinematicTrajectory.calculateBonzoAimPlan(
             playerPos = playerPos,
@@ -1545,7 +1583,8 @@ object PathExecutor {
             recordedPitch = recordedPitch,
             recordedYaw = recordedYaw,
             groundY = groundY,
-            hasLookNode = hasLookNode
+            hasLookNode = hasLookNode,
+            runwayHeadingYaw = runwayHeadingYaw
         )
         return BonzoLaunchParams(
             isRedirection = plan.isRedirection,
@@ -1582,7 +1621,8 @@ object PathExecutor {
         isMiningObstacle: Boolean,
         isExitingBreakDoorway: Boolean,
         isDescending: Boolean = false,
-        isHeadingAligned: Boolean = true
+        isHeadingAligned: Boolean = true,
+        isSteppingOnStairsOrSlabs: Boolean = false
     ): Boolean {
         // An explicit jump point owns its takeoff; a distant gap probe must not launch it early.
         if (nodeType == RouteNodeType.JUMP) return false
@@ -1593,7 +1633,7 @@ object PathExecutor {
             return onGround && (isObstacleCollision || isElevationStep)
         }
 
-        val canAutoGapJump = onGround && isLedge && distH >= 0.4 && (isHeadingAligned || distH < 2.5)
+        val canAutoGapJump = onGround && isLedge && distH >= 0.4 && (isHeadingAligned || distH < 2.5) && !isSteppingOnStairsOrSlabs
         return canAutoGapJump || (onGround && (isObstacleCollision || isElevationStep))
     }
 
@@ -1703,6 +1743,7 @@ object PathExecutor {
 
         val target = points[currentNodeIndex]
         val nodeType = target.nodeType()
+        val prevNode = points.getOrNull(currentNodeIndex - 1)
         val nextTarget = points.getOrNull(currentNodeIndex + 1)
 
         val isDeviceNode = nodeType == RouteNodeType.SIMON_SAYS || nodeType == RouteNodeType.ARROWS_ALIGN
@@ -1771,7 +1812,15 @@ object PathExecutor {
                     (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat()
                 } else flightYaw
                 val turnAngle = abs(Mth.wrapDegrees(flightYaw - currentHeadingYaw))
-                val isTurnRedirection = turnAngle >= 14.0f
+
+                val runwayDx = target.x - currentX
+                val runwayDz = target.z - currentZ
+                val runwayYaw = if (hypot(runwayDx, runwayDz) > 0.08) (-Math.toDegrees(atan2(runwayDx, runwayDz))).toFloat() else flightYaw
+                val runwayHeadingYaw = if (prevNode != null && hypot(target.x - prevNode.x, target.z - prevNode.z) > 0.2) {
+                    (-Math.toDegrees(atan2(target.x - prevNode.x, target.z - prevNode.z))).toFloat()
+                } else runwayYaw
+                val isStraightRunway = abs(Mth.wrapDegrees(flightYaw - runwayHeadingYaw)) < 15.0f
+                val isTurnRedirection = !isStraightRunway && turnAngle >= 14.0f
 
                 val preAimPlan = if (isTurnRedirection) {
                     calculateKinematicBonzoAim(
@@ -1781,7 +1830,8 @@ object PathExecutor {
                         destinationPos = if (nextTarget != null) Vec3(nextTarget.x, nextTarget.y, nextTarget.z) else Vec3(target.x, target.y, target.z),
                         recordedPitch = target.pitch,
                         recordedYaw = target.normalizedYaw(),
-                        hasLookNode = target.hasLookNode
+                        hasLookNode = target.hasLookNode,
+                        runwayHeadingYaw = runwayHeadingYaw
                     )
                 } else null
 
@@ -1825,10 +1875,6 @@ object PathExecutor {
                 }
                 val prePitch = surfaceResult.pitch
                 val adjustedPreYaw = surfaceResult.yaw
-
-                val runwayDx = target.x - currentX
-                val runwayDz = target.z - currentZ
-                val runwayYaw = if (hypot(runwayDx, runwayDz) > 0.08) (-Math.toDegrees(atan2(runwayDx, runwayDz))).toFloat() else flightYaw
 
                 val finalGoalYaw = if (target.hasLookNode) {
                     preYaw
@@ -2083,8 +2129,15 @@ object PathExecutor {
 
             val stateAtFloor = level.getBlockState(probeBlockPos)
             val stateBelowFloor = level.getBlockState(probeBlockPos.below())
+            val stateAboveFloor = level.getBlockState(probeBlockPos.above())
             val shapeAtFloor = stateAtFloor.getCollisionShape(level, probeBlockPos)
             val shapeBelowFloor = stateBelowFloor.getCollisionShape(level, probeBlockPos.below())
+            val shapeAboveFloor = stateAboveFloor.getCollisionShape(level, probeBlockPos.above())
+
+            // If ground ahead is ascending/rising (stairs or uphill step), definitely not a ledge/gap!
+            if (!shapeAboveFloor.isEmpty || stateAtFloor.`is`(BlockTags.STAIRS) || stateAtFloor.`is`(BlockTags.SLABS)) {
+                continue
+            }
 
             // If floor level has no solid collision AND 1 block below has no solid collision or is air/hazard, gap ahead!
             if ((shapeAtFloor.isEmpty || isHazardOrAir(stateAtFloor)) &&
@@ -2109,6 +2162,10 @@ object PathExecutor {
         val destination = points.getOrNull(nextIdx) ?: currentNode
 
         val distH = hypot(currentNode.x - player.x, currentNode.z - player.z)
+        val runwayHeadingYaw = if (currentNodeIndex > 0 && hypot(currentNode.x - points[currentNodeIndex - 1].x, currentNode.z - points[currentNodeIndex - 1].z) > 0.2) {
+            val prev = points[currentNodeIndex - 1]
+            (-Math.toDegrees(atan2(currentNode.x - prev.x, currentNode.z - prev.z))).toFloat()
+        } else null
         val params = launchParams ?: calculateKinematicBonzoAim(
             playerPos = Vec3(player.x, player.y, player.z),
             playerVel = player.deltaMovement,
@@ -2117,7 +2174,8 @@ object PathExecutor {
             recordedPitch = currentNode.pitch,
             recordedYaw = currentNode.normalizedYaw(),
             groundY = if (player.onGround()) player.y else null,
-            hasLookNode = currentNode.hasLookNode
+            hasLookNode = currentNode.hasLookNode,
+            runwayHeadingYaw = runwayHeadingYaw
         )
 
         bonzoLaunchYaw = params.destYaw

@@ -1217,6 +1217,62 @@ internal fun simonDeviceRegressionChecks() {
         arrivalDist = 2.2
     )
     check(passedCatwalk) { "Player passing Node 1 along catwalk towards Node 2 must trigger alongTrack waypoint advance" }
+
+    // 45. niggap3 catwalk runway Bonzo launch classification
+    // Runway (-38.16°) aligned within 11.6° of launch (-26.56°) must be classified as a straight runway launch,
+    // avoiding false redirection that flips camera to -128° and strafes into void.
+    val niggap3CatwalkPlan = KinematicTrajectory.calculateBonzoAimPlan(
+        playerPos = Vec3(99.135, 119.0, 73.374),
+        playerVel = Vec3(0.4477, -0.0784, 0.3457),
+        playerEyeY = 120.62,
+        destinationPos = Vec3(107.5, 120.0, 89.5),
+        recordedPitch = 63.78f,
+        recordedYaw = -44.77f,
+        hasLookNode = false,
+        runwayHeadingYaw = -38.16f
+    )
+    check(!niggap3CatwalkPlan.isRedirection) { "niggap3 catwalk launch with 11.6° runway turn must not be classified as redirection" }
+    check(Math.abs(niggap3CatwalkPlan.shotYaw - niggap3CatwalkPlan.destYaw) < 0.01f) {
+        "Straight runway launch must aim forward towards destination (${niggap3CatwalkPlan.destYaw}°), got ${niggap3CatwalkPlan.shotYaw}"
+    }
+    check(niggap3CatwalkPlan.jumpOnFire) { "Straight catwalk runway launch must jump on fire to clear the chasm" }
+
+    // 46. Stair and slab climb elevation jump suppression
+    // Climbing stairs must suppress auto-jump to prevent bumping upper steps and losing forward sprint speed
+    val stairClimbJump = PathExecutor.shouldAutoJump(
+        nodeType = RouteNodeType.WALK,
+        isStationaryDest = false,
+        onGround = true,
+        isLedge = true,
+        distH = 2.0,
+        isCrouchNode = false,
+        isObstacleCollision = false,
+        isElevationStep = false,
+        isMiningObstacle = false,
+        isExitingBreakDoorway = false,
+        isDescending = false,
+        isHeadingAligned = true,
+        isSteppingOnStairsOrSlabs = true
+    )
+    check(!stairClimbJump) { "Auto jump must be suppressed while stepping on stairs or slabs to maintain sprint speed" }
+
+    // 47. Vanilla step-assist auto climb without jumping for elevations <= 0.6m
+    val slabStepElevationJump = PathExecutor.shouldAutoJump(
+        nodeType = RouteNodeType.WALK,
+        isStationaryDest = false,
+        onGround = true,
+        isLedge = false,
+        distH = 1.5,
+        isCrouchNode = false,
+        isObstacleCollision = false,
+        isElevationStep = false, // Step <= 0.6m stepped up by vanilla physics
+        isMiningObstacle = false,
+        isExitingBreakDoorway = false,
+        isDescending = false,
+        isHeadingAligned = true,
+        isSteppingOnStairsOrSlabs = true
+    )
+    check(!slabStepElevationJump) { "Step elevation <= 0.6m on stairs/slabs must not trigger jump" }
 }
 
 
