@@ -189,6 +189,7 @@ object PathExecutor {
             mc.options.keyShift.setDown(false)
             mc.options.keySprint.setDown(false)
             mc.options.keyAttack.setDown(false)
+            mc.player?.setSprinting(false)
             mc.gameMode?.stopDestroyBlock()
         } catch (_: Exception) {}
     }
@@ -901,7 +902,7 @@ object PathExecutor {
         val isApproachingBonzoRunway = nodeType == RouteNodeType.BONZO_STAFF &&
             !player.isInLava && !player.isInWater &&
             distH <= 2.5 && player.y >= target.y - 1.5 && player.y <= target.y + 2.5
-        val isSettledStationary = isStationaryDest && distH <= 0.30 && player.deltaMovement.horizontalDistance() <= 0.08
+        val isSettledStationary = isStationaryDest && distH <= 0.35 && player.deltaMovement.horizontalDistance() <= 0.10
         if (isSettledStationary && player.onGround()) {
             releaseAllMovementKeys()
             player.setSprinting(false)
@@ -928,7 +929,7 @@ object PathExecutor {
                     options.keyUp.setDown(true)
                     options.keyDown.setDown(false)
                     val currentSpeedH = player.deltaMovement.horizontalDistance() * 20.0
-                    val wantsSprint = !isHighSpeed || currentSpeedH < 12.0
+                    val wantsSprint = (!isHighSpeed || currentSpeedH < 12.0) && !isStationaryDest
                     options.keySprint.setDown(wantsSprint)
                     player.setSprinting(wantsSprint)
                 } else {
@@ -952,7 +953,8 @@ object PathExecutor {
             // Steer and coast in world coordinates without reverse key bang-bang oscillation
             val wantsSprint = !isCrouchNode && isApproaching && !isStationaryDest && distH > (stoppingDist + 0.8) &&
                 (!isHighSpeed || distH > (stoppingDist + 2.0))
-            moveInDirection(player, stationaryMotion, wantsSprint, isCrouchNode)
+            val wantsCrouch = isCrouchNode || (isHighSpeed && (isStationaryDest || isApproachingStationary) && distH <= 1.5)
+            moveInDirection(player, stationaryMotion, wantsSprint, wantsCrouch)
         } else if ((isBonzoRunway || isApproachingBonzoRunway) && nodeType == RouteNodeType.BONZO_STAFF) {
             val destinationPos = if (nextTarget != null) Vec3(nextTarget.x, nextTarget.y, nextTarget.z) else Vec3(target.x, target.y, target.z)
             val bonzoParams = calculateKinematicBonzoAim(
@@ -1044,11 +1046,13 @@ object PathExecutor {
                     mc.options.keySprint.setDown(false)
                 } else {
                     mc.options.keyShift.setDown(false)
-                    val wantsSprint = (forward > 0.2 || !isSharpTurn) &&
+                    val wantsSprint = (forward > 0.2 || !isSharpTurn) && !isStationaryDest &&
                         (!isHighSpeed || !(hasGapToTarget || isLedge || (isApproachingStationary && distH <= stoppingDist + 2.0)))
                     mc.options.keySprint.setDown(wantsSprint)
                     if (wantsSprint && !player.isSprinting) {
                         player.setSprinting(true)
+                    } else if (!wantsSprint && player.isSprinting) {
+                        player.setSprinting(false)
                     }
                 }
             }
@@ -1265,37 +1269,40 @@ object PathExecutor {
             return Vec3.ZERO
         }
 
-        if (distH < 1.4) {
-            // Coasting deadband: small speed or coasting projected to land inside deadzone
-            val dir = offset.normalize()
-            val vToward = horizontalVelocity.dot(dir)
-            val coastDist = (vToward * 1.25).coerceAtLeast(0.0)
-            if (speed <= 0.06 || (vToward > 0.04 && distH - coastDist in 0.0..0.35)) {
-                return Vec3.ZERO
-            }
-            if (vToward > 0.06) {
-                return horizontalVelocity.scale(-1.0)
-            }
-            // If drifting away or slow outside deadzone, steer smoothly toward target
-            if (vToward < -0.04 || speed <= 0.06) {
-                return dir
-            }
-            return Vec3.ZERO
-        }
-
-        // When distH >= 1.4:
         val dir = offset.normalize()
         val vToward = horizontalVelocity.dot(dir)
         val lateralVel = horizontalVelocity.subtract(dir.scale(vToward))
         val lateralDamping = lateralVel.scale(-1.5)
+        val coastDist = (vToward * 1.25).coerceAtLeast(0.0)
 
+        if (distH < 1.4) {
+            // Coasting deadband: small speed or coasting projected to land inside deadzone
+            if (speed <= 0.06 || (vToward > 0.04 && (distH - coastDist) in -0.35..0.35)) {
+                return if (lateralDamping.horizontalDistance() > 0.05) lateralDamping else Vec3.ZERO
+            }
+            // Brake only if dropping from air onto platform or high momentum that would blow past the device
+            if ((heightAboveTarget > 0.8 && vToward > 0.15) || vToward > 0.45) {
+                return horizontalVelocity.scale(-1.0).add(lateralDamping)
+            }
+            // If already coasting towards the target at controlled speed, continue gliding on ground friction
+            if (vToward >= 0.08) {
+                return if (lateralDamping.horizontalDistance() > 0.05) lateralDamping else Vec3.ZERO
+            }
+            // If drifting away or slow outside deadzone, steer smoothly toward target
+            if (vToward < -0.04 || speed <= 0.06 || (distH - coastDist > 0.35)) {
+                return dir.add(lateralDamping)
+            }
+            return if (lateralDamping.horizontalDistance() > 0.05) lateralDamping else Vec3.ZERO
+        }
+
+        // When distH >= 1.4:
         // If player has high momentum that would blow past the stationary device:
         // (e.g. Simon approach test: distH = 3.687, vToward = 0.587)
-        if (vToward > 0.40 || (distH < 2.5 && vToward > 0.28)) {
+        if (vToward > 0.50 || (distH < 2.5 && vToward > 0.40)) {
             return horizontalVelocity.scale(-1.0).add(lateralDamping)
         }
 
-        // If moving at controlled approach speed (vToward between 0.12 and 0.40):
+        // If moving at controlled approach speed (vToward between 0.12 and 0.50):
         // Coast smoothly on friction without slamming S or accelerating!
         if (vToward >= 0.12) {
             return if (lateralDamping.horizontalDistance() > 0.05) lateralDamping else Vec3.ZERO
@@ -2103,6 +2110,9 @@ object PathExecutor {
                     jumpTicksRemaining = 0
                     mc.options.keyLeft.setDown(false)
                     mc.options.keyRight.setDown(false)
+                    mc.options.keyUp.setDown(false)
+                    mc.options.keySprint.setDown(false)
+                    player.setSprinting(false)
                     // Immediately transition to the destination waypoint
                     if (bonzoTargetNextIndex < points.size) {
                         currentNodeIndex = bonzoTargetNextIndex

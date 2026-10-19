@@ -1315,6 +1315,22 @@ fun main() {
             "Inside 0.35m deadzone, stationaryMovement must return Vec3.ZERO regardless of residual velocity"
         }
 
+        // 4b. Smooth ground approach without reverse key bang-bang oscillation:
+        // A player moving at 4 bps (0.20 bpt) at 2.1m towards stationary target must coast cleanly (Vec3.ZERO)
+        val smoothApproachOffset = Vec3(0.0, 0.0, 2.1)
+        val smoothApproachVelocity = Vec3(0.0, 0.0, 0.20)
+        val smoothApproachMotion = PathExecutor.stationaryMovement(smoothApproachOffset, smoothApproachVelocity, 0.0)
+        check(smoothApproachMotion == Vec3.ZERO) {
+            "Player approaching stationary destination on ground at controlled speed must coast smoothly with Vec3.ZERO"
+        }
+        // At 0.8m with 0.15 bpt (3 bps), momentum naturally carries player forward -> must coast with Vec3.ZERO instead of reverse braking
+        val closeCoastOffset = Vec3(0.0, 0.0, 0.8)
+        val closeCoastVelocity = Vec3(0.0, 0.0, 0.15)
+        val closeCoastMotion = PathExecutor.stationaryMovement(closeCoastOffset, closeCoastVelocity, 0.0)
+        check(closeCoastMotion == Vec3.ZERO) {
+            "Player approaching inside 1.4m on solid ground must coast smoothly on friction without reverse braking"
+        }
+
         // 5. Bonzo staff runway approach must suppress jumping across ledges so player stays grounded to fire
         val shouldJumpGap = PathExecutor.shouldAutoJump(
             nodeType = com.asthoonlite.pathfinding.RouteNodeType.BONZO_STAFF,
