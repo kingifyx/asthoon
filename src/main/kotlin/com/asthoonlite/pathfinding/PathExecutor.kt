@@ -950,7 +950,7 @@ object PathExecutor {
             }
         } else if (stationaryMotion != null) {
             // Steer and coast in world coordinates without reverse key bang-bang oscillation
-            val wantsSprint = !isCrouchNode && isApproaching && distH > (stoppingDist + 0.8) &&
+            val wantsSprint = !isCrouchNode && isApproaching && !isStationaryDest && distH > (stoppingDist + 0.8) &&
                 (!isHighSpeed || distH > (stoppingDist + 2.0))
             moveInDirection(player, stationaryMotion, wantsSprint, isCrouchNode)
         } else if ((isBonzoRunway || isApproachingBonzoRunway) && nodeType == RouteNodeType.BONZO_STAFF) {
@@ -1284,17 +1284,26 @@ object PathExecutor {
         }
 
         // When distH >= 1.4:
-        // Lead the stopping position along the approach vector
-        // by 8 ticks of forward momentum before reaching the platform.
         val dir = offset.normalize()
         val vToward = horizontalVelocity.dot(dir)
-        val forwardLead = distH - vToward * 8.0
-        val forwardMotion = dir.scale(forwardLead)
-        // For lateral velocity, damp gently without throwing the player sideways off catwalks
         val lateralVel = horizontalVelocity.subtract(dir.scale(vToward))
         val lateralDamping = lateralVel.scale(-1.5)
-        val correction = forwardMotion.add(lateralDamping)
-        return if (correction.horizontalDistance() < 0.1) Vec3.ZERO else correction
+
+        // If player has high momentum that would blow past the stationary device:
+        // (e.g. Simon approach test: distH = 3.687, vToward = 0.587)
+        if (vToward > 0.40 || (distH < 2.5 && vToward > 0.28)) {
+            return horizontalVelocity.scale(-1.0).add(lateralDamping)
+        }
+
+        // If moving at controlled approach speed (vToward between 0.12 and 0.40):
+        // Coast smoothly on friction without slamming S or accelerating!
+        if (vToward >= 0.12) {
+            return if (lateralDamping.horizontalDistance() > 0.05) lateralDamping else Vec3.ZERO
+        }
+
+        // If speed has dropped low (vToward < 0.12) and player is still outside 1.4m:
+        // Step forward towards target (without sprint)
+        return dir.add(lateralDamping)
     }
 
     internal fun airborneMovement(offset: Vec3, velocity: Vec3): Vec3 {
