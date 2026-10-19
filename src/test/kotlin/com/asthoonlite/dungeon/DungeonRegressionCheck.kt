@@ -1437,6 +1437,9 @@ fun main() {
         check(!PathExecutor.waypointTouchdownAllowsAdvance(false, com.asthoonlite.pathfinding.RouteNodeType.WALK, false, currentType = com.asthoonlite.pathfinding.RouteNodeType.BREAK)) {
             "Advancing from BREAK node must require grounded stance"
         }
+        check(PathExecutor.waypointTouchdownAllowsAdvance(false, com.asthoonlite.pathfinding.RouteNodeType.WALK, false, currentType = com.asthoonlite.pathfinding.RouteNodeType.BREAK, isDescending = true)) {
+            "Advancing from BREAK node while descending must allow airborne advancement"
+        }
 
         // 11b. Touchdown & speed gating for stationary devices (SIMON_SAYS, ARROWS_ALIGN, TERMINAL, TIMEOUT)
         check(!PathExecutor.waypointTouchdownAllowsAdvance(false, com.asthoonlite.pathfinding.RouteNodeType.SIMON_SAYS, false)) {

@@ -741,7 +741,7 @@ object PathExecutor {
         val lookaheadDist = (currentBpsH * 0.30).coerceIn(1.8, 5.0)
         val lookaheadBlend = if (distH < lookaheadDist && nextTarget != null && (nodeType == RouteNodeType.WALK || (isBreakNode && !isBreakBlockSolid))) {
             val t = ((lookaheadDist - distH) / lookaheadDist).coerceIn(0.0, 1.0)
-            t * t * (3.0 - 2.0 * t) * 0.35
+            t * t * (3.0 - 2.0 * t) * 0.85
         } else {
             0.0
         }
@@ -865,11 +865,13 @@ object PathExecutor {
         val toTargetDz = aimTarget.z - player.z
         val targetYaw = (-Math.toDegrees(atan2(toTargetDx, toTargetDz))).toFloat()
         val isDescending = target.y < player.y - 0.5
+        val isDescendingToNext = nextTarget != null && nextTarget.y < target.y - 0.5
+        val isDropping = isDescending || isDescendingToNext
         val moveSpeedH = player.deltaMovement.horizontalDistance()
         val moveStride = (moveSpeedH * 1.8).coerceIn(0.40, 1.80)
         val maxLedgeDist = (moveStride + 0.15).coerceIn(0.40, 1.95)
         val moveYaw = if (moveSpeedH > 0.15) (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat() else targetYaw
-        val hasLedgeAhead = !isDescending && (nodeType != RouteNodeType.BONZO_STAFF || distH > 1.8) && distH > 0.6 &&
+        val hasLedgeAhead = !isDropping && (nodeType != RouteNodeType.BONZO_STAFF || distH > 1.8) && distH > 0.6 &&
             (isLedgeOrGapAhead(level, player, moveYaw, maxLedgeDist) ||
              KinematicTrajectory.shouldPredictiveLedgeJump(level, Vec3(player.x, player.y, player.z), player.deltaMovement, Vec3(target.x, target.y, target.z), player.onGround()))
 
@@ -886,20 +888,19 @@ object PathExecutor {
         val isApproachingStationary = isStationaryDest || nextTarget?.nodeType() in setOf(
             RouteNodeType.SIMON_SAYS, RouteNodeType.ARROWS_ALIGN, RouteNodeType.TERMINAL, RouteNodeType.TIMEOUT
         )
-        val isCrossingGapToStationary = isStationaryDest && hasGapToTarget && distH >= 1.2
-        val isLedge = if (isApproachingStationary) hasGapToTarget else (hasLedgeAhead || hasGapToTarget)
+        val isCrossingGapToStationary = isApproachingStationary && hasGapToTarget && distH >= 1.2
+        val isLedge = if (isApproachingStationary) (if (isCrossingGapToStationary) hasGapToTarget else false) else (hasLedgeAhead || hasGapToTarget)
 
         val landingFloor = BlockPos.containing(player.x, target.y - 0.1, player.z)
-        val landingSupport = isStationaryDest && player.onGround() && !isCrossingGapToStationary && (abs(player.y - target.y) <= 0.8 || !level.getBlockState(landingFloor).getCollisionShape(level, landingFloor).isEmpty)
-        val stationaryMotion = if (isStationaryDest && !isCrossingGapToStationary) {
+        val landingSupport = (isStationaryDest || isApproachingStationary) && player.onGround() && !isCrossingGapToStationary && (abs(player.y - target.y) <= 0.8 || !level.getBlockState(landingFloor).getCollisionShape(level, landingFloor).isEmpty)
+        val stoppingDist = (player.deltaMovement.horizontalDistance() * 20.0 * 0.12).coerceIn(0.5, 3.0)
+        val stationaryMotion = if ((isStationaryDest || (isApproachingStationary && distH <= stoppingDist + 2.0)) && !isCrossingGapToStationary) {
             stationaryMovement(offset, player.deltaMovement, player.y - target.y, landingSupport)
         } else null
         val isApproaching = stationaryMotion == null || isApproachingNode(offset, stationaryMotion, player.y - target.y, landingSupport)
         val isApproachingBonzoRunway = nodeType == RouteNodeType.BONZO_STAFF &&
             !player.isInLava && !player.isInWater &&
             distH <= 2.5 && player.y >= target.y - 1.5 && player.y <= target.y + 2.5
-
-        val stoppingDist = (player.deltaMovement.horizontalDistance() * 20.0 * 0.12).coerceIn(0.5, 3.0)
         val isSettledStationary = isStationaryDest && distH <= 0.30 && player.deltaMovement.horizontalDistance() <= 0.08
         if (isSettledStationary && player.onGround()) {
             releaseAllMovementKeys()
@@ -999,8 +1000,9 @@ object PathExecutor {
                     val vx = player.x - prevNode.x
                     val vz = player.z - prevNode.z
                     val crossTrack = (segX * vz - segZ * vx) / segLen
-                    if (abs(crossTrack) > 0.08) {
-                        (atan2(-crossTrack * 1.5, 1.0) * 180.0 / Math.PI).toFloat().coerceIn(-25f, 25f)
+                    val excessCte = (abs(crossTrack) - 0.06).coerceAtLeast(0.0) * crossTrack.sign
+                    if (abs(excessCte) > 0.001) {
+                        (atan2(-excessCte * 1.2, 1.0) * 180.0 / Math.PI).toFloat().coerceIn(-18f, 18f)
                     } else 0f
                 } else 0f
             } else 0f
@@ -1075,7 +1077,7 @@ object PathExecutor {
             nodeType = nodeType,
             isStationaryDest = isStationaryDest,
             onGround = player.onGround(),
-            isLedge = if (isStationaryDest && landingSupport && !isCrossingGapToStationary) false else isLedge,
+            isLedge = if (isApproachingStationary && landingSupport && !isCrossingGapToStationary) false else isLedge,
             distH = distH,
             isCrouchNode = isCrouchNode,
             isObstacleCollision = isObstacleCollision,
@@ -1096,7 +1098,7 @@ object PathExecutor {
             isCrossingGap = true
         }
 
-        if (!isApproaching || isBonzoRunway || (nodeType == RouteNodeType.BONZO_STAFF && distH <= 1.8) || (isStationaryDest && !isCrossingGapToStationary)) {
+        if (!isApproaching || isBonzoRunway || (nodeType == RouteNodeType.BONZO_STAFF && distH <= 1.8) || (isApproachingStationary && !isCrossingGapToStationary)) {
             jumpTicksRemaining = 0
             mc.options.keyJump.setDown(false)
         } else {
@@ -1159,10 +1161,17 @@ object PathExecutor {
         }
 
         // 8. Fluid Waypoint Transition: Speed-Scaled Arrival Check
-        val canArriveElevation = if (isClimbingToNode) player.y >= target.y - 0.6 else distY < 2.5
+        val canArriveElevation = if (isClimbingToNode) {
+            player.y >= target.y - 0.6
+        } else if (isDropping) {
+            val lowerY = (nextTarget?.y ?: target.y) - 1.5
+            player.y <= target.y + 2.5 && player.y >= lowerY
+        } else {
+            distY < 2.5
+        }
         val isPrecedingAirborne = points.getOrNull(currentNodeIndex - 1)?.nodeType() in setOf(RouteNodeType.BONZO_STAFF, RouteNodeType.JUMP)
 
-        val canAdvanceBreak = isBreakNode && !isBreakBlockSolid && player.onGround()
+        val canAdvanceBreak = isBreakNode && !isBreakBlockSolid && (player.onGround() || isDropping)
         val arrivalDist = if (canAdvanceBreak) (if (isHighSpeed) 1.5 else 1.2) else arrivalThreshold
 
         val passedAlongTrack = hasPassedWaypointAlongRoute(
@@ -1171,7 +1180,8 @@ object PathExecutor {
             next = nextTarget,
             arrivalDist = arrivalDist
         )
-        val hasArrived = distH < arrivalDist || (passedAlongTrack && nodeType == RouteNodeType.WALK)
+        val hasPassedThroughDrop = isDescendingToNext && !isBreakBlockSolid && player.y <= target.y - 1.0
+        val hasArrived = distH < arrivalDist || (passedAlongTrack && (nodeType == RouteNodeType.WALK || canAdvanceBreak)) || hasPassedThroughDrop
 
         // If at final node and landed/settled on ground, complete route cleanly (device nodes finish via solver completion)
         val isSpecialStationary = (nodeType == RouteNodeType.SIMON_SAYS && Config.autoSimonSaysEnabled) ||
@@ -1194,7 +1204,8 @@ object PathExecutor {
                 player.onGround(),
                 isCrossingGap = isCrossingGap,
                 currentType = nodeType,
-                horizontalSpeed = player.deltaMovement.horizontalDistance()
+                horizontalSpeed = player.deltaMovement.horizontalDistance(),
+                isDescending = isDropping
             ) &&
             (!isStationaryDest || isSettled)) {
             if (isBreakNode && nextTarget?.nodeType() != RouteNodeType.BREAK) {
@@ -1512,15 +1523,16 @@ object PathExecutor {
         onGround: Boolean,
         isCrossingGap: Boolean = false,
         currentType: RouteNodeType? = null,
-        horizontalSpeed: Double = 0.0
+        horizontalSpeed: Double = 0.0,
+        isDescending: Boolean = false
     ): Boolean {
         // Retain the landing target until grounded before starting a crouched, break, or Bonzo traverse,
-        // or when clearing a gap/chasm to a platform.
+        // or when clearing a gap/chasm to a platform, unless descending/dropping to a lower level.
         val isNextStationary = when (nextType) {
             RouteNodeType.SIMON_SAYS, RouteNodeType.ARROWS_ALIGN, RouteNodeType.TERMINAL, RouteNodeType.TIMEOUT -> true
             else -> false
         }
-        val requiresTouchdown = stationaryDestination || isCrossingGap || currentType == RouteNodeType.BREAK ||
+        val requiresTouchdown = stationaryDestination || isCrossingGap || (currentType == RouteNodeType.BREAK && !isDescending) ||
             isNextStationary || when (nextType) {
                 RouteNodeType.CROUCH, RouteNodeType.BREAK, RouteNodeType.BONZO_STAFF -> true
                 else -> false
@@ -1726,7 +1738,7 @@ object PathExecutor {
                 val lookaheadDist = (currentBpsH * 0.30).coerceIn(1.8, 5.0)
                 val lookaheadBlend = if (distH < lookaheadDist && nextTarget != null && (nodeType == RouteNodeType.WALK || breakAir)) {
                     val t = ((lookaheadDist - distH) / lookaheadDist).coerceIn(0.0, 1.0)
-                    t * t * (3.0 - 2.0 * t) * 0.35
+                    t * t * (3.0 - 2.0 * t) * 0.85
                 } else {
                     0.0
                 }
@@ -1757,13 +1769,15 @@ object PathExecutor {
             }
         }
 
-        // Frame-rate independent continuous exponential smoothing matching 8b6a1f9 rates
+        // Frame-rate independent continuous exponential smoothing scaled for player speed
         val isPropelling = bonzoState == BonzoState.POST_FIRE_PROPEL
+        val isHighSpeed = player.attributes.getValue(Attributes.MOVEMENT_SPEED) > 0.35
+        val baseRate = if (isHighSpeed) 0.85 else 0.35
         val rate = when {
             isPropelling -> 1.5
             isBreakAim -> 2.5
-            isFastAim -> 0.45
-            else -> 0.25
+            isFastAim -> 0.60
+            else -> baseRate
         }
         val alpha = (1.0 - exp(-rate * dtTicks.toDouble())).toFloat().coerceIn(0.01f, 0.95f)
         val deltaYaw = Mth.wrapDegrees(goalYaw - player.yRot)
@@ -1772,14 +1786,14 @@ object PathExecutor {
         val maxFrameYawStep = when {
             isPropelling -> 80.0f * dtTicks
             isBreakAim -> 60.0f * dtTicks
-            isFastAim -> 18.0f * dtTicks
-            else -> 6.5f * dtTicks
+            isFastAim -> 25.0f * dtTicks
+            else -> (if (isHighSpeed) 22.0f else 8.0f) * dtTicks
         }
         val maxFramePitchStep = when {
             isPropelling -> 60.0f * dtTicks
             isBreakAim -> 45.0f * dtTicks
             isFastAim -> 18.0f * dtTicks
-            else -> 6.0f * dtTicks
+            else -> (if (isHighSpeed) 12.0f else 6.0f) * dtTicks
         }
 
         val stepYaw = (deltaYaw * alpha).coerceIn(-maxFrameYawStep, maxFrameYawStep)
