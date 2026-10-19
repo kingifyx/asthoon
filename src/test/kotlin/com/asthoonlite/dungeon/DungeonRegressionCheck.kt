@@ -1539,6 +1539,53 @@ fun main() {
         check(onTargetAirGuidance.forward == 0.0) {
             "Airborne trajectory precisely on target must output neutral guidance (coast), projLand=$projLand, got ${onTargetAirGuidance.forward}"
         }
+
+        // 14. High-Speed Diagonal Chasm Jump Kinematics (6.56m span from 94.78 to 99.50)
+        val chasmTarget = Vec3(99.50, 119.00, 73.50)
+        val chasmStart = Vec3(94.78, 119.00, 67.68)
+        val toChasm = Vec3(chasmTarget.x - chasmStart.x, 0.0, chasmTarget.z - chasmStart.z)
+        val chasmDir = toChasm.normalize()
+        val chasmYaw = (-Math.toDegrees(atan2(toChasm.x, toChasm.z))).toFloat()
+
+        // High speed (14 bps = 0.70 blocks/tick): sprint-jump clears the gap onto the landing platform
+        val highSpeedVel = chasmDir.scale(0.70)
+        val highSpeedJumpVel = Vec3(
+            highSpeedVel.x + chasmDir.x * KinematicTrajectory.SPRINT_JUMP_BOOST,
+            KinematicTrajectory.JUMP_VELOCITY,
+            highSpeedVel.z + chasmDir.z * KinematicTrajectory.SPRINT_JUMP_BOOST
+        )
+        val (highSpeedLand, _, highSpeedTicks) = KinematicTrajectory.predictAirFlight(
+            startPos = chasmStart,
+            startVel = highSpeedJumpVel,
+            targetY = chasmTarget.y,
+            forwardInput = 1.0,
+            yaw = chasmYaw,
+            maxTicks = 16
+        )
+        val highSpeedDistToTarget = hypot(highSpeedLand.x - chasmTarget.x, highSpeedLand.z - chasmTarget.z)
+        check(highSpeedDistToTarget <= 2.5 && highSpeedTicks in 9..14) {
+            "High-speed sprint jump must safely clear the 6.56m chasm onto the platform, got land=$highSpeedLand, dist=$highSpeedDistToTarget, ticks=$highSpeedTicks"
+        }
+
+        // Low speed (7 bps = 0.35 blocks/tick): sprint-jump falls short into the void
+        val lowSpeedVel = chasmDir.scale(0.35)
+        val lowSpeedJumpVel = Vec3(
+            lowSpeedVel.x + chasmDir.x * KinematicTrajectory.SPRINT_JUMP_BOOST,
+            KinematicTrajectory.JUMP_VELOCITY,
+            lowSpeedVel.z + chasmDir.z * KinematicTrajectory.SPRINT_JUMP_BOOST
+        )
+        val (lowSpeedLand, _, _) = KinematicTrajectory.predictAirFlight(
+            startPos = chasmStart,
+            startVel = lowSpeedJumpVel,
+            targetY = chasmTarget.y,
+            forwardInput = 1.0,
+            yaw = chasmYaw,
+            maxTicks = 16
+        )
+        val lowSpeedDistToTarget = hypot(lowSpeedLand.x - chasmTarget.x, lowSpeedLand.z - chasmTarget.z)
+        check(lowSpeedDistToTarget > 2.0) {
+            "Low-speed sprint jump must be recognized as falling short into void, got land=$lowSpeedLand, dist=$lowSpeedDistToTarget"
+        }
     }
 
     println("Dungeon regression checks passed: scoreboard detection, terminal timing, terminal identification, candidates and click order, melody row selection, custom terminal grid, map dimensions/bounds, mob categories, tictactoe solver, secret hitbox expansion geometry, map overlay canvas, map decoration binding, legit map base, terminal pointer flight timing, terminal motion and gui, terminal pointer motion, cursor trail fade, rounded tile arcs, real cursor handback, pointer linger, and pathfinding preset taxonomy.")

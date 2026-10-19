@@ -738,6 +738,53 @@ object PathExecutor {
         val breakBlockPos = if (isBreakNode) BlockPos.containing(target.x, target.y, target.z) else null
         val isBreakBlockSolid = breakBlockPos != null && !isBlockBroken(level, target)
 
+        val isDescending = target.y < player.y - 0.5
+        val moveSpeedH = player.deltaMovement.horizontalDistance()
+        val moveStride = (moveSpeedH * 1.8).coerceIn(0.40, 1.80)
+        val maxLedgeDist = (moveStride + 0.15).coerceIn(0.40, 1.95)
+
+        val hasGapToTarget = run {
+            if (distH < 0.6) return@run false
+            val count = (distH / 0.8).toInt().coerceIn(1, 8)
+            (1..count).any { i ->
+                val frac = i.toDouble() / (count + 1)
+                val checkPos = BlockPos(floor(player.x + dx * frac).toInt(), floor(player.y - 0.1).toInt(), floor(player.z + dz * frac).toInt())
+                val s1 = level.getBlockState(checkPos)
+                val s2 = level.getBlockState(checkPos.below())
+                (s1.isAir || s1.`is`(Blocks.LAVA) || s1.`is`(Blocks.WATER)) && (s2.isAir || s2.`is`(Blocks.LAVA) || s2.`is`(Blocks.WATER))
+            }
+        }
+
+        val canChasmJump = hasGapToTarget && isHighSpeed && player.onGround() && !isDescending &&
+            KinematicTrajectory.canPredictiveChasmJump(
+                level = level,
+                playerPos = Vec3(player.x, player.y, player.z),
+                playerVel = player.deltaMovement,
+                targetPos = Vec3(target.x, target.y, target.z),
+                onGround = player.onGround(),
+                minTakeoffSpeedBps = 11.5
+            )
+
+        val corridorAim = if (hasGapToTarget && !canChasmJump && player.onGround() && !player.isInLava && !player.isInWater) {
+            if (!isHighSpeed) {
+                KinematicTrajectory.findLocalCorridorAim(
+                    level = level,
+                    playerPos = Vec3(player.x, player.y, player.z),
+                    targetPos = Vec3(target.x, target.y, target.z)
+                )
+            } else {
+                val testYaw = if (moveSpeedH > 0.15) (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat() else target.yaw
+                val isLedgeAheadProbe = isLedgeOrGapAhead(level, player, testYaw, maxLedgeDist)
+                if (isLedgeAheadProbe) {
+                    KinematicTrajectory.findLocalCorridorAim(
+                        level = level,
+                        playerPos = Vec3(player.x, player.y, player.z),
+                        targetPos = Vec3(target.x, target.y, target.z)
+                    )
+                } else null
+            }
+        } else null
+
         val currentBpsH = player.deltaMovement.horizontalDistance() * 20.0
         val lookaheadDist = (currentBpsH * 0.30).coerceIn(1.8, 5.0)
         val lookaheadBlend = if (distH < lookaheadDist && nextTarget != null && !isClimbingToNode && (nodeType == RouteNodeType.WALK || (isBreakNode && !isBreakBlockSolid))) {
@@ -747,12 +794,16 @@ object PathExecutor {
             0.0
         }
 
-        val aimX = if (lookaheadBlend > 0.0 && nextTarget != null) {
+        val aimX = if (corridorAim != null) {
+            corridorAim.x
+        } else if (lookaheadBlend > 0.0 && nextTarget != null) {
             target.x * (1.0 - lookaheadBlend) + nextTarget.x * lookaheadBlend
         } else {
             target.x
         }
-        val aimZ = if (lookaheadBlend > 0.0 && nextTarget != null) {
+        val aimZ = if (corridorAim != null) {
+            corridorAim.z
+        } else if (lookaheadBlend > 0.0 && nextTarget != null) {
             target.z * (1.0 - lookaheadBlend) + nextTarget.z * lookaheadBlend
         } else {
             target.z
@@ -865,32 +916,22 @@ object PathExecutor {
         val toTargetDx = aimTarget.x - player.x
         val toTargetDz = aimTarget.z - player.z
         val targetYaw = (-Math.toDegrees(atan2(toTargetDx, toTargetDz))).toFloat()
-        val isDescending = target.y < player.y - 0.5
         val isDescendingToNext = nextTarget != null && nextTarget.y < target.y - 0.5
         val isDropping = isDescending || isDescendingToNext
-        val moveSpeedH = player.deltaMovement.horizontalDistance()
-        val moveStride = (moveSpeedH * 1.8).coerceIn(0.40, 1.80)
-        val maxLedgeDist = (moveStride + 0.15).coerceIn(0.40, 1.95)
         val moveYaw = if (moveSpeedH > 0.15) (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat() else targetYaw
         val hasLedgeAhead = !isDropping && (nodeType != RouteNodeType.BONZO_STAFF || distH > 1.8) && distH > 0.6 &&
             (isLedgeOrGapAhead(level, player, moveYaw, maxLedgeDist) ||
              KinematicTrajectory.shouldPredictiveLedgeJump(level, Vec3(player.x, player.y, player.z), player.deltaMovement, Vec3(target.x, target.y, target.z), player.onGround()))
 
-        val hasGapToTarget = run {
-            val count = (distH / 0.8).toInt().coerceIn(1, 6)
-            (1..count).any { i ->
-                val frac = i.toDouble() / (count + 1)
-                val checkPos = BlockPos(floor(player.x + dx * frac).toInt(), floor(player.y - 0.1).toInt(), floor(player.z + dz * frac).toInt())
-                val s1 = level.getBlockState(checkPos)
-                val s2 = level.getBlockState(checkPos.below())
-                (s1.isAir || s1.`is`(Blocks.LAVA) || s1.`is`(Blocks.WATER)) && (s2.isAir || s2.`is`(Blocks.LAVA) || s2.`is`(Blocks.WATER))
-            }
-        }
         val isApproachingStationary = isStationaryDest || nextTarget?.nodeType() in setOf(
             RouteNodeType.SIMON_SAYS, RouteNodeType.ARROWS_ALIGN, RouteNodeType.TERMINAL, RouteNodeType.TIMEOUT
         )
         val isCrossingGapToStationary = isApproachingStationary && hasGapToTarget && distH >= 1.2
-        val isLedge = if (isApproachingStationary) (if (isCrossingGapToStationary) hasGapToTarget else false) else (hasLedgeAhead || hasGapToTarget)
+        val isLedge = if (isApproachingStationary) {
+            if (isCrossingGapToStationary) hasGapToTarget else false
+        } else {
+            hasLedgeAhead || (hasGapToTarget && (canChasmJump || corridorAim == null))
+        }
 
         val landingFloor = BlockPos.containing(player.x, target.y - 0.1, player.z)
         val landingSupport = (isStationaryDest || isApproachingStationary) && player.onGround() && !isCrossingGapToStationary && (abs(player.y - target.y) <= 0.8 || !level.getBlockState(landingFloor).getCollisionShape(level, landingFloor).isEmpty)
@@ -929,7 +970,7 @@ object PathExecutor {
                     options.keyUp.setDown(true)
                     options.keyDown.setDown(false)
                     val currentSpeedH = player.deltaMovement.horizontalDistance() * 20.0
-                    val wantsSprint = (!isHighSpeed || currentSpeedH < 12.0) && !isStationaryDest
+                    val wantsSprint = (isCrossingGap || !isHighSpeed || currentSpeedH < 12.0) && !isStationaryDest
                     options.keySprint.setDown(wantsSprint)
                     player.setSprinting(wantsSprint)
                 } else {
@@ -991,10 +1032,10 @@ object PathExecutor {
         } else {
             // On ground: calculate movement vector towards target
             val effectiveTarget = if (passedAlongRoute) nextTarget else target
-            val targetMoveX = if (lookaheadBlend > 0.0 && nextTarget != null) aimX else effectiveTarget.x
-            val targetMoveZ = if (lookaheadBlend > 0.0 && nextTarget != null) aimZ else effectiveTarget.z
+            val targetMoveX = if (corridorAim != null) corridorAim.x else if (lookaheadBlend > 0.0 && nextTarget != null) aimX else effectiveTarget.x
+            val targetMoveZ = if (corridorAim != null) corridorAim.z else if (lookaheadBlend > 0.0 && nextTarget != null) aimZ else effectiveTarget.z
             val moveYaw = (-Math.toDegrees(atan2(targetMoveX - player.x, targetMoveZ - player.z))).toFloat()
-            val cteCorrection = if (prevNode != null && !target.hasLookNode && !passedAlongRoute) {
+            val cteCorrection = if (corridorAim == null && prevNode != null && !target.hasLookNode && !passedAlongRoute) {
                 val segX = target.x - prevNode.x
                 val segZ = target.z - prevNode.z
                 val segLen = hypot(segX, segZ)
@@ -1047,7 +1088,7 @@ object PathExecutor {
                 } else {
                     mc.options.keyShift.setDown(false)
                     val wantsSprint = (forward > 0.2 || !isSharpTurn) && !isStationaryDest &&
-                        (!isHighSpeed || !(hasGapToTarget || isLedge || (isApproachingStationary && distH <= stoppingDist + 2.0)))
+                        (!isHighSpeed || canChasmJump || corridorAim != null || !(hasGapToTarget || isLedge || (isApproachingStationary && distH <= stoppingDist + 2.0)))
                     mc.options.keySprint.setDown(wantsSprint)
                     if (wantsSprint && !player.isSprinting) {
                         player.setSprinting(true)
@@ -1107,14 +1148,14 @@ object PathExecutor {
             mc.options.keyJump.setDown(false)
         } else {
             jumpTicksRemaining = nextAutoJumpPulse(shouldAutoJump, jumpTicksRemaining, mc.options.keyJump.isDown)
-            if (shouldAutoJump && (isLedge || (nodeType == RouteNodeType.BONZO_STAFF && distH > 1.8) || isCrossingGapToStationary) && jumpTicksRemaining > 0) {
+            if (shouldAutoJump && (canChasmJump || isLedge || (nodeType == RouteNodeType.BONZO_STAFF && distH > 1.8) || isCrossingGapToStationary) && jumpTicksRemaining > 0) {
                 jumpTicksRemaining = 3
             }
         }
 
         if (jumpTicksRemaining > 0) {
             mc.options.keyJump.setDown(true)
-            val shouldSprintJump = !isCrouchNode && (!isHighSpeed || !(hasGapToTarget || isLedge))
+            val shouldSprintJump = !isCrouchNode && (canChasmJump || !isHighSpeed || !(hasGapToTarget || isLedge))
             if (shouldSprintJump) {
                 player.setSprinting(true)
             }

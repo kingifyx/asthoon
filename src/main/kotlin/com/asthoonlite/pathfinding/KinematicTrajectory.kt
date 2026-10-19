@@ -319,11 +319,11 @@ object KinematicTrajectory {
             JUMP_VELOCITY,
             playerVel.z + velDir.z * SPRINT_JUMP_BOOST
         )
-        val (projectedLand, _, _) = predictAirFlight(playerPos, jumpVel, floorY.toDouble(), maxTicks = 12)
+        val toTargetYaw = (-Math.toDegrees(atan2(velDir.x, velDir.z))).toFloat()
+        val (projectedLand, _, _) = predictAirFlight(playerPos, jumpVel, playerPos.y, forwardInput = 1.0, yaw = toTargetYaw, maxTicks = 12)
         val landingBlockPos = BlockPos(floor(projectedLand.x).toInt(), floorY, floor(projectedLand.z).toInt())
         val landingState = level.getBlockState(landingBlockPos)
-
-        return !landingState.getCollisionShape(level, landingBlockPos).isEmpty || dropDetectedAtTick in 1..2
+        return !landingState.getCollisionShape(level, landingBlockPos).isEmpty
     }
 
     data class AirControl(val forward: Double, val strafe: Double)
@@ -405,6 +405,176 @@ object KinematicTrajectory {
         val cosYaw = cos(rad)
         val sinYaw = sin(rad)
         return cosYaw * cx + sinYaw * cz
+    }
+
+    /**
+     * Checks whether an airborne sprint-jump from [playerPos] with current [playerVel]
+     * is guaranteed to clear the gap and land safely on a solid platform near [targetPos].
+     */
+    fun canPredictiveChasmJump(
+        level: Level,
+        playerPos: Vec3,
+        playerVel: Vec3,
+        targetPos: Vec3,
+        onGround: Boolean,
+        minTakeoffSpeedBps: Double = 11.5
+    ): Boolean {
+        if (!onGround) return false
+        val speedH = playerVel.horizontalDistance()
+        if (speedH * 20.0 < minTakeoffSpeedBps) return false
+
+        val targetFloorY = floor(targetPos.y - 0.1).toInt()
+        val velDir = if (speedH > 0.01) Vec3(playerVel.x / speedH, 0.0, playerVel.z / speedH) else Vec3.ZERO
+        val toTarget = Vec3(targetPos.x - playerPos.x, 0.0, targetPos.z - playerPos.z)
+        val distToTarget = toTarget.horizontalDistance()
+        if (distToTarget < 2.0 || distToTarget > 12.0) return false
+
+        // Player heading must be oriented within ~45 degrees of destination
+        val toTargetDir = toTarget.normalize()
+        if (velDir.dot(toTargetDir) < 0.65) return false
+
+        val jumpVel = Vec3(
+            playerVel.x + velDir.x * SPRINT_JUMP_BOOST,
+            JUMP_VELOCITY,
+            playerVel.z + velDir.z * SPRINT_JUMP_BOOST
+        )
+
+        // Predict landing position at target elevation
+        val toTargetYaw = (-Math.toDegrees(atan2(toTarget.x, toTarget.z))).toFloat()
+        val (projectedLand, _, ticks) = predictAirFlight(playerPos, jumpVel, targetPos.y, forwardInput = 1.0, yaw = toTargetYaw, maxTicks = 16)
+        if (ticks < 5) return false
+
+        // Check if landing position lands on solid platform
+        val landBlock = BlockPos(floor(projectedLand.x).toInt(), targetFloorY, floor(projectedLand.z).toInt())
+        val floorState = level.getBlockState(landBlock)
+        if (floorState.isAir || floorState.`is`(net.minecraft.world.level.block.Blocks.LAVA) || floorState.`is`(net.minecraft.world.level.block.Blocks.WATER)) return false
+        if (floorState.getCollisionShape(level, landBlock).isEmpty) return false
+
+        // Landing must land on or near the destination platform (within 2.5m of target)
+        val distLandToTarget = hypot(projectedLand.x - targetPos.x, projectedLand.z - targetPos.z)
+        return distLandToTarget <= 2.5
+    }
+
+    /**
+     * Searches a local connected walkable ground corridor between [playerPos] and [targetPos].
+     * If direct line of sight has a void/gap, this finds the next intermediate aim point
+     * along the connected solid floor (e.g. following an L-shaped catwalk around a corner)
+     * so the player never walks off an edge.
+     */
+    fun findLocalCorridorAim(
+        level: Level,
+        playerPos: Vec3,
+        targetPos: Vec3,
+        maxRadius: Int = 16
+    ): Vec3? {
+        fun findFloorY(x: Int, initialY: Int, z: Int): Int? {
+            for (dy in 0 downTo -3) {
+                val p = BlockPos(x, initialY + dy, z)
+                val s = level.getBlockState(p)
+                if (!s.isAir && !s.`is`(net.minecraft.world.level.block.Blocks.LAVA) && !s.`is`(net.minecraft.world.level.block.Blocks.WATER) && !s.getCollisionShape(level, p).isEmpty) {
+                    val a1 = level.getBlockState(p.above())
+                    val a2 = level.getBlockState(p.above(2))
+                    if (a1.getCollisionShape(level, p.above()).isEmpty && a2.getCollisionShape(level, p.above(2)).isEmpty) {
+                        return p.y
+                    }
+                }
+            }
+            return null
+        }
+
+        val startFloorY = findFloorY(floor(playerPos.x).toInt(), floor(playerPos.y).toInt(), floor(playerPos.z).toInt()) ?: floor(playerPos.y - 0.1).toInt()
+        val targetFloorY = findFloorY(floor(targetPos.x).toInt(), floor(targetPos.y).toInt(), floor(targetPos.z).toInt()) ?: floor(targetPos.y - 0.1).toInt()
+        val startPos = BlockPos(floor(playerPos.x).toInt(), startFloorY, floor(playerPos.z).toInt())
+        val goalPos = BlockPos(floor(targetPos.x).toInt(), targetFloorY, floor(targetPos.z).toInt())
+
+        if (startPos == goalPos) return null
+
+        fun isWalkable(pos: BlockPos): Boolean {
+            val floorState = level.getBlockState(pos)
+            if (floorState.isAir || floorState.`is`(net.minecraft.world.level.block.Blocks.LAVA) || floorState.`is`(net.minecraft.world.level.block.Blocks.WATER)) return false
+            if (floorState.getCollisionShape(level, pos).isEmpty) return false
+            val above1 = level.getBlockState(pos.above())
+            val above2 = level.getBlockState(pos.above(2))
+            return above1.getCollisionShape(level, pos.above()).isEmpty && above2.getCollisionShape(level, pos.above(2)).isEmpty
+        }
+
+        // BFS to find connected walkable path
+        val queue = ArrayDeque<BlockPos>()
+        val cameFrom = HashMap<BlockPos, BlockPos>()
+        queue.add(startPos)
+        cameFrom[startPos] = startPos
+
+        var closestToGoal = startPos
+        var closestDistSq = startPos.distSqr(goalPos)
+
+        val cardinalDirs = listOf(
+            BlockPos(1, 0, 0), BlockPos(-1, 0, 0),
+            BlockPos(0, 0, 1), BlockPos(0, 0, -1)
+        )
+
+        var iterations = 0
+        while (queue.isNotEmpty() && iterations < 90) {
+            iterations++
+            val current = queue.removeFirst()
+            if (current == goalPos) {
+                closestToGoal = current
+                break
+            }
+
+            for (dir in cardinalDirs) {
+                val candidates = listOf(
+                    current.offset(dir.x, 0, dir.z),
+                    current.offset(dir.x, 1, dir.z),
+                    current.offset(dir.x, -1, dir.z)
+                )
+                for (next in candidates) {
+                    if (abs(next.x - startPos.x) > maxRadius || abs(next.z - startPos.z) > maxRadius) continue
+                    if (next !in cameFrom && isWalkable(next)) {
+                        cameFrom[next] = current
+                        queue.add(next)
+                        val dSq = next.distSqr(goalPos)
+                        if (dSq < closestDistSq) {
+                            closestDistSq = dSq
+                            closestToGoal = next
+                        }
+                    }
+                }
+            }
+        }
+
+        if (closestToGoal == startPos) return null
+
+        // Reconstruct path from closestToGoal back to startPos
+        val path = mutableListOf<BlockPos>()
+        var curr = closestToGoal
+        while (curr != startPos) {
+            path.add(curr)
+            curr = cameFrom[curr] ?: break
+        }
+        path.reverse()
+        if (path.isEmpty()) return null
+
+        // Find the furthest block in the path that has direct unbroken line-of-sight on the ground from player
+        for (i in path.indices.reversed()) {
+            val targetBlock = path[i]
+            val bx = targetBlock.x + 0.5
+            val bz = targetBlock.z + 0.5
+            val segDx = bx - playerPos.x
+            val segDz = bz - playerPos.z
+            val segDist = hypot(segDx, segDz)
+            val steps = (segDist / 0.6).toInt().coerceIn(1, 12)
+            val hasGapOnSegment = (1..steps).any { s ->
+                val frac = s.toDouble() / (steps + 1)
+                val testPos = BlockPos(floor(playerPos.x + segDx * frac).toInt(), targetBlock.y, floor(playerPos.z + segDz * frac).toInt())
+                !isWalkable(testPos) && !isWalkable(testPos.below()) && !isWalkable(testPos.above())
+            }
+            if (!hasGapOnSegment) {
+                return Vec3(bx, targetBlock.y + 1.0, bz)
+            }
+        }
+
+        val firstBlock = path.first()
+        return Vec3(firstBlock.x + 0.5, firstBlock.y + 1.0, firstBlock.z + 0.5)
     }
 }
 
