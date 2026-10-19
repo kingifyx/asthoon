@@ -426,7 +426,7 @@ object PathExecutor {
         val distY = abs(target.y - player.y)
         val isDeviceNode = nodeType == RouteNodeType.SIMON_SAYS || nodeType == RouteNodeType.ARROWS_ALIGN
         val isFinalNode = currentNodeIndex == points.size - 1
-        val isStationaryDest = isDeviceNode || nodeType == RouteNodeType.TIMEOUT || isFinalNode
+        val isStationaryDest = isDeviceNode || nodeType == RouteNodeType.TIMEOUT || (isFinalNode && distH <= 4.0)
 
         // Read player speed (Hypixel Skyblock speed = attribute * 1000)
         val speedAttr = player.getAttributeValue(Attributes.MOVEMENT_SPEED)
@@ -928,9 +928,13 @@ object PathExecutor {
         )
         val isCrossingGapToStationary = isApproachingStationary && hasGapToTarget && distH >= 1.2
         val isLedge = if (isApproachingStationary) {
-            if (isCrossingGapToStationary) hasGapToTarget else false
+            if (isCrossingGapToStationary) (canChasmJump || distH <= 2.5) else false
         } else {
-            hasLedgeAhead || (hasGapToTarget && (canChasmJump || corridorAim == null))
+            if (hasGapToTarget && corridorAim == null) {
+                canChasmJump
+            } else {
+                hasLedgeAhead
+            }
         }
 
         val landingFloor = BlockPos.containing(player.x, target.y - 0.1, player.z)
@@ -1076,7 +1080,7 @@ object PathExecutor {
                 val angleDiffAbs = Math.abs(angleDiff)
                 val isSharpTurn = angleDiffAbs > 50.0
                 mc.options.keyUp.setDown(forward > 0.1 || !isSharpTurn)
-                val canBrake = isStationaryDest || isApproachingStationary || isCrouchNode
+                val canBrake = isDeviceNode || nodeType == RouteNodeType.TIMEOUT || isCrouchNode
                 mc.options.keyDown.setDown(canBrake && forward < -0.5)
                 val hasLateralDrift = angleDiffAbs > 15.0
                 mc.options.keyLeft.setDown(hasLateralDrift && strafe > 0.35)
@@ -1088,7 +1092,7 @@ object PathExecutor {
                 } else {
                     mc.options.keyShift.setDown(false)
                     val wantsSprint = (forward > 0.2 || !isSharpTurn) && !isStationaryDest &&
-                        (!isHighSpeed || canChasmJump || corridorAim != null || !(hasGapToTarget || isLedge || (isApproachingStationary && distH <= stoppingDist + 2.0)))
+                        (!isHighSpeed || canChasmJump || corridorAim != null || !(isLedge || (isApproachingStationary && distH <= stoppingDist + 2.0)))
                     mc.options.keySprint.setDown(wantsSprint)
                     if (wantsSprint && !player.isSprinting) {
                         player.setSprinting(true)

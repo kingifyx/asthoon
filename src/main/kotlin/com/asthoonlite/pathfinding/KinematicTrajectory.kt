@@ -446,13 +446,16 @@ object KinematicTrajectory {
 
         // Check if landing position lands on solid platform
         val landBlock = BlockPos(floor(projectedLand.x).toInt(), targetFloorY, floor(projectedLand.z).toInt())
-        val floorState = level.getBlockState(landBlock)
-        if (floorState.isAir || floorState.`is`(net.minecraft.world.level.block.Blocks.LAVA) || floorState.`is`(net.minecraft.world.level.block.Blocks.WATER)) return false
-        if (floorState.getCollisionShape(level, landBlock).isEmpty) return false
+        val isSolidFloor: (BlockPos) -> Boolean = { pos ->
+            val s = level.getBlockState(pos)
+            !s.isAir && !s.`is`(net.minecraft.world.level.block.Blocks.LAVA) && !s.`is`(net.minecraft.world.level.block.Blocks.WATER) && !s.getCollisionShape(level, pos).isEmpty
+        }
+        val isLandSolid = isSolidFloor(landBlock) || (level.getBlockState(landBlock).isAir && isSolidFloor(landBlock.below()))
+        if (!isLandSolid) return false
 
-        // Landing must land on or near the destination platform (within 2.5m of target)
+        // Landing must land on or near the destination platform (within 3.2m of target)
         val distLandToTarget = hypot(projectedLand.x - targetPos.x, projectedLand.z - targetPos.z)
-        return distLandToTarget <= 2.5
+        return distLandToTarget <= 3.2
     }
 
     /**
