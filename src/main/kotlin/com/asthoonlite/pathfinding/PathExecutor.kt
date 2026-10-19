@@ -561,8 +561,8 @@ object PathExecutor {
                 launchParams.shotPitch
             }
 
-            val (hasGroundImpact, effectiveLaunchPitch) = if (isAirborneBonzo) {
-                true to baseLaunchPitch
+            val surfaceResult = if (isAirborneBonzo) {
+                LaunchSurfaceResult(true, baseLaunchPitch, effectiveShotYaw)
             } else {
                 resolveBonzoLaunchGround(
                     level = level,
@@ -571,6 +571,9 @@ object PathExecutor {
                     basePitch = baseLaunchPitch
                 )
             }
+            val hasGroundImpact = surfaceResult.hit
+            val effectiveLaunchPitch = surfaceResult.pitch
+            val finalShotYaw = surfaceResult.yaw
 
             val flightDirX = if (nextTarget != null) nextTarget.x - target.x else 0.0
             val flightDirZ = if (nextTarget != null) nextTarget.z - target.z else 0.0
@@ -607,7 +610,7 @@ object PathExecutor {
                 val hasLowCeiling = ceilingHit.type == HitResult.Type.BLOCK && ceilingHit.location.y - player.y < 2.6
                 val finalLaunchParams = launchParams.copy(
                     shotPitch = effectiveLaunchPitch,
-                    shotYaw = effectiveShotYaw,
+                    shotYaw = finalShotYaw,
                     destYaw = flightYaw,
                     jumpOnFire = player.onGround() && !launchParams.isRedirection && !hasLowCeiling
                 )
@@ -857,6 +860,10 @@ object PathExecutor {
                 )
             } else null
 
+            val runwayDx = target.x - player.x
+            val runwayDz = target.z - player.z
+            val runwayYaw = if (hypot(runwayDx, runwayDz) > 0.08) (-Math.toDegrees(atan2(runwayDx, runwayDz))).toFloat() else flightYaw
+
             val preYaw = if (target.hasLookNode) {
                 val ldx = target.lookX - player.x
                 val ldz = target.lookZ - player.z
@@ -890,16 +897,29 @@ object PathExecutor {
                     recordedPitch = target.pitch
                 )
             }
-            val (_, prePitch) = if (isAirborneBonzo) {
-                true to basePrePitch
+            val surfaceResult = if (isAirborneBonzo) {
+                LaunchSurfaceResult(true, basePrePitch, preYaw)
             } else {
                 resolveBonzoLaunchGround(level, player, preYaw, basePrePitch)
             }
+            val prePitch = surfaceResult.pitch
+            val adjustedPreYaw = surfaceResult.yaw
+
+            val finalAimYaw = if (target.hasLookNode) {
+                preYaw
+            } else if (distH <= 1.2) {
+                val tYaw = ((1.2 - distH) / 1.2).toFloat().coerceIn(0f, 1f)
+                val blendYaw = tYaw * tYaw * (3.0f - 2.0f * tYaw)
+                runwayYaw + Mth.wrapDegrees(adjustedPreYaw - runwayYaw) * blendYaw
+            } else {
+                runwayYaw
+            }
+
             val maxPreAimDist = if (isHighSpeed) 5.5 else 4.0
             val t = ((maxPreAimDist - distH) / maxPreAimDist).toFloat().coerceIn(0f, 1f)
             val blend = t * t * (3.0f - 2.0f * t)
             val smoothPitch = Mth.lerp(blend, 0.0f, prePitch)
-            aimRotation(player, preYaw, smoothPitch, launching = true)
+            aimRotation(player, finalAimYaw, smoothPitch, launching = true)
         } else {
             val aimDx = aimX - player.x
             val aimDz = aimZ - player.z
@@ -1409,38 +1429,63 @@ object PathExecutor {
     internal fun canReserveBonzoJump(heightAboveNode: Double, groundImpact: Boolean): Boolean =
         groundImpact && heightAboveNode in -0.3..0.6
 
+    internal data class LaunchSurfaceResult(
+        val hit: Boolean,
+        val pitch: Float,
+        val yaw: Float
+    )
+
     internal fun resolveBonzoLaunchGround(
         level: Level,
         player: LocalPlayer,
         launchYaw: Float,
         basePitch: Float
-    ): Pair<Boolean, Float> {
+    ): LaunchSurfaceResult {
         // 1. Check if basePitch strikes a solid collider (floor or wall bounce surface) within effective blast reach (<= 7.5m)
         if (basePitch in 20.0f..88.0f) {
             val clipVec = player.eyePosition.add(Vec3.directionFromRotation(basePitch, launchYaw).scale(8.0))
             val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
             if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 7.5) {
-                return true to basePitch
+                return LaunchSurfaceResult(true, basePitch, launchYaw)
             }
         }
-        // 2. If basePitch missed solid colliders, test candidate pitches aimed at ground near feet
+
+        // 2. Wall bounce redirection: if basePitch is shallow (20°..40°), probe candidate yaws to find the bounce wall collider
+        if (basePitch in 20.0f..40.0f) {
+            val yawOffsets = floatArrayOf(+5f, -5f, +10f, -10f, +15f, -15f, +20f, -20f, +25f, -25f, +30f, -30f)
+            for (off in yawOffsets) {
+                val candYaw = Mth.wrapDegrees(launchYaw + off)
+                val clipVec = player.eyePosition.add(Vec3.directionFromRotation(basePitch, candYaw).scale(8.0))
+                val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
+                if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 7.5) {
+                    return LaunchSurfaceResult(true, basePitch, candYaw)
+                }
+            }
+            // For shallow wall-bounce trajectories, NEVER fall back to shooting the floor at 58° at your feet!
+            // Shooting the floor on a 90° corner launch provides no lateral knockback and kills the player.
+            return LaunchSurfaceResult(false, basePitch, launchYaw)
+        }
+
+        // 3. Ground blast trajectories (basePitch > 40°): test candidate ground pitches near feet
         val testPitches = listOf(58.0f, 68.0f, 78.0f)
         for (p in testPitches) {
             val clipVec = player.eyePosition.add(Vec3.directionFromRotation(p, launchYaw).scale(3.5))
             val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
             if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 2.5) {
-                return true to p
+                return LaunchSurfaceResult(true, p, launchYaw)
             }
         }
-        // 3. If launchYaw points into open air/void (e.g. edge of a catwalk), probe the solid floor directly under player's feet
+
+        // 4. If launchYaw points into open air/void (e.g. edge of a catwalk), probe the solid floor directly under player's feet
         if (player.onGround()) {
             val downVec = player.eyePosition.add(0.0, -2.5, 0.0)
             val downHit = level.clip(ClipContext(player.eyePosition, downVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
             if (downHit.type == HitResult.Type.BLOCK) {
-                return true to 76.0f
+                return LaunchSurfaceResult(true, 76.0f, launchYaw)
             }
         }
-        return false to (if (basePitch in 20.0f..88.0f) basePitch else 65.0f)
+
+        return LaunchSurfaceResult(false, (if (basePitch in 20.0f..88.0f) basePitch else 65.0f), launchYaw)
     }
 
     internal data class BonzoLaunchParams(
@@ -1786,17 +1831,34 @@ object PathExecutor {
                         recordedPitch = target.pitch
                     )
                 }
-                val (_, prePitch) = if (isAirborneBonzo) {
-                    true to basePrePitch
+                val surfaceResult = if (isAirborneBonzo) {
+                    LaunchSurfaceResult(true, basePrePitch, preYaw)
                 } else {
                     resolveBonzoLaunchGround(level, player, preYaw, basePrePitch)
                 }
+                val prePitch = surfaceResult.pitch
+                val adjustedPreYaw = surfaceResult.yaw
+
+                val runwayDx = target.x - currentX
+                val runwayDz = target.z - currentZ
+                val runwayYaw = if (hypot(runwayDx, runwayDz) > 0.08) (-Math.toDegrees(atan2(runwayDx, runwayDz))).toFloat() else flightYaw
+
+                val finalGoalYaw = if (target.hasLookNode) {
+                    preYaw
+                } else if (distH <= 1.2) {
+                    val tYaw = ((1.2 - distH) / 1.2).toFloat().coerceIn(0f, 1f)
+                    val blendYaw = tYaw * tYaw * (3.0f - 2.0f * tYaw)
+                    runwayYaw + Mth.wrapDegrees(adjustedPreYaw - runwayYaw) * blendYaw
+                } else {
+                    runwayYaw
+                }
+
                 val maxPreAimDist = if (isHighSpeed) 5.5 else 4.0
                 val t = ((maxPreAimDist - distH) / maxPreAimDist).toFloat().coerceIn(0f, 1f)
                 val blend = t * t * (3.0f - 2.0f * t)
-                goalYaw = preYaw
+                goalYaw = finalGoalYaw
                 goalPitch = Mth.lerp(blend, 0.0f, prePitch)
-                isFastAim = true
+                isFastAim = distH <= 1.2
             }
             target.hasLookNode && (!isDeviceNode || isSettled) -> {
                 val ldx = target.lookX - currentX

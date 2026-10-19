@@ -1166,7 +1166,27 @@ internal fun simonDeviceRegressionChecks() {
     )
     check(redirectionPlan.isRedirection) { "niggaS4 launch must be identified as redirection" }
     check(Math.abs(redirectionPlan.shotPitch - 28.65f) < 0.01f) { "Wall bounce redirection pitch 28.65° must be preserved, got ${redirectionPlan.shotPitch}" }
+
+    // 40. Bonzo Approach Runway Alignment vs Terminal Flick
+    // When approaching from distH > 1.2m, gaze must remain aligned with runway (e.g. 180° for niggaS4 or -45° for niggap3)
+    // rather than turning sideways towards shotYaw (127°-144°), preventing catwalk slips into lava.
+    val runwayHeading = 180.0f
+    val shotAimYaw = 144.14f
+    val farApproachDist = 3.5
+    val farBlend = if (farApproachDist <= 1.2) {
+        val tYaw = ((1.2 - farApproachDist) / 1.2).toFloat().coerceIn(0f, 1f)
+        tYaw * tYaw * (3.0f - 2.0f * tYaw)
+    } else 0f
+    val farGazeYaw = runwayHeading + Mth.wrapDegrees(shotAimYaw - runwayHeading) * farBlend
+    check(farGazeYaw == runwayHeading) { "Approach gaze at 3.5m must strictly follow runway heading 180.0°, got $farGazeYaw" }
+
+    val terminalDist = 0.6
+    val termT = ((1.2 - terminalDist) / 1.2).toFloat().coerceIn(0f, 1f)
+    val termBlend = termT * termT * (3.0f - 2.0f * termT)
+    val termGazeYaw = runwayHeading + Mth.wrapDegrees(shotAimYaw - runwayHeading) * termBlend
+    check(Math.abs(termGazeYaw - 162.07f) < 0.1f) { "Terminal gaze at 0.6m must smoothly interpolate halfway (blend=0.5) towards shot aim 144.14°, got $termGazeYaw" }
 }
+
 
 
 
