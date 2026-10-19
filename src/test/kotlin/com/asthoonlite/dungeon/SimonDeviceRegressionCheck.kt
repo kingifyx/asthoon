@@ -1236,25 +1236,34 @@ internal fun simonDeviceRegressionChecks() {
         "Straight runway launch must aim forward towards destination (${niggap3CatwalkPlan.destYaw}°), got ${niggap3CatwalkPlan.shotYaw}"
     }
     check(niggap3CatwalkPlan.jumpOnFire) { "Straight catwalk runway launch must jump on fire to clear the chasm" }
+    val catwalkOptimalPitch = KinematicTrajectory.calculateOptimalBonzoPitch(
+        distH = 17.89,
+        deltaY = 1.0,
+        recordedPitch = 0f,
+        isRedirection = false
+    )
+    check(catwalkOptimalPitch in 28.0f..38.0f) {
+        "niggap3 17.89m catwalk chasm launch must compute aerodynamic flight pitch <= 38°, got $catwalkOptimalPitch"
+    }
 
     // 46. Stair and slab climb elevation jump suppression
-    // Climbing stairs must suppress auto-jump to prevent bumping upper steps and losing forward sprint speed
+    // 46. Climbing stairs without a ledge suppresses auto-jump on elevation step to maintain forward sprint speed
     val stairClimbJump = PathExecutor.shouldAutoJump(
         nodeType = RouteNodeType.WALK,
         isStationaryDest = false,
         onGround = true,
-        isLedge = true,
+        isLedge = false,
         distH = 2.0,
         isCrouchNode = false,
         isObstacleCollision = false,
-        isElevationStep = false,
+        isElevationStep = true,
         isMiningObstacle = false,
         isExitingBreakDoorway = false,
         isDescending = false,
         isHeadingAligned = true,
         isSteppingOnStairsOrSlabs = true
     )
-    check(!stairClimbJump) { "Auto jump must be suppressed while stepping on stairs or slabs to maintain sprint speed" }
+    check(!stairClimbJump) { "Elevation step jump must be suppressed while stepping on stairs or slabs to maintain sprint speed" }
 
     // 47. Vanilla step-assist auto climb without jumping for elevations <= 0.6m
     val slabStepElevationJump = PathExecutor.shouldAutoJump(
@@ -1315,9 +1324,10 @@ internal fun simonDeviceRegressionChecks() {
     check(Math.abs(niggaS4AimPlan.shotYaw - 144.14f) < 1.0f) {
         "niggaS4 redirection blast yaw must aim behind and left (~144.14°) to propel player East, got ${niggaS4AimPlan.shotYaw}"
     }
+    check(!niggaS4AimPlan.jumpOnFire) { "niggaS4 redirection launch plan specifies grounded takeoff" }
 
     // 50. Gap auto-jump ledge safety (niggas2 Node 3)
-    // When running towards a gap, hasLedgeAhead must trigger auto-jump even if canChasmJump is not set
+    // When running towards a gap, hasLedgeAhead must trigger auto-jump even on stairs or slabs
     val gapAutoJump = PathExecutor.shouldAutoJump(
         nodeType = RouteNodeType.WALK,
         isStationaryDest = false,
@@ -1331,9 +1341,9 @@ internal fun simonDeviceRegressionChecks() {
         isExitingBreakDoorway = false,
         isDescending = false,
         isHeadingAligned = true,
-        isSteppingOnStairsOrSlabs = false
+        isSteppingOnStairsOrSlabs = true
     )
-    check(gapAutoJump) { "Auto-jump must be triggered when approaching a ledge across a gap" }
+    check(gapAutoJump) { "Auto-jump must be triggered when approaching a ledge across a gap even on stairs/slabs" }
 }
 
 
