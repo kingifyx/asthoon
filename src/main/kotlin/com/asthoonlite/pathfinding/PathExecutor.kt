@@ -434,7 +434,7 @@ object PathExecutor {
         val skyblockSpeed = speedAttr * 1000.0
         val isHighSpeed = skyblockSpeed > 400.0
 
-        val maxNodeDistH = if (isDeviceNode) 4.5 else 1.4
+        val maxNodeDistH = if (isDeviceNode) 0.8 else 1.4
         val isSettled = isSettledAtNode(distH, distY, player.onGround(), player.deltaMovement.horizontalDistance(), maxDistH = maxNodeDistH)
         var isBonzoRunway = false
 
@@ -610,7 +610,7 @@ object PathExecutor {
             val destDx = if (nextTarget != null) nextTarget.x - player.x else 0.0
             val destDz = if (nextTarget != null) nextTarget.z - player.z else 0.0
             val destDistH = hypot(destDx, destDz)
-            val hasSufficientSpeed = if (destDistH >= 14.0 && player.onGround() && !isAirborneBonzo) {
+            val hasSufficientSpeed = if (destDistH >= 14.0 && player.onGround() && !isAirborneBonzo && !launchParams.isRedirection) {
                 currentBpsH >= 8.0
             } else {
                 true
@@ -659,7 +659,7 @@ object PathExecutor {
         }
 
         // 3. Specialized Stationary Nodes: Simon Says, Arrows Align, Timeout
-        if (nodeType == RouteNodeType.SIMON_SAYS && distY <= 1.5 && (isSettled || (player.onGround() && distH <= 4.5))) {
+        if (nodeType == RouteNodeType.SIMON_SAYS && distY <= 1.5 && (isSettled || (player.onGround() && distH <= 0.8))) {
             releaseAllMovementKeys()
             player.setSprinting(false)
             jumpTicksRemaining = 0
@@ -672,7 +672,7 @@ object PathExecutor {
             return
         }
 
-        if (nodeType == RouteNodeType.ARROWS_ALIGN && distY <= 1.5 && (isSettled || (player.onGround() && distH <= 4.5))) {
+        if (nodeType == RouteNodeType.ARROWS_ALIGN && distY <= 1.5 && (isSettled || (player.onGround() && distH <= 0.8))) {
             releaseAllMovementKeys()
             player.setSprinting(false)
             jumpTicksRemaining = 0
@@ -768,6 +768,10 @@ object PathExecutor {
         val isBreakBlockSolid = breakBlockPos != null && !isBlockBroken(level, target)
 
         val isDescending = target.y < player.y - 0.5
+        val isDescendingToNext = nextTarget != null && nextTarget.y < target.y - 0.5
+        val isDropping = isDescending || isDescendingToNext
+
+
         val moveSpeedH = player.deltaMovement.horizontalDistance()
         val moveStride = (moveSpeedH * 1.8).coerceIn(0.40, 1.80)
         val maxLedgeDist = (moveStride * 1.5 + 0.25).coerceIn(0.60, 2.90)
@@ -803,7 +807,7 @@ object PathExecutor {
                 )
             } else {
                 val testYaw = if (moveSpeedH > 0.15) (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat() else target.yaw
-                val isLedgeAheadProbe = isLedgeOrGapAhead(level, player, testYaw, maxLedgeDist)
+                val isLedgeAheadProbe = isLedgeOrGapAhead(level, player, testYaw, maxLedgeDist, isDropping = isDropping)
                 if (isLedgeAheadProbe) {
                     KinematicTrajectory.findLocalCorridorAim(
                         level = level,
@@ -990,11 +994,12 @@ object PathExecutor {
         val toTargetDx = aimTarget.x - player.x
         val toTargetDz = aimTarget.z - player.z
         val targetYaw = (-Math.toDegrees(atan2(toTargetDx, toTargetDz))).toFloat()
-        val isDescendingToNext = nextTarget != null && nextTarget.y < target.y - 0.5
-        val isDropping = isDescending || isDescendingToNext
+
+
         val moveYaw = if (moveSpeedH > 0.15) (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat() else targetYaw
         val hasLedgeAhead = !isDropping && (nodeType != RouteNodeType.BONZO_STAFF || distH > 1.8) && distH > 0.6 &&
-            (isLedgeOrGapAhead(level, player, moveYaw, maxLedgeDist) ||
+            (isLedgeOrGapAhead(level, player, moveYaw, maxLedgeDist, isDropping = isDropping) ||
+             isLedgeOrGapAhead(level, player, targetYaw, maxLedgeDist, isDropping = isDropping) ||
              KinematicTrajectory.shouldPredictiveLedgeJump(level, Vec3(player.x, player.y, player.z), player.deltaMovement, Vec3(target.x, target.y, target.z), player.onGround()))
 
         val isApproachingStationary = isStationaryDest || nextTarget?.nodeType() in setOf(
@@ -1021,7 +1026,7 @@ object PathExecutor {
         val isApproachingBonzoRunway = nodeType == RouteNodeType.BONZO_STAFF &&
             !player.isInLava && !player.isInWater &&
             distH <= 2.5 && player.y >= target.y - 1.5 && player.y <= target.y + 2.5
-        val maxStationaryDistH = if (isDeviceNode) 4.5 else 0.35
+        val maxStationaryDistH = if (isDeviceNode) 0.8 else 0.35
         val isSettledStationary = isStationaryDest && distH <= maxStationaryDistH && player.deltaMovement.horizontalDistance() <= 0.10
         if (isSettledStationary && player.onGround()) {
             releaseAllMovementKeys()
@@ -1159,13 +1164,13 @@ object PathExecutor {
                 // Normal pathing: forward W dominates, with strafe assisting to track node line
                 val isBonzoApproach = nodeType == RouteNodeType.BONZO_STAFF || nextTarget?.nodeType() == RouteNodeType.BONZO_STAFF
                 val angleDiffAbs = Math.abs(angleDiff)
-                val isSharpTurn = angleDiffAbs > 50.0 && !isBonzoApproach
-                mc.options.keyUp.setDown(forward > 0.1 || !isSharpTurn || isBonzoApproach)
+                val isSharpTurn = if (isBonzoApproach) angleDiffAbs > 40.0 else angleDiffAbs > 50.0
+                mc.options.keyUp.setDown(forward > 0.1 || !isSharpTurn)
                 val canBrake = (isDeviceNode || nodeType == RouteNodeType.TIMEOUT || isCrouchNode) && !isBonzoApproach
                 mc.options.keyDown.setDown(canBrake && forward < -0.5)
-                val hasLateralDrift = angleDiffAbs > 15.0
-                mc.options.keyLeft.setDown(hasLateralDrift && strafe > 0.35)
-                mc.options.keyRight.setDown(hasLateralDrift && strafe < -0.35)
+                val hasLateralDrift = angleDiffAbs > 8.0 || abs(strafe) > 0.18
+                mc.options.keyLeft.setDown(hasLateralDrift && strafe > 0.18)
+                mc.options.keyRight.setDown(hasLateralDrift && strafe < -0.18)
 
                 if (isCrouchNode) {
                     mc.options.keyShift.setDown(true)
@@ -1337,7 +1342,7 @@ object PathExecutor {
         val hasArrived = distH < arrivalDist || (passedAlongTrack && (nodeType == RouteNodeType.WALK || canAdvanceBreak)) || hasPassedThroughDrop
 
         // If at final node and landed/settled on ground, complete route cleanly (device nodes finish via solver completion)
-        val isSpecialStationary = (nodeType == RouteNodeType.SIMON_SAYS && Config.autoSimonSaysEnabled) ||
+        val isSpecialStationary = nodeType == RouteNodeType.SIMON_SAYS ||
             nodeType == RouteNodeType.ARROWS_ALIGN ||
             nodeType == RouteNodeType.TERMINAL ||
             nodeType == RouteNodeType.TIMEOUT
@@ -1743,7 +1748,7 @@ object PathExecutor {
             abs(node.y - player.y),
             player.onGround(),
             player.deltaMovement.horizontalDistance(),
-            maxDistH = if (node.nodeType() in setOf(RouteNodeType.SIMON_SAYS, RouteNodeType.ARROWS_ALIGN)) 4.5 else 1.4
+            maxDistH = if (node.nodeType() in setOf(RouteNodeType.SIMON_SAYS, RouteNodeType.ARROWS_ALIGN)) 0.8 else 1.4
         )
 
     internal fun canUseSimonSolver(routeActive: Boolean, nodeType: RouteNodeType?, settled: Boolean): Boolean =
@@ -2132,7 +2137,7 @@ object PathExecutor {
         return state.isAir || !state.isSolid() || state.getCollisionShape(level, bp).isEmpty
     }
 
-    private fun isLedgeOrGapAhead(level: Level, player: LocalPlayer, moveYaw: Float, maxDist: Double = 2.6): Boolean {
+    private fun isLedgeOrGapAhead(level: Level, player: LocalPlayer, moveYaw: Float, maxDist: Double = 2.6, isDropping: Boolean = false): Boolean {
         if (!player.onGround() || player.isInLava || player.isInWater) return false
 
         val rad = Math.toRadians(-moveYaw.toDouble())
@@ -2164,9 +2169,10 @@ object PathExecutor {
             }
 
             // If floor level has no solid collision AND 1 block below has no solid collision or is air/hazard, gap ahead!
-            if ((shapeAtFloor.isEmpty || isHazardOrAir(stateAtFloor)) &&
-                (shapeBelowFloor.isEmpty || isHazardOrAir(stateBelowFloor))) {
-                return true
+            if (shapeAtFloor.isEmpty || isHazardOrAir(stateAtFloor)) {
+                if (!isDropping || shapeBelowFloor.isEmpty || isHazardOrAir(stateBelowFloor)) {
+                    return true
+                }
             }
         }
         return false

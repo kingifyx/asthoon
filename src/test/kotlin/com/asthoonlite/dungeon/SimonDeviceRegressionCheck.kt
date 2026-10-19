@@ -1284,23 +1284,25 @@ internal fun simonDeviceRegressionChecks() {
     check(!slabStepElevationJump) { "Step elevation <= 0.6m on stairs/slabs must not trigger jump" }
 
     // 48. Simon Says platform standing reach and settle check (niggap3 Node 4)
-    // Standing platform ends at z=91.5, buttons on wall at z=93.5 (distH ~ 3.5..4.0m)
+    // Standing pad waypoint is at z=93.5; player must physically arrive on the pad (distH <= 0.80m)
+    // and must NOT settle or advance prematurely while still 4.25m away at the catwalk landing (z=89.27m)
+    val simonLandingPrematureSettle = PathExecutor.isSettledAtNode(
+        distH = 4.25,
+        distY = 0.0,
+        onGround = true,
+        horizontalSpeed = 0.04,
+        maxDistH = 0.8
+    )
+    check(!simonLandingPrematureSettle) { "Player 4.25m away at catwalk landing must NOT settle Simon device node" }
+
     val simonSettledPlatform = PathExecutor.isSettledAtNode(
-        distH = 3.86,
+        distH = 0.45,
         distY = 0.0,
         onGround = true,
         horizontalSpeed = 0.04,
-        maxDistH = 4.5
+        maxDistH = 0.8
     )
-    check(simonSettledPlatform) { "Player standing on Simon platform (distH=3.86m) must be recognized as settled with 4.5m device reach" }
-    val simonDefaultReachFails = PathExecutor.isSettledAtNode(
-        distH = 3.86,
-        distY = 0.0,
-        onGround = true,
-        horizontalSpeed = 0.04,
-        maxDistH = 1.4
-    )
-    check(!simonDefaultReachFails) { "Default 1.4m reach must fail for 3.86m Simon platform standing distance" }
+    check(simonSettledPlatform) { "Player standing on Simon pad (distH=0.45m) must be recognized as settled" }
     check(PathExecutor.canUseSimonSolver(true, RouteNodeType.SIMON_SAYS, simonSettledPlatform)) {
         "Simon solver must be permitted to execute once settled on standing platform"
     }
