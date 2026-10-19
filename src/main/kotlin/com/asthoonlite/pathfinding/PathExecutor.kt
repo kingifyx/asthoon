@@ -731,7 +731,7 @@ object PathExecutor {
 
         // 5. Waypoint Lookahead, Look Node Aiming & Smooth Natural Camera Control
         val isClimbingToNode = nodeType != RouteNodeType.BREAK && target.y > player.y + 0.4
-        val arrivalThreshold = if (isClimbingToNode) 1.5 else if (isHighSpeed) 2.5 else 1.8
+        val arrivalThreshold = if (isClimbingToNode) 1.0 else if (isHighSpeed) 2.5 else 1.8
 
         val isBreakNode = nodeType == RouteNodeType.BREAK
         val breakBlockPos = if (isBreakNode) BlockPos.containing(target.x, target.y, target.z) else null
@@ -739,7 +739,7 @@ object PathExecutor {
 
         val currentBpsH = player.deltaMovement.horizontalDistance() * 20.0
         val lookaheadDist = (currentBpsH * 0.30).coerceIn(1.8, 5.0)
-        val lookaheadBlend = if (distH < lookaheadDist && nextTarget != null && (nodeType == RouteNodeType.WALK || (isBreakNode && !isBreakBlockSolid))) {
+        val lookaheadBlend = if (distH < lookaheadDist && nextTarget != null && !isClimbingToNode && (nodeType == RouteNodeType.WALK || (isBreakNode && !isBreakBlockSolid))) {
             val t = ((lookaheadDist - distH) / lookaheadDist).coerceIn(0.0, 1.0)
             t * t * (3.0 - 2.0 * t) * 0.85
         } else {
@@ -876,6 +876,7 @@ object PathExecutor {
              KinematicTrajectory.shouldPredictiveLedgeJump(level, Vec3(player.x, player.y, player.z), player.deltaMovement, Vec3(target.x, target.y, target.z), player.onGround()))
 
         val hasGapToTarget = run {
+            if (distH > 4.2) return@run false
             val count = (distH / 0.8).toInt().coerceIn(1, 6)
             (1..count).any { i ->
                 val frac = i.toDouble() / (count + 1)
@@ -1056,7 +1057,7 @@ object PathExecutor {
 
         // Jump handling: auto-jump on elevation step-up, obstacle collision, gap/ledge detection
         // Auto gap jump: trigger on WALK nodes or approach across chasms to Bonzo launch pads!
-        val canAutoGapJump = (nodeType == RouteNodeType.WALK || (nodeType == RouteNodeType.BONZO_STAFF && distH > 1.8)) && player.onGround() && isLedge && distH > 0.4 && !isCrouchNode && !isDescending
+        val canAutoGapJump = (nodeType == RouteNodeType.WALK || (nodeType == RouteNodeType.BONZO_STAFF && distH in 1.8..4.2)) && player.onGround() && isLedge && distH > 0.4 && !isCrouchNode && !isDescending
         val isObstacleCollision = !isDescending && player.horizontalCollision && player.onGround() && nodeType != RouteNodeType.BREAK && !isApproachingBreak
         val isElevationStep = !isDescending && target.y > player.y + 0.35 && distH < 2.5 && player.onGround() && nodeType != RouteNodeType.BREAK && !isApproachingBreak
 
@@ -1103,7 +1104,7 @@ object PathExecutor {
             mc.options.keyJump.setDown(false)
         } else {
             jumpTicksRemaining = nextAutoJumpPulse(shouldAutoJump, jumpTicksRemaining, mc.options.keyJump.isDown)
-            if (shouldAutoJump && (isLedge || (nodeType == RouteNodeType.BONZO_STAFF && distH > 1.8) || isCrossingGapToStationary) && jumpTicksRemaining > 0) {
+            if (shouldAutoJump && (isLedge || (nodeType == RouteNodeType.BONZO_STAFF && distH in 1.8..4.2) || isCrossingGapToStationary) && jumpTicksRemaining > 0) {
                 jumpTicksRemaining = 3
             }
         }
@@ -1162,7 +1163,7 @@ object PathExecutor {
 
         // 8. Fluid Waypoint Transition: Speed-Scaled Arrival Check
         val canArriveElevation = if (isClimbingToNode) {
-            player.y >= target.y - 0.6
+            player.y >= target.y - 0.25
         } else if (isDropping) {
             val lowerY = (nextTarget?.y ?: target.y) - 1.5
             player.y <= target.y + 2.5 && player.y >= lowerY
