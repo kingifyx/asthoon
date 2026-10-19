@@ -16,6 +16,8 @@ object PathPresetManager {
 
     private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
     private val presets = mutableListOf<PathPreset>()
+    @Volatile
+    private var lastLoadedTimestamp: Long = 0L
 
     private val presetsDir: File by lazy {
         val baseDir = runCatching { Minecraft.getInstance().gameDirectory }.getOrNull()
@@ -34,7 +36,17 @@ object PathPresetManager {
         loadPresets()
     }
 
+    private fun checkReload() {
+        if (presetsFile.exists()) {
+            val fileTime = presetsFile.lastModified()
+            if (fileTime > lastLoadedTimestamp) {
+                loadPresets()
+            }
+        }
+    }
+
     fun getPresets(): List<PathPreset> = synchronized(presets) {
+        checkReload()
         presets.toList()
     }
 
@@ -55,6 +67,7 @@ object PathPresetManager {
     }
 
     fun getPresetById(id: String): PathPreset? = synchronized(presets) {
+        checkReload()
         presets.firstOrNull { it.id == id }
     }
 
@@ -70,6 +83,7 @@ object PathPresetManager {
                             presets.addAll(loaded)
                         }
                     }
+                    lastLoadedTimestamp = presetsFile.lastModified()
                 } catch (e: Exception) {
                     AsthoonLite.LOGGER.error("[AsthoonLite] Failed to load presets.json", e)
                 }
@@ -85,6 +99,7 @@ object PathPresetManager {
                 FileWriter(presetsFile).use { writer ->
                     gson.toJson(presets, writer)
                 }
+                lastLoadedTimestamp = presetsFile.lastModified()
             } catch (e: Exception) {
                 AsthoonLite.LOGGER.error("[AsthoonLite] Failed to save presets.json", e)
             }

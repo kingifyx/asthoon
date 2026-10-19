@@ -876,7 +876,6 @@ object PathExecutor {
              KinematicTrajectory.shouldPredictiveLedgeJump(level, Vec3(player.x, player.y, player.z), player.deltaMovement, Vec3(target.x, target.y, target.z), player.onGround()))
 
         val hasGapToTarget = run {
-            if (distH > 4.2) return@run false
             val count = (distH / 0.8).toInt().coerceIn(1, 6)
             (1..count).any { i ->
                 val frac = i.toDouble() / (count + 1)
@@ -1057,7 +1056,7 @@ object PathExecutor {
 
         // Jump handling: auto-jump on elevation step-up, obstacle collision, gap/ledge detection
         // Auto gap jump: trigger on WALK nodes or approach across chasms to Bonzo launch pads!
-        val canAutoGapJump = (nodeType == RouteNodeType.WALK || (nodeType == RouteNodeType.BONZO_STAFF && distH in 1.8..4.2)) && player.onGround() && isLedge && distH > 0.4 && !isCrouchNode && !isDescending
+        val canAutoGapJump = (nodeType == RouteNodeType.WALK || (nodeType == RouteNodeType.BONZO_STAFF && distH > 1.8)) && player.onGround() && isLedge && distH > 0.4 && !isCrouchNode && !isDescending
         val isObstacleCollision = !isDescending && player.horizontalCollision && player.onGround() && nodeType != RouteNodeType.BREAK && !isApproachingBreak
         val isElevationStep = !isDescending && target.y > player.y + 0.35 && distH < 2.5 && player.onGround() && nodeType != RouteNodeType.BREAK && !isApproachingBreak
 
@@ -1104,7 +1103,7 @@ object PathExecutor {
             mc.options.keyJump.setDown(false)
         } else {
             jumpTicksRemaining = nextAutoJumpPulse(shouldAutoJump, jumpTicksRemaining, mc.options.keyJump.isDown)
-            if (shouldAutoJump && (isLedge || (nodeType == RouteNodeType.BONZO_STAFF && distH in 1.8..4.2) || isCrossingGapToStationary) && jumpTicksRemaining > 0) {
+            if (shouldAutoJump && (isLedge || (nodeType == RouteNodeType.BONZO_STAFF && distH > 1.8) || isCrossingGapToStationary) && jumpTicksRemaining > 0) {
                 jumpTicksRemaining = 3
             }
         }
