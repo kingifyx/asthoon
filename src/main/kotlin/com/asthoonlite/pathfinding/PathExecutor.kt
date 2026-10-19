@@ -426,13 +426,14 @@ object PathExecutor {
         val isDeviceNode = nodeType == RouteNodeType.SIMON_SAYS || nodeType == RouteNodeType.ARROWS_ALIGN
         val isFinalNode = currentNodeIndex == points.size - 1
         val isStationaryDest = isDeviceNode || nodeType == RouteNodeType.TIMEOUT || isFinalNode
-        val isSettled = isSettledAtNode(distH, distY, player.onGround(), player.deltaMovement.horizontalDistance())
-        var isBonzoRunway = false
 
         // Read player speed (Hypixel Skyblock speed = attribute * 1000)
         val speedAttr = player.getAttributeValue(Attributes.MOVEMENT_SPEED)
         val skyblockSpeed = speedAttr * 1000.0
         val isHighSpeed = skyblockSpeed > 400.0
+
+        val isSettled = isSettledAtNode(distH, distY, player.onGround(), player.deltaMovement.horizontalDistance())
+        var isBonzoRunway = false
 
         if (tickCount % 5L == 0L || lastLoggedNodeIndex != currentNodeIndex) {
             lastLoggedNodeIndex = currentNodeIndex
@@ -986,10 +987,11 @@ object PathExecutor {
             moveInDirection(player, motion, true)
         } else {
             // On ground: calculate movement vector towards target
-            val targetMoveX = if (lookaheadBlend > 0.0 && nextTarget != null) aimX else target.x
-            val targetMoveZ = if (lookaheadBlend > 0.0 && nextTarget != null) aimZ else target.z
+            val effectiveTarget = if (passedAlongRoute) nextTarget else target
+            val targetMoveX = if (lookaheadBlend > 0.0 && nextTarget != null) aimX else effectiveTarget.x
+            val targetMoveZ = if (lookaheadBlend > 0.0 && nextTarget != null) aimZ else effectiveTarget.z
             val moveYaw = (-Math.toDegrees(atan2(targetMoveX - player.x, targetMoveZ - player.z))).toFloat()
-            val cteCorrection = if (prevNode != null && !target.hasLookNode) {
+            val cteCorrection = if (prevNode != null && !target.hasLookNode && !passedAlongRoute) {
                 val segX = target.x - prevNode.x
                 val segZ = target.z - prevNode.z
                 val segLen = hypot(segX, segZ)
@@ -1029,7 +1031,8 @@ object PathExecutor {
                 val angleDiffAbs = Math.abs(angleDiff)
                 val isSharpTurn = angleDiffAbs > 50.0
                 mc.options.keyUp.setDown(forward > 0.1 || !isSharpTurn)
-                mc.options.keyDown.setDown(forward < -0.5)
+                val canBrake = isStationaryDest || isApproachingStationary || isCrouchNode
+                mc.options.keyDown.setDown(canBrake && forward < -0.5)
                 val hasLateralDrift = angleDiffAbs > 15.0
                 mc.options.keyLeft.setDown(hasLateralDrift && strafe > 0.35)
                 mc.options.keyRight.setDown(hasLateralDrift && strafe < -0.35)
@@ -1098,7 +1101,7 @@ object PathExecutor {
             mc.options.keyJump.setDown(false)
         } else {
             jumpTicksRemaining = nextAutoJumpPulse(shouldAutoJump, jumpTicksRemaining, mc.options.keyJump.isDown)
-            if (shouldAutoJump && ((nodeType == RouteNodeType.BONZO_STAFF && distH > 1.8 && isLedge) || isCrossingGapToStationary) && jumpTicksRemaining > 0) {
+            if (shouldAutoJump && (isLedge || (nodeType == RouteNodeType.BONZO_STAFF && distH > 1.8) || isCrossingGapToStationary) && jumpTicksRemaining > 0) {
                 jumpTicksRemaining = 3
             }
         }
@@ -1175,7 +1178,9 @@ object PathExecutor {
             nodeType == RouteNodeType.ARROWS_ALIGN ||
             nodeType == RouteNodeType.TERMINAL ||
             nodeType == RouteNodeType.TIMEOUT
-        val isSettledAtEnd = player.onGround() && (isSettled || (distH <= 0.35 && player.deltaMovement.horizontalDistance() <= 0.10))
+        val settledDistThreshold = if (isHighSpeed) 2.2 else 0.35
+        val settledSpeedThreshold = if (isHighSpeed) 0.18 else 0.10
+        val isSettledAtEnd = player.onGround() && (isSettled || (distH <= settledDistThreshold && player.deltaMovement.horizontalDistance() <= settledSpeedThreshold))
         if (isFinalNode && !isSpecialStationary && canArriveElevation && isSettledAtEnd) {
             finishRoute(preset)
             return
@@ -1245,7 +1250,7 @@ object PathExecutor {
         val distH = offset.horizontalDistance()
         val speed = horizontalVelocity.horizontalDistance()
 
-        if (distH < 0.25 && speed <= 0.08) {
+        if (distH <= 0.35) {
             return Vec3.ZERO
         }
 
@@ -1260,7 +1265,11 @@ object PathExecutor {
             if (vToward > 0.06) {
                 return horizontalVelocity.scale(-1.0)
             }
-            return dir
+            // If drifting away or slow outside deadzone, steer smoothly toward target
+            if (vToward < -0.04 || speed <= 0.06) {
+                return dir
+            }
+            return Vec3.ZERO
         }
 
         // When distH >= 1.4:
@@ -1460,9 +1469,19 @@ object PathExecutor {
 
     private fun moveInDirection(player: LocalPlayer, motion: Vec3, sprint: Boolean, crouch: Boolean = false) {
         val options = Minecraft.getInstance().options
+        if (motion.lengthSqr() < 1e-4) {
+            options.keyUp.setDown(false)
+            options.keyDown.setDown(false)
+            options.keyLeft.setDown(false)
+            options.keyRight.setDown(false)
+            options.keyShift.setDown(crouch)
+            options.keySprint.setDown(false)
+            player.setSprinting(false)
+            return
+        }
         val (forward, strafe) = movementInput(motion, player.yRot)
         options.keyUp.setDown(forward > 0.25)
-        options.keyDown.setDown(forward < -0.25)
+        options.keyDown.setDown(forward < -0.40)
         options.keyLeft.setDown(strafe > 0.25)
         options.keyRight.setDown(strafe < -0.25)
         options.keyShift.setDown(crouch)
@@ -1511,11 +1530,18 @@ object PathExecutor {
         return true
     }
 
-    internal fun hasLandedAtNode(distH: Double, distY: Double, onGround: Boolean): Boolean =
-        onGround && distH < 1.4 && distY <= 0.8
+    internal fun hasLandedAtNode(distH: Double, distY: Double, onGround: Boolean, maxDistH: Double = 1.4): Boolean =
+        onGround && distH < maxDistH && distY <= 0.8
 
-    internal fun isSettledAtNode(distH: Double, distY: Double, onGround: Boolean, horizontalSpeed: Double): Boolean =
-        hasLandedAtNode(distH, distY, onGround) && horizontalSpeed <= 0.08
+    internal fun isSettledAtNode(
+        distH: Double,
+        distY: Double,
+        onGround: Boolean,
+        horizontalSpeed: Double,
+        maxDistH: Double = 1.4,
+        maxSpeed: Double = 0.08
+    ): Boolean =
+        hasLandedAtNode(distH, distY, onGround, maxDistH) && horizontalSpeed <= maxSpeed
 
     private fun isSettledAtNode(player: LocalPlayer, node: PathPoint): Boolean =
         isSettledAtNode(hypot(node.x - player.x, node.z - player.z), abs(node.y - player.y),

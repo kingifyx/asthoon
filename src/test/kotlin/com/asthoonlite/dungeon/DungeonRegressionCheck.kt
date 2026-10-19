@@ -1308,6 +1308,12 @@ fun main() {
         check(PathExecutor.isSettledAtNode(0.35, 0.2, true, 0.07)) {
             "Player in deadzone on ground must register as settled"
         }
+        check(PathExecutor.isSettledAtNode(1.8, 0.2, true, 0.15, maxDistH = 2.2, maxSpeed = 0.18)) {
+            "High speed arrival inside 2.2m with <= 0.18 horizontal speed must register as settled"
+        }
+        check(PathExecutor.stationaryMovement(Vec3(0.1, 0.0, 0.05), Vec3(0.15, 0.0, 0.10), 0.0) == Vec3.ZERO) {
+            "Inside 0.35m deadzone, stationaryMovement must return Vec3.ZERO regardless of residual velocity"
+        }
 
         // 5. Bonzo staff runway approach must suppress jumping across ledges so player stays grounded to fire
         val shouldJumpGap = PathExecutor.shouldAutoJump(
