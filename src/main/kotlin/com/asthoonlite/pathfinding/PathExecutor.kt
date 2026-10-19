@@ -523,6 +523,7 @@ object PathExecutor {
             val passedAlongRoute = nextTarget != null && ((player.x - target.x) * routeDirX + (player.z - target.z) * routeDirZ > 0.0)
 
             val launchDistanceThreshold = when {
+                launchParams.isRedirection -> 0.7
                 isAirborneBonzo && currentBpsH >= 12.0 -> 2.2
                 isAirborneBonzo -> 1.8
                 currentBpsH >= 10.0 -> 1.6
@@ -2155,7 +2156,7 @@ object PathExecutor {
         mc.options.keyRight.setDown(false)
         mc.options.keySprint.setDown(true)
         player.setSprinting(true)
-        val shouldJump = player.onGround()
+        val shouldJump = player.onGround() && params.jumpOnFire
         jumpTicksRemaining = if (shouldJump) 3 else 0
         mc.options.keyJump.setDown(shouldJump)
 

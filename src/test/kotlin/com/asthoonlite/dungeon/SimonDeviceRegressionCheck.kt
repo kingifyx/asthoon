@@ -1185,6 +1185,11 @@ internal fun simonDeviceRegressionChecks() {
     val termBlend = termT * termT * (3.0f - 2.0f * termT)
     val termGazeYaw = runwayHeading + Mth.wrapDegrees(shotAimYaw - runwayHeading) * termBlend
     check(Math.abs(termGazeYaw - 162.07f) < 0.1f) { "Terminal gaze at 0.6m must smoothly interpolate halfway (blend=0.5) towards shot aim 144.14°, got $termGazeYaw" }
+
+    // 41. Redirection Bonzo Launch Jump Suppression
+    check(!redirectionPlan.jumpOnFire) { "Redirection launch must have jumpOnFire = false" }
+    val shouldJumpRedirection = true && redirectionPlan.jumpOnFire
+    check(!shouldJumpRedirection) { "Redirection launch must not trigger jumpOnFire even when grounded" }
 }
 
 
