@@ -17,9 +17,18 @@ object WardrobeKeybinds {
 
     @Volatile var pendingLoadoutIndex: Int? = null
     @Volatile var pendingLoadoutTime = 0L
+    @Volatile private var closeDelayTicks = -1
 
     fun register() {
         ClientTickEvents.END_CLIENT_TICK.register { mc ->
+            if (closeDelayTicks > 0) {
+                closeDelayTicks--
+                if (closeDelayTicks == 0) {
+                    closeDelayTicks = -1
+                    mc.player?.closeContainer()
+                }
+            }
+
             if (mc.player == null || mc.screen != null) return@register
 
             // Handle dedicated loadout keybinds (Loadouts 1..9)
@@ -76,8 +85,10 @@ object WardrobeKeybinds {
 
             gameMode.handleContainerInput(menu.containerId, slot, 0, ContainerInput.PICKUP, player)
             player.playSound(SoundEvents.ARMOR_EQUIP_GENERIC.value(), 1.0f, 1.0f)
-            player.closeContainer()
             pendingLoadoutIndex = null
+            if (Config.wardrobeAutoClose) {
+                closeDelayTicks = 2
+            }
         }
     }
 
@@ -114,7 +125,7 @@ object WardrobeKeybinds {
                 player.playSound(SoundEvents.ARMOR_EQUIP_GENERIC.value(), 1.0f, 1.0f)
 
                 if (Config.wardrobeAutoClose) {
-                    player.closeContainer()
+                    closeDelayTicks = 2
                 }
                 return true
             }
@@ -142,12 +153,7 @@ object WardrobeKeybinds {
             player.playSound(SoundEvents.ARMOR_EQUIP_GENERIC.value(), 1.0f, 1.0f)
 
             if (Config.wardrobeAutoClose) {
-                // Let the click packet go through, then close container next tick
-                net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(object : net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.EndTick {
-                    override fun onEndTick(client: Minecraft) {
-                        client.player?.closeContainer()
-                    }
-                })
+                closeDelayTicks = 2
             }
         }
         return false

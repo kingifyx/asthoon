@@ -30,12 +30,11 @@ object PetHudOverlay : HudElement {
 
     private fun getPetLabel(pet: PetTracker.ActivePet): String {
         return if (Config.petHudShowLevel) {
-            "\u2665 ${pet.display}"
+            pet.display
         } else {
-            val cleanName = pet.name.ifBlank {
+            pet.name.ifBlank {
                 pet.display.replace(Regex("""^\[Lvl \d+\]\s*"""), "")
             }
-            "\u2665 $cleanName"
         }
     }
 
@@ -84,7 +83,7 @@ object PetHudOverlay : HudElement {
     /** Width/height of the panel at scale=1 (used by editor for hit-testing). */
     fun panelSize(pet: PetTracker.ActivePet? = PetTracker.current): Pair<Int, Int> {
         val tr    = Minecraft.getInstance().font
-        val label = if (pet != null) getPetLabel(pet) else (if (Config.petHudShowLevel) "\u2665 [Lvl 100] PetName" else "\u2665 PetName")
+        val label = if (pet != null) getPetLabel(pet) else (if (Config.petHudShowLevel) "[Lvl 100] PetName" else "PetName")
         val showBg = Config.petHudShowBackground
         val w     = if (showBg) tr.width(label) + PAD_X * 2 + BAR_W + 4 else tr.width(label)
         val h     = if (showBg) tr.lineHeight + PAD_Y * 2 else tr.lineHeight

@@ -58,6 +58,11 @@ object AslCommand {
                         )
                         .then(
                             ClientCommands.literal("bind")
+                                .executes { _ ->
+                                    val mc = Minecraft.getInstance()
+                                    mc.execute { mc.setScreen(com.asthoonlite.gui.CommandKeybindsScreen()) }
+                                    1
+                                }
                                 .then(
                                     ClientCommands.argument("command", StringArgumentType.greedyString())
                                         .executes { ctx ->
@@ -198,6 +203,17 @@ object AslCommand {
                         )
                         .executes { _ ->
                             openConfigScreen()
+                            1
+                        }
+                )
+            }
+
+            for (alias in listOf("binds", "keybinds")) {
+                dispatcher.register(
+                    ClientCommands.literal(alias)
+                        .executes { _ ->
+                            val mc = Minecraft.getInstance()
+                            mc.execute { mc.setScreen(com.asthoonlite.gui.CommandKeybindsScreen()) }
                             1
                         }
                 )

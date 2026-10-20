@@ -22,12 +22,22 @@ class CommandKeybindsScreen(private val parent: Screen? = null) : Screen(Compone
     private var newCommandEditBox: EditBox? = null
     private var scrollOffset = 0
 
+    private val panelW = 440
+    private val panelH = 280
+    private val maxVisible = 6
+
     override fun init() {
-        val centerX = width / 2
+        val panelX = width / 2 - panelW / 2
+        val panelY = height / 2 - panelH / 2
+        val addY = panelY + panelH - 80
+
+        val keyBtnW = 120
+        val ebX = panelX + 24 + keyBtnW + 8
+        val ebW = (panelX + panelW - 96) - ebX
 
         if (isAddingNew) {
-            val eb = EditBox(font, centerX - 120, height - 70, 180, 20, Component.literal("Command"))
-            eb.setMaxLength(100)
+            val eb = EditBox(font, ebX, addY + 8, ebW, 20, Component.literal("Command"))
+            eb.setMaxLength(120)
             eb.value = newCommandEditBox?.value ?: "/warp dungeon_hub"
             newCommandEditBox = eb
             addRenderableWidget(eb)
@@ -46,8 +56,6 @@ class CommandKeybindsScreen(private val parent: Screen? = null) : Screen(Compone
         // Dark translucent backdrop
         graphics.fill(0, 0, width, height, 0xCC000000.toInt())
 
-        val panelW = 400
-        val panelH = 260
         val panelX = width / 2 - panelW / 2
         val panelY = height / 2 - panelH / 2
 
@@ -67,7 +75,6 @@ class CommandKeybindsScreen(private val parent: Screen? = null) : Screen(Compone
         // List of bindings
         val listY = panelY + 48
         val itemHeight = 24
-        val maxVisible = 6
 
         val binds = Config.commandBinds.toList()
         val visibleBinds = binds.drop(scrollOffset).take(maxVisible)
@@ -114,17 +121,17 @@ class CommandKeybindsScreen(private val parent: Screen? = null) : Screen(Compone
             fillRoundedRect(graphics, panelX + 16, addY, panelX + panelW - 16, addY + 36, 0xEE141E2B.toInt(), 4)
             outlineRoundedRect(graphics, panelX + 16, addY, panelX + panelW - 16, addY + 36, 0xFF1E90FF.toInt(), 4)
 
-            val keyText = if (listeningForNewKey) "§e[ Press Key... ]" else if (newKey != null) "§a[ ${getKeyName(newKey!!)} ]" else "§7[ Click to Set Key ]"
-            val keyW = font.width(keyText) + 12
+            val keyText = if (listeningForNewKey) "§e[ Press Key... ]" else if (newKey != null) "§a[ ${getKeyName(newKey!!)} ]" else "§7[ Set Key ]"
+            val keyW = 120
             val keyX = panelX + 24
-            val keyBtnHover = mouseX in keyX..(keyX + keyW) && mouseY in (addY + 7)..(addY + 27)
-            fillRoundedRect(graphics, keyX, addY + 7, keyX + keyW, addY + 27, if (keyBtnHover) 0xFF2A4A70.toInt() else 0xFF162536.toInt(), 3)
-            graphics.text(font, keyText, keyX + 6, addY + 12, 0xFFFFFFFF.toInt())
+            val keyBtnHover = mouseX in keyX..(keyX + keyW) && mouseY in (addY + 7)..(addY + 29)
+            fillRoundedRect(graphics, keyX, addY + 7, keyX + keyW, addY + 29, if (keyBtnHover) 0xFF2A4A70.toInt() else 0xFF162536.toInt(), 3)
+            graphics.text(font, keyText, keyX + 8, addY + 12, 0xFFFFFFFF.toInt())
 
             // Save new bind button
             val saveX = panelX + panelW - 90
-            val saveHover = mouseX in saveX..(saveX + 68) && mouseY in (addY + 7)..(addY + 27)
-            fillRoundedRect(graphics, saveX, addY + 7, saveX + 68, addY + 27, if (saveHover) 0xFF388E3C.toInt() else 0xFF1B5E20.toInt(), 3)
+            val saveHover = mouseX in saveX..(saveX + 68) && mouseY in (addY + 7)..(addY + 29)
+            fillRoundedRect(graphics, saveX, addY + 7, saveX + 68, addY + 29, if (saveHover) 0xFF388E3C.toInt() else 0xFF1B5E20.toInt(), 3)
             graphics.text(font, "§a✔ Save", saveX + 12, addY + 12, 0xFFFFFFFF.toInt())
         }
 
@@ -156,8 +163,6 @@ class CommandKeybindsScreen(private val parent: Screen? = null) : Screen(Compone
         val mouseX = event.x.toInt()
         val mouseY = event.y.toInt()
 
-        val panelW = 400
-        val panelH = 260
         val panelX = width / 2 - panelW / 2
         val panelY = height / 2 - panelH / 2
         val btnY = panelY + panelH - 34
@@ -191,16 +196,15 @@ class CommandKeybindsScreen(private val parent: Screen? = null) : Screen(Compone
         if (isAddingNew) {
             val addY = panelY + panelH - 80
             val keyX = panelX + 24
-            val keyText = if (listeningForNewKey) "§e[ Press Key... ]" else if (newKey != null) "§a[ ${getKeyName(newKey!!)} ]" else "§7[ Click to Set Key ]"
-            val keyW = font.width(keyText) + 12
+            val keyW = 120
 
-            if (mouseX in keyX..(keyX + keyW) && mouseY in (addY + 7)..(addY + 27)) {
+            if (mouseX in keyX..(keyX + keyW) && mouseY in (addY + 7)..(addY + 29)) {
                 listeningForNewKey = true
                 return true
             }
 
             val saveX = panelX + panelW - 90
-            if (mouseX in saveX..(saveX + 68) && mouseY in (addY + 7)..(addY + 27)) {
+            if (mouseX in saveX..(saveX + 68) && mouseY in (addY + 7)..(addY + 29)) {
                 val cmd = newCommandEditBox?.value?.trim() ?: ""
                 val k = newKey
                 if (cmd.isNotEmpty() && k != null && k > 0) {
@@ -220,7 +224,7 @@ class CommandKeybindsScreen(private val parent: Screen? = null) : Screen(Compone
         val listY = panelY + 48
         val itemHeight = 24
         val binds = Config.commandBinds.toList()
-        val visibleBinds = binds.drop(scrollOffset).take(6)
+        val visibleBinds = binds.drop(scrollOffset).take(maxVisible)
 
         for ((idx, entry) in visibleBinds.withIndex()) {
             val (key, _) = entry
@@ -244,6 +248,19 @@ class CommandKeybindsScreen(private val parent: Screen? = null) : Screen(Compone
         }
 
         return super.mouseClicked(event, doubleClick)
+    }
+
+    override fun mouseScrolled(mouseX: Double, mouseY: Double, horizontalAmount: Double, verticalAmount: Double): Boolean {
+        val binds = Config.commandBinds.size
+        val maxScroll = maxOf(0, binds - maxVisible)
+        if (verticalAmount > 0) {
+            scrollOffset = maxOf(0, scrollOffset - 1)
+            return true
+        } else if (verticalAmount < 0) {
+            scrollOffset = minOf(maxScroll, scrollOffset + 1)
+            return true
+        }
+        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)
     }
 
     override fun keyPressed(event: KeyEvent): Boolean {

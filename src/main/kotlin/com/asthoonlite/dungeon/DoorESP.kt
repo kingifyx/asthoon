@@ -33,10 +33,11 @@ object DoorESP {
                 val z1 = if (isZOriented) wz - 1.5 else wz - 0.5
                 val z2 = if (isZOriented) wz + 1.5 else wz + 0.5
 
-                val (r, g, b) = if (isBlood) {
-                    Triple(1.0f, 0.1f, 0.1f) // Crimson Red for Blood Door
+                val hasKey = if (isBlood) KeyPickupTracker.hasBloodKey else KeyPickupTracker.hasWitherKey
+                val (r, g, b) = if (hasKey) {
+                    Triple(0.0f, 1.0f, 0.4f) // Bright emerald green when key is obtained
                 } else {
-                    Triple(1.0f, 0.65f, 0.0f) // Gold/Amber for Wither Door
+                    Triple(1.0f, 0.15f, 0.15f) // Red when key is not grabbed
                 }
 
                 val throughWalls = Config.doorSeeThrough

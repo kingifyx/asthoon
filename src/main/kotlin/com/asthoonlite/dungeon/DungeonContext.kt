@@ -97,6 +97,7 @@ object DungeonContext {
     }
 
     private fun onChat(message: String) {
+        KeyPickupTracker.onChatMessage(message)
         when {
             message == "[NPC] Mort: Here, I found this map when I first entered the dungeon." -> {
                 AsthoonLite.LOGGER.info("[AsthoonLite-Debug] DungeonContext: Mort map chat message detected.")
@@ -276,6 +277,7 @@ object DungeonContext {
         floor = FloorType.None
         scoreboardMissingTicks = 0
         lastLoggedLines = emptyList()
+        KeyPickupTracker.reset()
         playerClasses.clear()
         party.clear()
     }

@@ -23,11 +23,11 @@ object DroppedItemESP {
                 val stack = entity.item
                 if (stack.isEmpty) continue
 
-                val quality = if (Config.dungeonItemQualityHighlight) ItemRarityOverlay.getDungeonQuality(stack) else 0
-                val isDungeon = ItemRarityOverlay.isDungeonItem(stack)
-                val rarity = ItemRarityOverlay.getRarity(stack)
+                val isMobDrop = ItemRarityOverlay.isRedundantMobDrop(stack)
+                if (!isMobDrop) continue
 
-                if (quality == 0 && !isDungeon && rarity == null) continue
+                val quality = ItemRarityOverlay.getDungeonQuality(stack)
+                val rarity = ItemRarityOverlay.getRarity(stack)
 
                 val (r, g, b) = when {
                     quality >= 50 -> Triple(1.0f, 0.84f, 0.0f)

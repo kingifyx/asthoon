@@ -33,6 +33,16 @@ public abstract class MixinClientPacketListener {
         DungeonTimers.INSTANCE.onServerTime(packet);
     }
 
+    @Inject(method = "handleSystemChat(Lnet/minecraft/network/protocol/game/ClientboundSystemChatPacket;)V", at = @At("TAIL"))
+    private void asthoonlite_onSystemChat(ClientboundSystemChatPacket packet, CallbackInfo ci) {
+        com.asthoonlite.dungeon.KeyPickupTracker.INSTANCE.onChatMessage(packet.content().getString());
+    }
+
+    @Inject(method = "handleDisguisedChat(Lnet/minecraft/network/protocol/game/ClientboundDisguisedChatPacket;)V", at = @At("TAIL"))
+    private void asthoonlite_onDisguisedChat(ClientboundDisguisedChatPacket packet, CallbackInfo ci) {
+        com.asthoonlite.dungeon.KeyPickupTracker.INSTANCE.onChatMessage(packet.message().getString());
+    }
+
     @Inject(method = "setActionBarText(Lnet/minecraft/network/protocol/game/ClientboundSetActionBarTextPacket;)V", at = @At("TAIL"))
     private void asthoonlite_onActionBar(ClientboundSetActionBarTextPacket packet, CallbackInfo ci) {
         com.asthoonlite.hud.CondensedHealthHud.INSTANCE.onActionBarPacket(packet);

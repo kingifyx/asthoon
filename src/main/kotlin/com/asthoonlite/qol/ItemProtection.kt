@@ -14,6 +14,33 @@ import net.minecraft.world.item.Items
 
 object ItemProtection {
 
+    private var wasHotbarKeyPressed = false
+
+    fun register() {
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register { mc ->
+            val window = mc.window
+            val player = mc.player ?: return@register
+            if (mc.screen != null) {
+                wasHotbarKeyPressed = false
+                return@register
+            }
+
+            val protectKey = Config.protectKeybind
+            val starKey = Config.starProtectionKey
+
+            val isDown = (protectKey > 0 && try { com.mojang.blaze3d.platform.InputConstants.isKeyDown(window, protectKey) } catch (_: Throwable) { false }) ||
+                         (starKey > 0 && try { com.mojang.blaze3d.platform.InputConstants.isKeyDown(window, starKey) } catch (_: Throwable) { false })
+
+            if (isDown && !wasHotbarKeyPressed) {
+                val held = player.inventory.selectedItem
+                if (!held.isEmpty) {
+                    toggleProtection(held)
+                }
+            }
+            wasHotbarKeyPressed = isDown
+        }
+    }
+
     fun getExtraAttributes(stack: ItemStack): CompoundTag? {
         val tag = stack.get(DataComponents.CUSTOM_DATA)?.copyTag() ?: return null
         if (tag.contains("id") || tag.contains("uuid") || tag.contains("baseStatBoostPercentage")) return tag

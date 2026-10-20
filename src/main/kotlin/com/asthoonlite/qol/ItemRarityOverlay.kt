@@ -81,43 +81,59 @@ object ItemRarityOverlay {
         return extra.getIntOr("baseStatBoostPercentage", 0)
     }
 
-    fun isDungeonItem(stack: ItemStack): Boolean {
+    private val dungeonLootBlacklist = setOf(
+        "BONZO_MASK", "STARRED_BONZO_MASK",
+        "BONZO_STAFF", "STARRED_BONZO_STAFF",
+        "DUNGEONBREAKER",
+        "ICE_SPRAY_WAND", "STARRED_ICE_SPRAY_WAND",
+        "SPIRIT_SCEPTRE", "STARRED_SPIRIT_SCEPTRE",
+        "SPIRIT_BOW", "STARRED_SPIRIT_BOW",
+        "HYPERION", "VALKYRIE", "ASTRAEA", "SCYLLA", "NECRON_BLADE",
+        "TERMINATOR", "JUJU_SHORTBOW",
+        "DARK_CLAYMORE", "GIANTS_SWORD",
+        "LIVID_DAGGER", "SHADOW_FURY",
+        "SHADOW_ASSASSIN_CHESTPLATE", "SHADOW_ASSASSIN_HELMET",
+        "SHADOW_ASSASSIN_LEGGINGS", "SHADOW_ASSASSIN_BOOTS",
+        "NECRON_CHESTPLATE", "NECRON_HELMET", "NECRON_LEGGINGS", "NECRON_BOOTS",
+        "STORM_CHESTPLATE", "STORM_HELMET", "STORM_LEGGINGS", "STORM_BOOTS",
+        "MAXOR_CHESTPLATE", "MAXOR_HELMET", "MAXOR_LEGGINGS", "MAXOR_BOOTS",
+        "GOLDOR_CHESTPLATE", "GOLDOR_HELMET", "GOLDOR_LEGGINGS", "GOLDOR_BOOTS",
+        "WITHER_CLOAK"
+    )
+
+    fun isRedundantMobDrop(stack: ItemStack): Boolean {
         if (stack.isEmpty) return false
-        if (getDungeonQuality(stack) > 0) return true
-        val extra = getExtraAttributes(stack)
-        if (extra != null) {
-            if (extra.getIntOr("item_tier", 0) > 0) return true
-            if (extra.getIntOr("dungeon_item_level", 0) > 0) return true
-            if (extra.getStringOr("dungeon_floor", "").isNotEmpty()) return true
-        }
-        val lore = stack.get(DataComponents.LORE)
-        if (lore != null) {
-            for (line in lore.lines()) {
-                val s = line.string.uppercase()
-                if (s.contains("DUNGEON ITEM") || s.contains("DUNGEON SWORD") ||
-                    s.contains("DUNGEON BOW") || s.contains("DUNGEON HELMET") ||
-                    s.contains("DUNGEON CHESTPLATE") || s.contains("DUNGEON LEGGINGS") ||
-                    s.contains("DUNGEON BOOTS") || s.contains("DUNGEON")) {
-                    return true
-                }
-            }
-        }
-        return false
+        val id = ItemProtection.getSkyblockId(stack)
+        if (id in dungeonLootBlacklist) return false
+
+        // Do not highlight starred items (player gear)
+        val name = stack.hoverName.string
+        if (name.contains("✪") || name.contains("★")) return false
+
+        val extra = getExtraAttributes(stack) ?: return false
+        // Skip items with player upgrades
+        if (extra.getIntOr("upgrade_level", 0) > 0) return false
+
+        // Mob drops have baseStatBoostPercentage
+        val boost = extra.getIntOr("baseStatBoostPercentage", 0)
+        return boost > 0
     }
+
+    fun isDungeonItem(stack: ItemStack): Boolean = isRedundantMobDrop(stack)
 
     fun drawSlotBackground(graphics: GuiGraphicsExtractor, slot: Slot) {
         val stack = slot.item
         if (stack.isEmpty) return
 
-        val quality = if (Config.dungeonItemQualityHighlight) getDungeonQuality(stack) else 0
-        val isDungeon = isDungeonItem(stack)
+        val isMobDrop = isRedundantMobDrop(stack)
+        val quality = if (Config.dungeonItemQualityHighlight && isMobDrop) getDungeonQuality(stack) else 0
         val rarity = getRarity(stack)
 
         val sx = slot.x
         val sy = slot.y
 
-        // Dungeon item quality highlight (vibrant, less transparent like Noamm)
-        if (quality > 0) {
+        // Dungeon item quality highlight (only for redundant mob drops)
+        if (Config.dungeonItemQualityHighlight && isMobDrop && quality > 0) {
             val (fillColor, borderColor) = when {
                 quality >= 50 -> 0x90FFD700.toInt() to 0xFFFFD700.toInt() // 50% max roll: bright gold
                 quality >= 40 -> 0x8055FF55.toInt() to 0xFF55FF55.toInt() // 40-49%: bright green
@@ -126,18 +142,6 @@ object ItemRarityOverlay {
             // Fill
             graphics.fill(sx, sy, sx + 16, sy + 16, fillColor)
             // 1px Border outline
-            graphics.fill(sx, sy, sx + 16, sy + 1, borderColor)
-            graphics.fill(sx, sy + 15, sx + 16, sy + 16, borderColor)
-            graphics.fill(sx, sy, sx + 1, sy + 16, borderColor)
-            graphics.fill(sx + 15, sy, sx + 16, sy + 16, borderColor)
-            return
-        }
-
-        // Dungeon mob drop / dungeon item without quality roll (highlighted based on rarity, less transparent)
-        if (Config.dungeonItemQualityHighlight && isDungeon && rarity != null) {
-            val fillColor = (0x75 shl 24) or (rarity.color and 0x00FFFFFF)
-            val borderColor = (0xFF shl 24) or (rarity.color and 0x00FFFFFF)
-            graphics.fill(sx, sy, sx + 16, sy + 16, fillColor)
             graphics.fill(sx, sy, sx + 16, sy + 1, borderColor)
             graphics.fill(sx, sy + 15, sx + 16, sy + 16, borderColor)
             graphics.fill(sx, sy, sx + 1, sy + 16, borderColor)
@@ -172,7 +176,7 @@ object ItemRarityOverlay {
         }
 
         // Dungeon quality text badge
-        if (Config.dungeonItemQualityHighlight) {
+        if (Config.dungeonItemQualityHighlight && isRedundantMobDrop(stack)) {
             val quality = getDungeonQuality(stack)
             if (quality > 0) {
                 val pose = graphics.pose()

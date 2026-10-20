@@ -1630,7 +1630,7 @@ object Config {
         set(v) { data.doorHighlightFill = v; save() }
     var doorSeeThrough: Boolean
         get() = data.doorSeeThrough
-        set(v) { data.doorSeeThrough = v; save() }
+        set(v) { data.doorSeeThrough = v; save(); com.asthoonlite.dungeon.DoorSeeThrough.refresh() }
     var doorStreamProof: Boolean
         get() = data.doorStreamProof
         set(v) { data.doorStreamProof = v; save() }

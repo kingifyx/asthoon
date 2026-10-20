@@ -38,7 +38,9 @@
     "MixinLocalPlayer",
     "MixinEffectsInInventory",
     "ChatComponentAccessor",
-    "MixinChatScreen"
+    "MixinChatScreen",
+    "MixinRenderSectionRegion",
+    "MixinSodiumLevelSlice"
   ],
   "injectors": {
     "defaultRequire": 1
