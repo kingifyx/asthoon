@@ -13,28 +13,28 @@ import net.minecraft.world.item.Items
 object ItemProtection {
 
     fun isProtected(stack: ItemStack): Boolean {
-        if (!Config.itemProtectionEnabled || stack.isEmpty) return false
-
-        val name = stack.hoverName.string
-        if (Config.protectStarredItems && (name.contains("✪") || name.contains("★"))) {
-            return true
-        }
+        if ((!Config.itemProtectionEnabled && !Config.starredItemProtection) || stack.isEmpty) return false
 
         val customData = stack.get(DataComponents.CUSTOM_DATA)?.copyTag()
         if (customData != null) {
             val extra = customData.getCompoundOrEmpty("ExtraAttributes")
+            val uuid = extra.getStringOr("uuid", "")
+            if (uuid.isNotEmpty() && uuid in Config.protectedUuids) return true
+
+            val id = extra.getStringOr("id", "")
+            if (id.isNotEmpty() && id in Config.protectedIds) return true
+
             if (Config.protectStarredItems) {
                 val upgradeLevel = extra.getIntOr("upgrade_level", 0)
                 if (upgradeLevel > 0) return true
                 val rarityUpgrades = extra.getIntOr("rarity_upgrades", 0)
                 if (rarityUpgrades > 0) return true
             }
+        }
 
-            val uuid = extra.getStringOr("uuid", "")
-            if (uuid.isNotEmpty() && uuid in Config.protectedUuids) return true
-
-            val id = extra.getStringOr("id", "")
-            if (id.isNotEmpty() && id in Config.protectedIds) return true
+        val name = stack.hoverName.string
+        if (Config.protectStarredItems && (name.contains("✪") || name.contains("★"))) {
+            return true
         }
 
         return false
@@ -60,11 +60,11 @@ object ItemProtection {
         if (list.contains(key)) {
             list.remove(key)
             newState = false
-            notify("§cProtection Removed: §f${stack.hoverName.string}")
+            notify("§c✪ Star Protection Removed: §f${stack.hoverName.string}")
         } else {
             list.add(key)
             newState = true
-            notify("§aProtection Added: §f${stack.hoverName.string}")
+            notify("§6✪ Star Protection Added: §f${stack.hoverName.string}")
         }
         Config.save()
         return newState
@@ -76,7 +76,7 @@ object ItemProtection {
         slotId: Int,
         actionType: ContainerInput
     ): Boolean {
-        if (!Config.itemProtectionEnabled) return false
+        if (!Config.itemProtectionEnabled && !Config.starredItemProtection) return false
 
         val menu = screen.menu
         val stack = when {

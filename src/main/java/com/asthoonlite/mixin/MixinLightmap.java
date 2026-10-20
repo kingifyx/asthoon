@@ -18,18 +18,22 @@ public abstract class MixinLightmap {
 
     @ModifyVariable(method = "render", at = @At("HEAD"), argsOnly = true)
     private LightmapRenderState asthoonlite_onRenderLightmap(LightmapRenderState renderState) {
-        if (!Config.INSTANCE.getFullbrightEnabled()) return renderState;
+        if (Config.INSTANCE.getDisableNightVision()) {
+            renderState.nightVisionEffectIntensity = 0.0f;
+        }
 
-        renderState.skyFactor = 1.0f;
-        renderState.blockFactor = 1.0f;
-        renderState.brightness = 1.0f;
-        renderState.darknessEffectScale = 0.0f;
-        renderState.nightVisionEffectIntensity = 0.0f;
-        renderState.bossOverlayWorldDarkening = 0.0f;
-        renderState.blockLightTint = ASTHOONLITE$WHITE;
-        renderState.skyLightColor = ASTHOONLITE$WHITE;
-        renderState.ambientColor = ASTHOONLITE$WHITE;
-        renderState.nightVisionColor = ASTHOONLITE$WHITE;
+        if (Config.INSTANCE.getFullbrightEnabled()) {
+            renderState.skyFactor = 1.0f;
+            renderState.blockFactor = 1.0f;
+            renderState.brightness = 1.0f;
+            renderState.darknessEffectScale = 0.0f;
+            renderState.nightVisionEffectIntensity = 0.0f;
+            renderState.bossOverlayWorldDarkening = 0.0f;
+            renderState.blockLightTint = ASTHOONLITE$WHITE;
+            renderState.skyLightColor = ASTHOONLITE$WHITE;
+            renderState.ambientColor = ASTHOONLITE$WHITE;
+            renderState.nightVisionColor = ASTHOONLITE$WHITE;
+        }
 
         return renderState;
     }

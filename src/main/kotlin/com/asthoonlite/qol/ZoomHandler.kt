@@ -2,42 +2,25 @@ package com.asthoonlite.qol
 
 import com.asthoonlite.config.Config
 import com.mojang.blaze3d.platform.InputConstants
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.minecraft.client.Minecraft
-import org.lwjgl.glfw.GLFW
+import kotlin.math.abs
+import kotlin.math.exp
 
 object ZoomHandler {
 
-    var currentFactor = 1.0f
-    private var isZooming = false
+    private var currentFactor = 1.0f
+    private var targetFactor = 1.0f
+    private var scrollOffset = 0.0f
+    private var lastFrameNanos = 0L
 
     fun register() {
-        ClientTickEvents.START_CLIENT_TICK.register { mc ->
-            if (mc.player == null) {
-                isZooming = false
-                currentFactor = 1.0f
-                return@register
-            }
-
-            val target = if (mc.screen == null && isZoomKeyDown(mc)) {
-                Config.zoomMultiplier.coerceIn(0.1f, 1.0f)
-            } else {
-                1.0f
-            }
-
-            isZooming = target < 0.99f
-            // Smoothly ease FOV
-            currentFactor += (target - currentFactor) * 0.35f
-            if (kotlin.math.abs(currentFactor - target) < 0.005f) {
-                currentFactor = target
-            }
-        }
+        // No-op tick listener: interpolation is handled per-frame in calculateFov
     }
 
-    private fun isZoomKeyDown(mc: Minecraft): Boolean {
+    fun isZoomKeyDown(mc: Minecraft = Minecraft.getInstance()): Boolean {
         val window = mc.window
         val key = Config.zoomKey
-        if (key <= 0) return false
+        if (key <= 0 || mc.screen != null) return false
         return try {
             InputConstants.isKeyDown(window, key)
         } catch (_: Throwable) {
@@ -45,7 +28,43 @@ object ZoomHandler {
         }
     }
 
-    fun isZooming(): Boolean = isZooming || currentFactor < 0.99f
+    fun onMouseScroll(yoffset: Double): Boolean {
+        val mc = Minecraft.getInstance()
+        if (!isZoomKeyDown(mc)) return false
 
-    fun getFovMultiplier(): Float = currentFactor
+        // Scrolling up (yoffset > 0) zooms in; scrolling down (yoffset < 0) zooms out
+        val step = (yoffset * 0.06f).toFloat()
+        scrollOffset = (scrollOffset + step).coerceIn(-0.85f, 0.88f)
+        return true
+    }
+
+    fun isZooming(): Boolean = isZoomKeyDown() || currentFactor < 0.999f
+
+    fun getFovMultiplier(): Float {
+        val mc = Minecraft.getInstance()
+        val keyDown = isZoomKeyDown(mc)
+
+        if (!keyDown) {
+            scrollOffset = 0.0f
+            targetFactor = 1.0f
+        } else {
+            val baseTarget = if (Config.zoomScrollOnly) 1.0f else Config.zoomMultiplier.coerceIn(0.1f, 1.0f)
+            targetFactor = (baseTarget - scrollOffset).coerceIn(0.06f, 1.0f)
+        }
+
+        val now = System.nanoTime()
+        if (lastFrameNanos == 0L) lastFrameNanos = now
+        val deltaSeconds = ((now - lastFrameNanos) / 1_000_000_000.0).coerceIn(0.0, 0.1).toFloat()
+        lastFrameNanos = now
+
+        // Smooth delta-time interpolation (24/sec rate)
+        val blendRate = 24.0f
+        val blend = 1.0f - exp(-blendRate * deltaSeconds)
+        currentFactor += (targetFactor - currentFactor) * blend
+        if (abs(currentFactor - targetFactor) < 0.001f) {
+            currentFactor = targetFactor
+        }
+
+        return currentFactor
+    }
 }

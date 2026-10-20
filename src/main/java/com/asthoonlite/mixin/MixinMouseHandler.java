@@ -22,4 +22,11 @@ public abstract class MixinMouseHandler {
             this.accumulatedDY *= mult;
         }
     }
+
+    @Inject(method = "onScroll", at = @At("HEAD"), cancellable = true)
+    private void asthoonlite_onScroll(long window, double xoffset, double yoffset, CallbackInfo ci) {
+        if (ZoomHandler.INSTANCE.onMouseScroll(yoffset)) {
+            ci.cancel();
+        }
+    }
 }

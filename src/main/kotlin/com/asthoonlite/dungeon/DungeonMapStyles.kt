@@ -243,7 +243,7 @@ internal object DungeonMapStyles {
     private fun doorColor(door: DungeonDoor, style: Int): Int = when (door.type) {
         DoorTypes.ENTRANCE -> roomColor(style, RoomTypes.ENTRANCE, true)
         DoorTypes.BLOOD -> roomColor(style, RoomTypes.BLOOD, true)
-        DoorTypes.WITHER -> if (style == 1 && door.opened) roomColor(style, RoomTypes.NORMAL, true) else 0xFF000000.toInt()
+        DoorTypes.WITHER -> if (door.opened) roomColor(style, RoomTypes.NORMAL, true) else if (style == 0) 0x33000000.toInt() else 0xFF000000.toInt()
         DoorTypes.NORMAL -> {
             if (style == 0) 0xFF5C340E.toInt() // Devonian's exact RGB(92, 52, 14) normal door color
             else {

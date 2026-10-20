@@ -68,7 +68,7 @@ public abstract class MixinHandledScreen {
             cir.setReturnValue(true);
             return;
         }
-        if (event.key() == Config.INSTANCE.getProtectKeybind()) {
+        if (event.key() == Config.INSTANCE.getProtectKeybind() || event.key() == Config.INSTANCE.getStarProtectionKey()) {
             Slot hovered = ((AbstractContainerScreenAccessor) self).getHoveredSlot();
             if (hovered != null && hovered.hasItem()) {
                 com.asthoonlite.qol.ItemProtection.INSTANCE.toggleProtection(hovered.getItem());
@@ -296,6 +296,20 @@ public abstract class MixinHandledScreen {
 
     @Inject(
         method = "extractSlot(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/world/inventory/Slot;II)V",
+        at = @At("HEAD")
+    )
+    private void asthoonlite_onSlotRenderHead(
+        GuiGraphicsExtractor graphics,
+        Slot slot,
+        int mouseX,
+        int mouseY,
+        CallbackInfo ci
+    ) {
+        com.asthoonlite.qol.ItemRarityOverlay.INSTANCE.drawSlotBackground(graphics, slot);
+    }
+
+    @Inject(
+        method = "extractSlot(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/world/inventory/Slot;II)V",
         at = @At("TAIL")
     )
     private void asthoonlite_onSlotRendered(
@@ -305,9 +319,7 @@ public abstract class MixinHandledScreen {
         int mouseY,
         CallbackInfo ci
     ) {
-        if (com.asthoonlite.qol.ItemProtection.INSTANCE.isProtected(slot.getItem())) {
-            graphics.text(Minecraft.getInstance().font, "§aP", slot.x + 1, slot.y + 1, 0xFF55FF55);
-        }
+        com.asthoonlite.qol.ItemRarityOverlay.INSTANCE.drawSlotOverlays(graphics, slot);
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
         if (self.getTitle().getString().toLowerCase().contains("stash")) {
             InventoryAutoClicker.INSTANCE.clearSkymyceWorthlessItems();

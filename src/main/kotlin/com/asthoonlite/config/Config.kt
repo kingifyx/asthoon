@@ -448,6 +448,23 @@ object Config {
         var bossSplitsX              : Int     = -1
         var bossSplitsY              : Int     = -1
         var bossSplitsScale          : Float   = 1.0f
+
+        // ── New QOL, Doors, Zoom, Rarity, Keybinds ────────────────────────────
+        var zoomScrollOnly           : Boolean = false
+        var disableNightVision       : Boolean = false
+        var starredItemProtection    : Boolean = true
+        var starProtectionKey        : Int     = 76 // GLFW_KEY_L
+        var hideInventoryEffects     : Boolean = false
+        var witherDoorEsp            : Boolean = false
+        var bloodDoorEsp             : Boolean = false
+        var doorHighlightFill        : Boolean = false
+        var doorSeeThrough           : Boolean = false
+        var doorStreamProof          : Boolean = false
+        var rightClickSwing          : Boolean = false
+        var watcherKillAlert         : Boolean = false
+        var itemRarityBackground     : Boolean = false
+        var itemRarityOpacity        : Float   = 0.25f
+        var dungeonItemQualityHighlight : Boolean = false
     }
 
     var data = Data()
@@ -1579,6 +1596,52 @@ object Config {
     var bossSplitsScale: Float
         get() = data.bossSplitsScale
         set(v) { data.bossSplitsScale = v.coerceIn(0.5f, 3.0f); save() }
+
+    var zoomScrollOnly: Boolean
+        get() = data.zoomScrollOnly
+        set(v) { data.zoomScrollOnly = v; save() }
+    var disableNightVision: Boolean
+        get() = data.disableNightVision
+        set(v) { data.disableNightVision = v; save() }
+    var starredItemProtection: Boolean
+        get() = data.starredItemProtection
+        set(v) { data.starredItemProtection = v; save() }
+    var starProtectionKey: Int
+        get() = data.starProtectionKey
+        set(v) { data.starProtectionKey = v; save() }
+    var hideInventoryEffects: Boolean
+        get() = data.hideInventoryEffects
+        set(v) { data.hideInventoryEffects = v; save() }
+    var witherDoorEsp: Boolean
+        get() = data.witherDoorEsp
+        set(v) { data.witherDoorEsp = v; save() }
+    var bloodDoorEsp: Boolean
+        get() = data.bloodDoorEsp
+        set(v) { data.bloodDoorEsp = v; save() }
+    var doorHighlightFill: Boolean
+        get() = data.doorHighlightFill
+        set(v) { data.doorHighlightFill = v; save() }
+    var doorSeeThrough: Boolean
+        get() = data.doorSeeThrough
+        set(v) { data.doorSeeThrough = v; save() }
+    var doorStreamProof: Boolean
+        get() = data.doorStreamProof
+        set(v) { data.doorStreamProof = v; save() }
+    var rightClickSwing: Boolean
+        get() = data.rightClickSwing
+        set(v) { data.rightClickSwing = v; save() }
+    var watcherKillAlert: Boolean
+        get() = data.watcherKillAlert
+        set(v) { data.watcherKillAlert = v; save() }
+    var itemRarityBackground: Boolean
+        get() = data.itemRarityBackground
+        set(v) { data.itemRarityBackground = v; save() }
+    var itemRarityOpacity: Float
+        get() = data.itemRarityOpacity
+        set(v) { data.itemRarityOpacity = v.coerceIn(0.05f, 1.0f); save() }
+    var dungeonItemQualityHighlight: Boolean
+        get() = data.dungeonItemQualityHighlight
+        set(v) { data.dungeonItemQualityHighlight = v; save() }
 
     fun load() {
         if (!configDir.exists()) configDir.mkdirs()

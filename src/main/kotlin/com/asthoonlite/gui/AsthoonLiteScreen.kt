@@ -164,6 +164,8 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
     private var listeningForQuietModeKey = false
     private lateinit var btnGoldorRouteKey: ModernButton
     private var listeningForGoldorRouteKey = false
+    private lateinit var btnStarProtectionKey: ModernButton
+    private var listeningForStarProtectionKey = false
     private lateinit var searchBox: EditBox
     private var searchQuery = ""
     private var scrollOffset = 0
@@ -333,6 +335,7 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
         listeningForInventoryAutoClickerKey = false
         listeningForQuietModeKey = false
         listeningForGoldorRouteKey = false
+        listeningForStarProtectionKey = false
 
         val px = px()
         val py = py()
@@ -496,6 +499,7 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
         listeningForInventoryAutoClickerKey = false
         listeningForQuietModeKey = false
         listeningForGoldorRouteKey = false
+        listeningForStarProtectionKey = false
 
         val px = px()
         val all = getSearchableEntries(px)
@@ -545,17 +549,21 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                     { Config.petMenuHighlightEnabled }, { Config.petMenuHighlightEnabled = it }),
 
                 SectionHeader("Item Protection"),
-                ToggleRow("Item Protection", "Prevents dropping or selling protected items",
-                    { Config.itemProtectionEnabled }, { Config.itemProtectionEnabled = it }),
-                ToggleRow("  ↳ Protect Starred Items", "Automatically protects starred and master-starred items",
+                ToggleRow("Starred Item Protection", "Adds star indicator in inventory and prevents voiding/dropping",
+                    { Config.starredItemProtection }, { Config.starredItemProtection = it }),
+                ToggleRow("  ↳ Auto-Protect Starred Items", "Automatically protects starred and master-starred items",
                     { Config.protectStarredItems }, { Config.protectStarredItems = it }),
-                WidgetRow(ModernButton(subX, 0, subW, 24, Component.literal("Protect Keybind: L (Hold/Hover item to protect)")) {
-                    // Informative button or future rebind
+                WidgetRow(run {
+                    btnStarProtectionKey = ModernButton(subX, 0, subW, 24, Component.literal(starProtectionKeyLabel())) {
+                        listeningForStarProtectionKey = true
+                        btnStarProtectionKey.message = Component.literal("Press a key (ESC = NONE)")
+                    }
+                    btnStarProtectionKey
                 }),
 
                 SectionHeader("Command Keybinds"),
-                WidgetRow(ModernButton(fullX, 0, fullW, 24, Component.literal("View Command Keybinds (/asl binds)")) {
-                    com.asthoonlite.qol.CommandKeybinds.listBinds()
+                WidgetRow(ModernButton(fullX, 0, fullW, 24, Component.literal("Edit Command Keybinds (GUI)...")) {
+                    minecraft.setScreen(com.asthoonlite.gui.CommandKeybindsScreen(this))
                 }),
 
                 SectionHeader("Wardrobe & Loadouts"),
@@ -579,14 +587,29 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                     { Config.neuInventoryGui }, { Config.neuInventoryGui = it }),
                 ToggleRow("Storage Overlay", "Quick tabs and preview for Ender Chests & Backpacks",
                     { Config.storageOverlayEnabled }, { Config.storageOverlayEnabled = it }),
+                ToggleRow("Hide Inventory Effects", "Blocks potion effect icons from showing on the side of inventory",
+                    { Config.hideInventoryEffects }, { Config.hideInventoryEffects = it }),
+                ToggleRow("Item Rarity Background", "Color-codes item slot background with good transparency",
+                    { Config.itemRarityBackground }, { Config.itemRarityBackground = it }),
+                WidgetRow(FloatSlider(subX, 0, subW, 24, 0.05f, 1.0f, Config.itemRarityOpacity, "Rarity Opacity: ", "%", 2) {
+                    Config.itemRarityOpacity = it
+                }),
+                ToggleRow("Dungeon Quality Highlight", "Highlights dungeon drops based on quality (50% max roll) like Noamm",
+                    { Config.dungeonItemQualityHighlight }, { Config.dungeonItemQualityHighlight = it }),
 
                 SectionHeader("Camera & Visuals"),
-                ToggleRow("OptiFine C-Zoom", "Hold C to zoom in smoothly like OptiFine",
+                ToggleRow("OptiFine C-Zoom", "Hold C to zoom in smoothly with mouse sensitivity scaling",
                     { Config.zoomMultiplier < 0.99f }, {
                         Config.zoomMultiplier = if (it) 0.35f else 1.0f
                     }),
+                ToggleRow("  ↳ Zoom Only On Scroll", "Only zoom when scrolling mouse wheel while holding zoom key",
+                    { Config.zoomScrollOnly }, { Config.zoomScrollOnly = it }),
+                ToggleRow("Disable Night Vision", "Disables night vision brightness and blinking/flashing",
+                    { Config.disableNightVision }, { Config.disableNightVision = it }),
                 ToggleRow("Fullbright", "Brightens the world without torches or night vision",
                     { Config.fullbrightEnabled }, { Config.fullbrightEnabled = it }),
+                ToggleRow("Right Click Swing Animation", "Plays hand swing animation when right-clicking items",
+                    { Config.rightClickSwing }, { Config.rightClickSwing = it }),
                 ToggleRow("Custom Item Animations", "Custom hand scale, position, and swing duration",
                     { Config.customItemModelEnabled }, { Config.customItemModelEnabled = it }),
                 WidgetRow(IntSlider(subX, 0, subW, 24, 1, 30, Config.swingDuration, "Swing Duration: ", " ticks") {
@@ -891,6 +914,19 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                         { Config.roomClearNoBlood }, { Config.roomClearNoBlood = it }),
                     ToggleRow("  ↳ Only Show For Blood Rush", "Only alert if room has wither or blood door",
                         { Config.roomClearOnlyKey }, { Config.roomClearOnlyKey = it }),
+                    ToggleRow("Kill Blood Mobs Alert", "Displays on-screen text when to kill blood mobs for dialogue skip",
+                        { Config.watcherKillAlert }, { Config.watcherKillAlert = it }),
+                    SectionHeader("Door ESP"),
+                    ToggleRow("Wither Door ESP", "Highlights unopened wither doors in world space",
+                        { Config.witherDoorEsp }, { Config.witherDoorEsp = it }),
+                    ToggleRow("Blood Door ESP", "Highlights blood door in world space",
+                        { Config.bloodDoorEsp }, { Config.bloodDoorEsp = it }),
+                    ToggleRow("  ↳ Highlight Fill", "Fills the door cube with translucent color",
+                        { Config.doorHighlightFill }, { Config.doorHighlightFill = it }),
+                    ToggleRow("  ↳ See Through (Phase)", "Renders door highlights through walls",
+                        { Config.doorSeeThrough }, { Config.doorSeeThrough = it }),
+                    ToggleRow("  ↳ Streamproof ESP", "Hides door highlights from screen capture",
+                        { Config.doorStreamProof }, { Config.doorStreamProof = it }),
                     SectionHeader("Starred Mob ESP"),
                     ToggleRow("Starred Mob ESP", "Highlights all starred mobs and minibosses",
                         { Config.starMobEspEnabled }, { Config.starMobEspEnabled = it }),
@@ -1840,6 +1876,14 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
         return "Quiet Mode Keybind: ${InputConstants.Type.KEYSYM.getOrCreate(key).displayName.string.uppercase()}"
     }
 
+    private fun starProtectionKeyLabel(): String {
+        if (listeningForStarProtectionKey) return "Press a key (ESC = NONE)"
+        val key = Config.starProtectionKey
+        if (key == InputConstants.UNKNOWN.value || key == GLFW.GLFW_KEY_UNKNOWN || key < 0) return "Protection Key: NONE"
+        if (key in 0..7) return "Protection Key: MOUSE $key"
+        return "Protection Key: ${InputConstants.Type.KEYSYM.getOrCreate(key).displayName.string.uppercase()}"
+    }
+
     private fun goldorRouteKeyLabel(): String {
         val key = Config.goldorRouteKey
         if (listeningForGoldorRouteKey) return "Press a key (ESC = NONE)"
@@ -1849,9 +1893,23 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
     }
 
     override fun keyPressed(event: KeyEvent): Boolean {
+        if (listeningForStarProtectionKey) {
+            val keyCode = event.key()
+            Config.starProtectionKey = if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+                InputConstants.UNKNOWN.value
+            } else {
+                keyCode
+            }
+            listeningForStarProtectionKey = false
+            if (::btnStarProtectionKey.isInitialized) {
+                btnStarProtectionKey.message = Component.literal(starProtectionKeyLabel())
+            }
+            return true
+        }
         if (listeningForGoldorRouteKey) {
             Config.goldorRouteKey = if (event.key() == GLFW.GLFW_KEY_ESCAPE) InputConstants.UNKNOWN.value else event.key()
             listeningForGoldorRouteKey = false
+        listeningForStarProtectionKey = false
             btnGoldorRouteKey.message = Component.literal(goldorRouteKeyLabel())
             return true
         }
@@ -1921,9 +1979,18 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 return true
             }
         }
+        if (listeningForStarProtectionKey && event.button() != 0) {
+            Config.starProtectionKey = event.button()
+            listeningForStarProtectionKey = false
+            if (::btnStarProtectionKey.isInitialized) {
+                btnStarProtectionKey.message = Component.literal(starProtectionKeyLabel())
+            }
+            return true
+        }
         if (listeningForGoldorRouteKey && event.button() != 0) {
             Config.goldorRouteKey = event.button()
             listeningForGoldorRouteKey = false
+        listeningForStarProtectionKey = false
             btnGoldorRouteKey.message = Component.literal(goldorRouteKeyLabel())
             return true
         }

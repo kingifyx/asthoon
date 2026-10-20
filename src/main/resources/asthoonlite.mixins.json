@@ -35,7 +35,8 @@
     "MixinLightmap",
     "MixinItemInHandRenderer",
     "MixinLivingEntity",
-    "MixinLocalPlayer"
+    "MixinLocalPlayer",
+    "MixinEffectsInInventory"
   ],
   "injectors": {
     "defaultRequire": 1

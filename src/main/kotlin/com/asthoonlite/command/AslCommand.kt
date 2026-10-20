@@ -70,7 +70,16 @@ object AslCommand {
                         .then(
                             ClientCommands.literal("binds")
                                 .executes { _ ->
-                                    com.asthoonlite.qol.CommandKeybinds.listBinds()
+                                    val mc = Minecraft.getInstance()
+                                    mc.execute { mc.setScreen(com.asthoonlite.gui.CommandKeybindsScreen()) }
+                                    1
+                                }
+                        )
+                        .then(
+                            ClientCommands.literal("keybinds")
+                                .executes { _ ->
+                                    val mc = Minecraft.getInstance()
+                                    mc.execute { mc.setScreen(com.asthoonlite.gui.CommandKeybindsScreen()) }
                                     1
                                 }
                         )

@@ -38,7 +38,11 @@ public abstract class MixinMinecraft {
     @Inject(method = "startUseItem", at = @At("HEAD"), cancellable = true)
     private void asthoonlite$guardRightClick(CallbackInfo ci) {
         InputCapture.INSTANCE.onRightClick();
-        if (player == null || level == null || hitResult == null) return;
+        if (player == null || level == null) return;
+        if (Config.INSTANCE.getRightClickSwing()) {
+            player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        }
+        if (hitResult == null) return;
         if (hitResult.getType() == HitResult.Type.BLOCK) {
             BlockHitResult block = (BlockHitResult) hitResult;
             var state = level.getBlockState(block.getBlockPos());

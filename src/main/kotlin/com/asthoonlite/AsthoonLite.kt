@@ -131,6 +131,8 @@ object AsthoonLite : ClientModInitializer {
         com.asthoonlite.hud.CondensedHealthHud.register()
         com.asthoonlite.qol.ZoomHandler.register()
         com.asthoonlite.dungeon.BossSplitsHud.register()
+        com.asthoonlite.dungeon.DoorESP.register()
+        com.asthoonlite.dungeon.WatcherKillAlert.register()
 
         com.asthoonlite.utils.InputCapture.register()
         com.asthoonlite.pathfinding.PathPresetManager.init()
