@@ -119,6 +119,14 @@ public abstract class MixinClientPacketListener {
 
     @Inject(method = "handleOpenScreen(Lnet/minecraft/network/protocol/game/ClientboundOpenScreenPacket;)V", at = @At("HEAD"), cancellable = true)
     private void asthoonlite_onOpenScreen(ClientboundOpenScreenPacket packet, CallbackInfo ci) {
+        if (com.asthoonlite.qol.WardrobeKeybinds.INSTANCE.shouldSuppressOpenScreen(packet.getTitle().getString())) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.getConnection() != null) {
+                mc.getConnection().send(new ServerboundContainerClosePacket(packet.getContainerId()));
+                ci.cancel();
+                return;
+            }
+        }
         if (!Config.INSTANCE.getAutoCloseSecretChest() || !DungeonContext.INSTANCE.getInDungeon() || DungeonContext.INSTANCE.getInBoss()) return;
         MenuType<?> type = packet.getType();
         if (type != MenuType.GENERIC_9x3 && type != MenuType.GENERIC_9x6) return;

@@ -275,6 +275,7 @@ object StarMobESP {
     }
 
     fun shouldForceGlow(entity: Entity): Boolean {
+        if (Config.espExternalOverlay) return false // Streamproof hides glow from screen capture
         if (!Config.starMobEspEnabled || !DungeonContext.inDungeon || !starMobs.containsKey(entity.id)) return false
         val player = Minecraft.getInstance().player ?: return false
         if (!Config.starMobEspThroughWalls && !player.hasLineOfSight(entity)) return false
@@ -360,10 +361,23 @@ object StarMobESP {
             val fillA = Config.starMobFillAlpha.toFloat()
             val thickness = (Config.starMobLineWidth * 0.007).coerceIn(0.01, 0.08)
 
-            if (Config.starMobRenderMode != 1 && fillA > 0f) {
-                WorldBoxRenderer.queueFilled(minX, minY, minZ, maxX, maxY, maxZ, r, g, b, fillA, throughWalls = phase)
+            if (Config.espExternalOverlay) {
+                val proj = com.asthoonlite.overlay.EspOverlayWindow.projectAABB(
+                    minX, minY, minZ, maxX, maxY, maxZ, mc.window.screenWidth, mc.window.screenHeight
+                )
+                if (proj != null) {
+                    com.asthoonlite.overlay.EspOverlayWindow.queueBox(
+                        com.asthoonlite.overlay.EspOverlayWindow.EspBox(
+                            proj[0], proj[1], proj[2], proj[3], r, g, b, 0.95f, filled = (Config.starMobRenderMode != 1 && fillA > 0f)
+                        )
+                    )
+                }
+            } else {
+                if (Config.starMobRenderMode != 1 && fillA > 0f) {
+                    WorldBoxRenderer.queueFilled(minX, minY, minZ, maxX, maxY, maxZ, r, g, b, fillA, throughWalls = phase)
+                }
+                WorldBoxRenderer.queueOutline(minX, minY, minZ, maxX, maxY, maxZ, r, g, b, 0.95f, thickness = thickness, throughWalls = phase)
             }
-            WorldBoxRenderer.queueOutline(minX, minY, minZ, maxX, maxY, maxZ, r, g, b, 0.95f, thickness = thickness, throughWalls = phase)
             lastQueuedMobs++
         }
         if (lastQueuedMobs > 0) lastQueueGate = if (com.asthoonlite.QuietMode.suppressing()) "quiet" else "queued"

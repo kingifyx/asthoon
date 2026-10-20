@@ -12,6 +12,10 @@ public abstract class MixinLocalPlayer {
 
     @Inject(method = "drop", at = @At("HEAD"), cancellable = true)
     private void asthoonlite_onDropItem(boolean entireStack, CallbackInfoReturnable<Boolean> cir) {
+        // In Dungeons, dropping triggers the class ultimate ability and Hypixel blocks item drops.
+        if (com.asthoonlite.dungeon.DungeonContext.INSTANCE.getInDungeon()) {
+            return;
+        }
         LocalPlayer self = (LocalPlayer) (Object) this;
         if (ItemProtection.INSTANCE.isProtected(self.getInventory().getSelectedItem())) {
             ItemProtection.INSTANCE.notify("§cAction Blocked: This item is protected!");

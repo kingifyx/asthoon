@@ -113,24 +113,34 @@ object BossSplitsHud : HudElement {
                 markStart("Blood Open")
             }
 
-            // Blood Open
-            message.contains("The BLOOD DOOR has been opened!") ||
-            message.startsWith("[BOSS] The Watcher:") -> {
-                markEnd("Blood Open")
-                markStart("Blood Clear")
-            }
-
-            // Blood Clear
-            message.contains("[BOSS] The Watcher: You have proven yourself. You may pass.") -> {
+            // Blood Clear (Watcher finished) - check BEFORE generic Watcher dialog
+            message.contains("You have proven yourself. You may pass.") -> {
                 markEnd("Blood Clear")
                 markStart("Blood Done")
             }
 
-            // Blood Done / Boss Entry / P1 Start
-            message.startsWith("[BOSS] Maxor: WELL! WELL! WELL!") -> {
+            // Blood Open (Blood door opened or Watcher dialogue started)
+            message.contains("The BLOOD DOOR has been opened!") ||
+            message.startsWith("[BOSS] The Watcher:") -> {
+                if (splits["Blood Clear"]?.start == null) {
+                    markEnd("Blood Open")
+                    markStart("Blood Clear")
+                }
+            }
+
+            // Blood Done / Boss Entry (any floor boss message)
+            message.startsWith("[BOSS] Maxor: WELL! WELL! WELL!") ||
+            message.startsWith("[BOSS] Bonzo:") ||
+            message.startsWith("[BOSS] Scarf:") ||
+            message.startsWith("[BOSS] The Professor:") ||
+            message.startsWith("[BOSS] Thorn:") ||
+            message.startsWith("[BOSS] Livid:") ||
+            message.startsWith("[BOSS] Sadan:") -> {
                 markEnd("Blood Done")
-                bossStartTime = DualTime.now()
-                markStart("P1")
+                if (message.startsWith("[BOSS] Maxor:")) {
+                    bossStartTime = DualTime.now()
+                    markStart("P1")
+                }
             }
 
             // P1 End / P2 (Storm) Start

@@ -59,6 +59,7 @@ object AsthoonLite : ClientModInitializer {
         // renderer/one draw call instead of each running their own GPU
         // pipeline). Must register before anything that queues boxes.
         WorldBoxRenderer.register()
+        com.asthoonlite.overlay.EspOverlayWindow.register()
         com.asthoonlite.render.WorldTextRenderer.register()
 
         EtherwarpOverlay.register()

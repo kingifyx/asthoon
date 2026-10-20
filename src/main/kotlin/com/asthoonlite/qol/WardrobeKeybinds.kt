@@ -18,23 +18,20 @@ object WardrobeKeybinds {
 
     @Volatile var pendingLoadoutIndex: Int? = null
     @Volatile var pendingLoadoutTime = 0L
-    @Volatile private var closeDelayTicks = -1
-    private var targetScreenToClose: AbstractContainerScreen<*>? = null
+    @Volatile private var suppressUntil = 0L
+
+    fun suppressFor(durationMs: Long = 800L) {
+        suppressUntil = System.currentTimeMillis() + durationMs
+    }
+
+    fun shouldSuppressOpenScreen(rawTitle: String): Boolean {
+        if (System.currentTimeMillis() >= suppressUntil) return false
+        val clean = net.minecraft.ChatFormatting.stripFormatting(rawTitle)?.trim() ?: rawTitle
+        return isLoadoutMenu(clean)
+    }
 
     fun register() {
         ClientTickEvents.END_CLIENT_TICK.register { mc ->
-            if (closeDelayTicks > 0) {
-                closeDelayTicks--
-                if (closeDelayTicks == 0) {
-                    closeDelayTicks = -1
-                    val target = targetScreenToClose
-                    targetScreenToClose = null
-                    if (target != null && mc.screen === target) {
-                        mc.player?.closeContainer()
-                    }
-                }
-            }
-
             if (mc.player == null || mc.screen != null) return@register
 
             // Handle dedicated loadout keybinds (Loadouts 1..9)
@@ -66,8 +63,6 @@ object WardrobeKeybinds {
 
     fun onScreenClose() {
         pendingLoadoutIndex = null
-        closeDelayTicks = -1
-        targetScreenToClose = null
     }
 
     fun triggerLoadout(index: Int) {
@@ -75,6 +70,7 @@ object WardrobeKeybinds {
         val player = mc.player ?: return
         pendingLoadoutIndex = index
         pendingLoadoutTime = System.currentTimeMillis()
+        suppressFor(1200L)
         player.connection.sendCommand("loadout")
     }
 
@@ -101,14 +97,18 @@ object WardrobeKeybinds {
 
             pendingLoadoutIndex = null
             if (alreadyEquipped) {
+                if (Config.wardrobeAutoClose) {
+                    suppressFor(1000L)
+                    player.closeContainer()
+                }
                 return
             }
 
             gameMode.handleContainerInput(menu.containerId, slot, 0, ContainerInput.PICKUP, player)
             player.playSound(SoundEvents.ARMOR_EQUIP_GENERIC.value(), 1.0f, 1.0f)
             if (Config.wardrobeAutoClose) {
-                targetScreenToClose = screen
-                closeDelayTicks = 2
+                suppressFor(1000L)
+                player.closeContainer()
             }
         }
     }
@@ -154,8 +154,8 @@ object WardrobeKeybinds {
                 player.playSound(SoundEvents.ARMOR_EQUIP_GENERIC.value(), 1.0f, 1.0f)
 
                 if (Config.wardrobeAutoClose) {
-                    targetScreenToClose = screen
-                    closeDelayTicks = 2
+                    suppressFor(1000L)
+                    player.closeContainer()
                 }
                 return true
             }
@@ -190,8 +190,8 @@ object WardrobeKeybinds {
             player.playSound(SoundEvents.ARMOR_EQUIP_GENERIC.value(), 1.0f, 1.0f)
 
             if (Config.wardrobeAutoClose) {
-                targetScreenToClose = screen
-                closeDelayTicks = 2
+                suppressFor(1000L)
+                player.closeContainer()
             }
         }
         return false

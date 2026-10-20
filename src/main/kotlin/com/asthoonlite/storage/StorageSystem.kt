@@ -134,6 +134,44 @@ object StorageSystem {
         }
     }
 
+    @Volatile private var cacheDirty = false
+    @Volatile private var isSaving = false
+    @Volatile private var preserveCursorUntil = 0L
+    @Volatile private var savedCursorX = -1.0
+    @Volatile private var savedCursorY = -1.0
+
+    fun preserveCursor() {
+        val mc = Minecraft.getInstance()
+        savedCursorX = mc.mouseHandler.xpos()
+        savedCursorY = mc.mouseHandler.ypos()
+        preserveCursorUntil = System.currentTimeMillis() + 1500L
+    }
+
+    fun shouldPreserveCursor(): Boolean {
+        return System.currentTimeMillis() < preserveCursorUntil && savedCursorX >= 0.0
+    }
+
+    fun getPreservedCursor(): DoubleArray? {
+        return if (shouldPreserveCursor()) doubleArrayOf(savedCursorX, savedCursorY) else null
+    }
+
+    fun markCacheDirty() {
+        cacheDirty = true
+    }
+
+    fun saveDiskCacheAsync() {
+        if (!cacheDirty || isSaving) return
+        isSaving = true
+        Thread({
+            try {
+                saveDiskCache()
+                cacheDirty = false
+            } finally {
+                isSaving = false
+            }
+        }, "AsthoonLite-StorageSave").start()
+    }
+
     fun saveDiskCache() {
         val file = getStorageFile() ?: return
         try {
@@ -165,8 +203,11 @@ object StorageSystem {
     fun isSearchFocused(): Boolean = searchFocused
 
     fun shouldSuppressScreenClose(newScreen: Screen?): Boolean {
-        if (newScreen == null && inTransition && System.currentTimeMillis() < transitionUntil) {
-            return true
+        if (newScreen == null) {
+            saveDiskCacheAsync()
+            if (inTransition && System.currentTimeMillis() < transitionUntil) {
+                return true
+            }
         }
         return false
     }
@@ -228,7 +269,7 @@ object StorageSystem {
                     }
                 }
             }
-            saveDiskCache()
+            markCacheDirty()
         }
     }
 
@@ -242,7 +283,7 @@ object StorageSystem {
             list.add(menu.slots[i].item.copy())
         }
         cachedPages[pageIndex] = list
-        saveDiskCache()
+        markCacheDirty()
     }
 
     fun matchesSearch(stack: ItemStack, query: String): Boolean {
@@ -589,6 +630,7 @@ object StorageSystem {
     // ─────────────────────────────────────────────────────────────────────────────
 
     fun handleMouseClick(screen: AbstractContainerScreen<*>, mouseX: Double, mouseY: Double, button: Int, doubleClick: Boolean): Boolean {
+        preserveCursor()
         val mx = mouseX.toInt()
         val my = mouseY.toInt()
         val mc = Minecraft.getInstance()

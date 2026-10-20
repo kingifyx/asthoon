@@ -15,7 +15,7 @@ object DoorESP {
     fun register() {
         LevelRenderEvents.END_EXTRACTION.register { _ ->
             if (!DungeonContext.inDungeon) return@register
-            if (QuietMode.suppressing() && !Config.doorStreamProof) return@register
+            if (QuietMode.suppressing()) return@register
 
             val mc = Minecraft.getInstance()
             val level = mc.level ?: return@register
@@ -80,10 +80,23 @@ object DoorESP {
 
                 val throughWalls = Config.doorSeeThrough
 
-                if (Config.doorHighlightFill) {
-                    WorldBoxRenderer.queueFilled(x1, y1, z1, x2, y2, z2, r, g, b, 0.25f, throughWalls)
+                if (Config.doorStreamProof) {
+                    val proj = com.asthoonlite.overlay.EspOverlayWindow.projectAABB(
+                        x1, y1, z1, x2, y2, z2, mc.window.screenWidth, mc.window.screenHeight
+                    )
+                    if (proj != null) {
+                        com.asthoonlite.overlay.EspOverlayWindow.queueBox(
+                            com.asthoonlite.overlay.EspOverlayWindow.EspBox(
+                                proj[0], proj[1], proj[2], proj[3], r, g, b, 0.95f, filled = Config.doorHighlightFill
+                            )
+                        )
+                    }
+                } else {
+                    if (Config.doorHighlightFill) {
+                        WorldBoxRenderer.queueFilled(x1, y1, z1, x2, y2, z2, r, g, b, 0.25f, throughWalls)
+                    }
+                    WorldBoxRenderer.queueOutline(x1, y1, z1, x2, y2, z2, r, g, b, 1.0f, throughWalls = throughWalls)
                 }
-                WorldBoxRenderer.queueOutline(x1, y1, z1, x2, y2, z2, r, g, b, 1.0f, throughWalls = throughWalls)
             }
         }
     }

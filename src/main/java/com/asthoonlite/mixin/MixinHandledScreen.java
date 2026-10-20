@@ -437,6 +437,12 @@ public abstract class MixinHandledScreen {
         if (com.asthoonlite.storage.StorageSystem.INSTANCE.isStorageScreen(self)) {
             com.asthoonlite.storage.StorageSystem.INSTANCE.onScreenOpenOrUpdate(self);
         }
+        if (com.asthoonlite.qol.WardrobeKeybinds.INSTANCE.getPendingLoadoutIndex() != null &&
+            com.asthoonlite.qol.WardrobeKeybinds.INSTANCE.isLoadoutMenu(self.getTitle().getString())) {
+            com.asthoonlite.qol.WardrobeKeybinds.INSTANCE.onScreenOpen(self);
+            ci.cancel();
+            return;
+        }
         com.asthoonlite.qol.WardrobeKeybinds.INSTANCE.onScreenOpen(self);
 
         if (!Config.INSTANCE.getTerminalSolverEnabled()) return;
