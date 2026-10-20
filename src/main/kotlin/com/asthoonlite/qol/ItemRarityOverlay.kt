@@ -122,15 +122,18 @@ object ItemRarityOverlay {
     fun isDungeonItem(stack: ItemStack): Boolean = isRedundantMobDrop(stack)
 
     fun drawSlotBackground(graphics: GuiGraphicsExtractor, slot: Slot) {
-        val stack = slot.item
+        drawItemBackground(graphics, slot.item, slot.x, slot.y)
+    }
+
+    fun drawItemBackground(graphics: GuiGraphicsExtractor, stack: ItemStack, x: Int, y: Int) {
         if (stack.isEmpty) return
 
         val isMobDrop = isRedundantMobDrop(stack)
         val quality = if (Config.dungeonItemQualityHighlight && isMobDrop) getDungeonQuality(stack) else 0
         val rarity = getRarity(stack)
 
-        val sx = slot.x
-        val sy = slot.y
+        val sx = x
+        val sy = y
 
         // Dungeon item quality highlight (only for redundant mob drops: deep crimson red)
         if (Config.dungeonItemQualityHighlight && isMobDrop && quality > 0) {
@@ -160,12 +163,15 @@ object ItemRarityOverlay {
     }
 
     fun drawSlotOverlays(graphics: GuiGraphicsExtractor, slot: Slot) {
-        val stack = slot.item
+        drawItemOverlays(graphics, slot.item, slot.x, slot.y)
+    }
+
+    fun drawItemOverlays(graphics: GuiGraphicsExtractor, stack: ItemStack, x: Int, y: Int) {
         if (stack.isEmpty) return
 
         val font = Minecraft.getInstance().font
-        val sx = slot.x
-        val sy = slot.y
+        val sx = x
+        val sy = y
 
         // Starred protection indicator
         if (ItemProtection.isProtected(stack)) {

@@ -35,6 +35,14 @@ object StorageSystem {
     private val backpackRegex = Regex("""^.+Backpack (?:✦ )?\(Slot #(\d+)\)$""")
 
     val cachedPages = HashMap<Int, List<ItemStack>>()
+    val unlockedPages = java.util.TreeSet<Int>().apply { add(0) }
+
+    private val emptySlotItems = setOf(
+        net.minecraft.world.level.block.Blocks.RED_STAINED_GLASS_PANE.asItem(),
+        net.minecraft.world.level.block.Blocks.BROWN_STAINED_GLASS_PANE.asItem(),
+        net.minecraft.world.level.block.Blocks.BLACK_STAINED_GLASS_PANE.asItem(),
+        net.minecraft.world.item.Items.GRAY_DYE
+    )
 
     var activePageIndex: Int? = null
     var inTransition: Boolean = false
@@ -106,6 +114,10 @@ object StorageSystem {
         if (!file.exists()) return
         try {
             val root = NbtIo.readCompressed(file.toPath(), NbtAccounter.uncompressedQuota())
+            if (root.contains("unlocked_pages")) {
+                val arr = root.getIntArray("unlocked_pages").orElse(intArrayOf())
+                for (p in arr) unlockedPages.add(p)
+            }
             for (i in 0 until 27) {
                 val key = "${i}_inv"
                 if (root.contains(key)) {
@@ -113,6 +125,7 @@ object StorageSystem {
                     val inv = NBTInventory.decode(encoded)
                     if (inv != null && inv.stacks.isNotEmpty()) {
                         cachedPages[i] = inv.stacks
+                        unlockedPages.add(i)
                     }
                 }
             }
@@ -125,6 +138,7 @@ object StorageSystem {
         val file = getStorageFile() ?: return
         try {
             val root = CompoundTag()
+            root.putIntArray("unlocked_pages", unlockedPages.toIntArray())
             for ((index, stacks) in cachedPages) {
                 if (stacks.isNotEmpty()) {
                     val encoded = NBTInventory(stacks).encode()
@@ -164,6 +178,7 @@ object StorageSystem {
             val pageNum = ecMatch.groupValues[1].toIntOrNull() ?: 1
             val pageIndex = pageNum - 1
             activePageIndex = pageIndex
+            unlockedPages.add(pageIndex)
             inTransition = false
             cacheContainerSlots(screen, pageIndex)
             return
@@ -174,6 +189,7 @@ object StorageSystem {
             val slotNum = bpMatch.groupValues[1].toIntOrNull() ?: 1
             val pageIndex = slotNum - 1 + 9
             activePageIndex = pageIndex
+            unlockedPages.add(pageIndex)
             inTransition = false
             cacheContainerSlots(screen, pageIndex)
             return
@@ -189,10 +205,12 @@ object StorageSystem {
                 val slotIdx = 9 + i
                 if (slotIdx < menu.slots.size) {
                     val item = menu.slots[slotIdx].item
-                    if (!item.isEmpty && !item.hoverName.string.contains("Locked", ignoreCase = true) && !item.hoverName.string.contains("Not Unlocked", ignoreCase = true)) {
-                        if (!cachedPages.containsKey(i)) {
-                            cachedPages[i] = emptyList()
-                        }
+                    val name = item.hoverName.string
+                    val isLocked = item.isEmpty || item.item in emptySlotItems || name.contains("Locked", ignoreCase = true) || name.contains("Not Unlocked", ignoreCase = true)
+                    if (!isLocked) {
+                        unlockedPages.add(i)
+                    } else if (i > 0 && !cachedPages.containsKey(i)) {
+                        unlockedPages.remove(i)
                     }
                 }
             }
@@ -201,13 +219,16 @@ object StorageSystem {
                 val slotIdx = 27 + i
                 if (slotIdx < menu.slots.size) {
                     val item = menu.slots[slotIdx].item
-                    if (!item.isEmpty && !item.hoverName.string.contains("Locked", ignoreCase = true) && !item.hoverName.string.contains("Empty", ignoreCase = true)) {
-                        if (!cachedPages.containsKey(i + 9)) {
-                            cachedPages[i + 9] = emptyList()
-                        }
+                    val name = item.hoverName.string
+                    val isLockedOrEmpty = item.isEmpty || item.item in emptySlotItems || name.contains("Locked", ignoreCase = true) || name.contains("Not Unlocked", ignoreCase = true) || name.contains("Empty", ignoreCase = true)
+                    if (!isLockedOrEmpty) {
+                        unlockedPages.add(i + 9)
+                    } else if (!cachedPages.containsKey(i + 9)) {
+                        unlockedPages.remove(i + 9)
                     }
                 }
             }
+            saveDiskCache()
         }
     }
 
@@ -308,7 +329,7 @@ object StorageSystem {
 
         // Precompute card heights
         cardHitboxes.clear()
-        val allPages = (0 until 27).map { StoragePage(it) }
+        val allPages = (if (unlockedPages.isNotEmpty()) unlockedPages.sorted() else listOf(0)).map { StoragePage(it) }
 
         // Layout rows
         var curY = 0
@@ -337,8 +358,9 @@ object StorageSystem {
 
             col++
             if (col >= colCount) {
-                for ((p, h) in rowCards) {
-                    val cx = panelX + (p.index % colCount) * (PAGE_WIDTH + 8)
+                for ((idxInRow, pair) in rowCards.withIndex()) {
+                    val (p, h) = pair
+                    val cx = panelX + idxInRow * (PAGE_WIDTH + 8)
                     val cy = panelY + curY - scroll.toInt()
                     val pRows = if (p.index == activePageIndex) {
                         ((screen.menu.slots.size - 36 - 9 + 8) / 9).coerceIn(1, 6)
@@ -354,8 +376,9 @@ object StorageSystem {
             }
         }
         if (rowCards.isNotEmpty()) {
-            for ((p, h) in rowCards) {
-                val cx = panelX + (p.index % colCount) * (PAGE_WIDTH + 8)
+            for ((idxInRow, pair) in rowCards.withIndex()) {
+                val (p, h) = pair
+                val cx = panelX + idxInRow * (PAGE_WIDTH + 8)
                 val cy = panelY + curY - scroll.toInt()
                 val pRows = if (p.index == activePageIndex) {
                     ((screen.menu.slots.size - 36 - 9 + 8) / 9).coerceIn(1, 6)

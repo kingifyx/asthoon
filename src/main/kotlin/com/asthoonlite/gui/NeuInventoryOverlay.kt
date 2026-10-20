@@ -12,24 +12,26 @@ import net.minecraft.world.item.Items
 object NeuInventoryOverlay {
 
     data class SidebarButton(val label: String, val command: String, val icon: ItemStack)
-    data class EquipmentButton(val label: String, val slotName: String, val icon: ItemStack)
 
-    private val buttons by lazy {
+    // Left side: /hub, /is, /warp dh, /bz, /ah
+    private val leftButtons by lazy {
         listOf(
-            SidebarButton("Wardrobe", "wardrobe", ItemStack(Items.LEATHER_CHESTPLATE)),
-            SidebarButton("Pets", "pets", ItemStack(Items.BONE)),
-            SidebarButton("Storage", "storage", ItemStack(Items.CHEST)),
-            SidebarButton("Craft", "craft", ItemStack(Items.CRAFTING_TABLE)),
-            SidebarButton("Menu", "menu", ItemStack(Items.NETHER_STAR))
+            SidebarButton("Hub", "hub", ItemStack(Items.COMPASS)),
+            SidebarButton("Island", "is", ItemStack(Items.GRASS_BLOCK)),
+            SidebarButton("Dungeon Hub", "warp dh", ItemStack(Items.IRON_SWORD)),
+            SidebarButton("Bazaar", "bz", ItemStack(Items.GOLD_INGOT)),
+            SidebarButton("Auction House", "ah", ItemStack(Items.EMERALD))
         )
     }
 
-    private val equipmentButtons by lazy {
+    // Right side: Equipment (Elytra), Loadouts, Wardrobe, Pets, Storage
+    private val rightButtons by lazy {
         listOf(
-            EquipmentButton("Necklace", "N", ItemStack(Items.STRING)),
-            EquipmentButton("Cloak", "C", ItemStack(Items.ELYTRA)),
-            EquipmentButton("Belt", "B", ItemStack(Items.LEAD)),
-            EquipmentButton("Gloves", "G", ItemStack(Items.LEATHER))
+            SidebarButton("Equipment", "equipment", ItemStack(Items.ELYTRA)),
+            SidebarButton("Loadouts", "loadouts", ItemStack(Items.ARMOR_STAND)),
+            SidebarButton("Wardrobe", "wardrobe", ItemStack(Items.LEATHER_CHESTPLATE)),
+            SidebarButton("Pets", "pets", ItemStack(Items.BONE)),
+            SidebarButton("Storage", "storage", ItemStack(Items.CHEST))
         )
     }
 
@@ -38,77 +40,73 @@ object NeuInventoryOverlay {
         val mc = Minecraft.getInstance()
         val font = mc.font
 
-        // Note: extractSlots already translated pose by (leftPos, topPos)
-        // so coordinates are relative to inventory top-left (0, 0)
         val relMouseX = mouseX - leftPos
         val relMouseY = mouseY - topPos
 
         val btnWidth = 24
         val btnHeight = 22
         val gap = 4
-        val startX = -btnWidth - 6
-        var startY = 10
 
-        // Draw sidebar container background
-        val totalH = buttons.size * (btnHeight + gap) + 4
-        fillRoundedRect(graphics, startX - 3, startY - 3, startX + btnWidth + 3, startY + totalH, 0xEE090B10.toInt(), 4)
-        outlineRoundedRect(graphics, startX - 3, startY - 3, startX + btnWidth + 3, startY + totalH, 0xFF1E90FF.toInt(), 4)
+        // 1. Render Left Sidebar
+        val leftX = -btnWidth - 6
+        var leftY = 10
+        val leftTotalH = leftButtons.size * (btnHeight + gap) + 4
 
-        for (btn in buttons) {
-            val isHovered = relMouseX in startX..(startX + btnWidth) && relMouseY in startY..(startY + btnHeight)
+        fillRoundedRect(graphics, leftX - 3, leftY - 3, leftX + btnWidth + 3, leftY + leftTotalH, 0xEE090B10.toInt(), 4)
+        outlineRoundedRect(graphics, leftX - 3, leftY - 3, leftX + btnWidth + 3, leftY + leftTotalH, 0xFF1E90FF.toInt(), 4)
+
+        for (btn in leftButtons) {
+            val isHovered = relMouseX in leftX..(leftX + btnWidth) && relMouseY in leftY..(leftY + btnHeight)
             val bg = if (isHovered) 0xFF0D3B66.toInt() else 0xDD121B28.toInt()
             val border = if (isHovered) 0xFF00FFFF.toInt() else 0x882A3A4E.toInt()
 
-            fillRoundedRect(graphics, startX, startY, startX + btnWidth, startY + btnHeight, bg, 3)
-            outlineRoundedRect(graphics, startX, startY, startX + btnWidth, startY + btnHeight, border, 3)
+            fillRoundedRect(graphics, leftX, leftY, leftX + btnWidth, leftY + btnHeight, bg, 3)
+            outlineRoundedRect(graphics, leftX, leftY, leftX + btnWidth, leftY + btnHeight, border, 3)
 
-            val itemX = startX + (btnWidth - 16) / 2
-            val itemY = startY + (btnHeight - 16) / 2
+            val itemX = leftX + (btnWidth - 16) / 2
+            val itemY = leftY + (btnHeight - 16) / 2
             graphics.fakeItem(btn.icon, itemX, itemY)
 
             if (isHovered) {
-                // Tooltip
                 val tip = "${btn.label} (/${btn.command})"
                 val tipW = font.width(tip)
-                val tipX = startX - tipW - 10
-                fillRoundedRect(graphics, tipX, startY + 2, tipX + tipW + 6, startY + font.lineHeight + 6, 0xF0000000.toInt(), 3)
-                graphics.text(font, tip, tipX + 3, startY + 4, 0xFFFFFFFF.toInt())
+                val tipX = leftX - tipW - 8
+                fillRoundedRect(graphics, tipX, leftY + 2, tipX + tipW + 6, leftY + font.lineHeight + 6, 0xF0000000.toInt(), 3)
+                graphics.text(font, tip, tipX + 3, leftY + 4, 0xFFFFFFFF.toInt())
             }
 
-            startY += btnHeight + gap
+            leftY += btnHeight + gap
         }
 
-        // Equipment panel on right (vanilla inventory width is 176)
-        val eqX = 176 + 6
-        val eqY = 10
-        val eqWidth = 24
+        // 2. Render Right Sidebar
+        val rightX = 176 + 6
+        var rightY = 10
+        val rightTotalH = rightButtons.size * (btnHeight + gap) + 4
 
-        val eqTotalH = equipmentButtons.size * (btnHeight + gap) + 4
-        fillRoundedRect(graphics, eqX - 3, eqY - 3, eqX + eqWidth + 3, eqY + eqTotalH, 0xEE090B10.toInt(), 4)
-        outlineRoundedRect(graphics, eqX - 3, eqY - 3, eqX + eqWidth + 3, eqY + eqTotalH, 0xFF00E676.toInt(), 4)
+        fillRoundedRect(graphics, rightX - 3, rightY - 3, rightX + btnWidth + 3, rightY + rightTotalH, 0xEE090B10.toInt(), 4)
+        outlineRoundedRect(graphics, rightX - 3, rightY - 3, rightX + btnWidth + 3, rightY + rightTotalH, 0xFF00E676.toInt(), 4)
 
-        var curEqY = eqY
-        for (eq in equipmentButtons) {
-            val isHovered = relMouseX in eqX..(eqX + eqWidth) && relMouseY in curEqY..(curEqY + btnHeight)
+        for (btn in rightButtons) {
+            val isHovered = relMouseX in rightX..(rightX + btnWidth) && relMouseY in rightY..(rightY + btnHeight)
             val bg = if (isHovered) 0xFF004D40.toInt() else 0xDD121B28.toInt()
             val border = if (isHovered) 0xFF00E676.toInt() else 0x882A3A4E.toInt()
 
-            fillRoundedRect(graphics, eqX, curEqY, eqX + eqWidth, curEqY + btnHeight, bg, 3)
-            outlineRoundedRect(graphics, eqX, curEqY, eqX + eqWidth, curEqY + btnHeight, border, 3)
+            fillRoundedRect(graphics, rightX, rightY, rightX + btnWidth, rightY + btnHeight, bg, 3)
+            outlineRoundedRect(graphics, rightX, rightY, rightX + btnWidth, rightY + btnHeight, border, 3)
 
-            val itemX = eqX + (eqWidth - 16) / 2
-            val itemY = curEqY + (btnHeight - 16) / 2
-            graphics.fakeItem(eq.icon, itemX, itemY)
+            val itemX = rightX + (btnWidth - 16) / 2
+            val itemY = rightY + (btnHeight - 16) / 2
+            graphics.fakeItem(btn.icon, itemX, itemY)
 
             if (isHovered) {
-                val tip = "${eq.label} (/equipment)"
+                val tip = "${btn.label} (/${btn.command})"
                 val tipW = font.width(tip)
-                val tipX = eqX + eqWidth + 8
-                fillRoundedRect(graphics, tipX, curEqY + 2, tipX + tipW + 6, curEqY + font.lineHeight + 6, 0xF0000000.toInt(), 3)
-                graphics.text(font, tip, tipX + 3, curEqY + 4, 0xFFFFFFFF.toInt())
+                val tipX = rightX + btnWidth + 8
+                fillRoundedRect(graphics, tipX, rightY + 2, tipX + tipW + 6, rightY + font.lineHeight + 6, 0xF0000000.toInt(), 3)
+                graphics.text(font, tip, tipX + 3, rightY + 4, 0xFFFFFFFF.toInt())
             }
 
-            curEqY += btnHeight + gap
+            rightY += btnHeight + gap
         }
     }
 
@@ -120,28 +118,31 @@ object NeuInventoryOverlay {
         val btnWidth = 24
         val btnHeight = 22
         val gap = 4
-        val startX = -btnWidth - 6
-        var startY = 10
 
-        for (btn in buttons) {
-            if (relX >= startX && relX <= startX + btnWidth && relY >= startY && relY <= startY + btnHeight) {
+        // Check Left Buttons
+        val leftX = -btnWidth - 6
+        var leftY = 10
+        for (btn in leftButtons) {
+            if (relX >= leftX && relX <= leftX + btnWidth && relY >= leftY && relY <= leftY + btnHeight) {
                 val player = Minecraft.getInstance().player ?: return true
                 player.closeContainer()
                 player.connection.sendCommand(btn.command)
                 return true
             }
-            startY += btnHeight + gap
+            leftY += btnHeight + gap
         }
 
-        val eqX = 176 + 6
-        val eqY = 10
-        val eqWidth = 24
-        val eqTotalH = equipmentButtons.size * (btnHeight + gap)
-        if (relX >= eqX && relX <= eqX + eqWidth && relY >= eqY && relY <= eqY + eqTotalH) {
-            val player = Minecraft.getInstance().player ?: return true
-            player.closeContainer()
-            player.connection.sendCommand("equipment")
-            return true
+        // Check Right Buttons
+        val rightX = 176 + 6
+        var rightY = 10
+        for (btn in rightButtons) {
+            if (relX >= rightX && relX <= rightX + btnWidth && relY >= rightY && relY <= rightY + btnHeight) {
+                val player = Minecraft.getInstance().player ?: return true
+                player.closeContainer()
+                player.connection.sendCommand(btn.command)
+                return true
+            }
+            rightY += btnHeight + gap
         }
 
         return false

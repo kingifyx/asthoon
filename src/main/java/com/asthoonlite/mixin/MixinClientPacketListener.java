@@ -23,10 +23,20 @@ import net.minecraft.world.item.Items;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ClientPacketListener.class)
 public abstract class MixinClientPacketListener {
+
+    @ModifyVariable(
+        method = "sendCommand(Ljava/lang/String;)V",
+        at = @At("HEAD"),
+        argsOnly = true
+    )
+    private String asthoonlite_modifySendCommand(String command) {
+        return com.asthoonlite.qol.CommandShortcuts.INSTANCE.processCommand(command);
+    }
 
     @Inject(method = "handleSetTime(Lnet/minecraft/network/protocol/game/ClientboundSetTimePacket;)V", at = @At("TAIL"))
     private void asthoonlite_onSetTime(ClientboundSetTimePacket packet, CallbackInfo ci) {

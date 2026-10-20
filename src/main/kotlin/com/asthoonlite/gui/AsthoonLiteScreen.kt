@@ -567,6 +567,9 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 WidgetRow(ModernButton(fullX, 0, fullW, 24, Component.literal("Edit Command Keybinds (GUI)...")) {
                     minecraft.setScreen(com.asthoonlite.gui.CommandKeybindsScreen(this))
                 }),
+                WidgetRow(ModernButton(fullX, 0, fullW, 24, Component.literal("Edit Command Shortcuts (GUI)...")) {
+                    minecraft.setScreen(com.asthoonlite.gui.CommandShortcutsScreen(this))
+                }),
 
                 SectionHeader("Wardrobe & Loadouts"),
                 ToggleRow("Wardrobe Keybinds", "Use keys 1-9 to equip wardrobe loadouts instantly",

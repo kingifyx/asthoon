@@ -1592,14 +1592,14 @@ fun main() {
     run {
         val diffSec = com.asthoonlite.dungeon.BossSplitsHud.DualDiff(25400L, 508L)
         val formattedSec = diffSec.format()
-        check(formattedSec.contains("25.4s") && formattedSec.contains("(508t)")) {
-            "DualDiff must format sub-minute times with tenths and tick count, got $formattedSec"
+        check(formattedSec.contains("25.4s") && formattedSec.contains("(25.4s)")) {
+            "DualDiff must format sub-minute times with tenths and tick count in seconds, got $formattedSec"
         }
 
         val diffMin = com.asthoonlite.dungeon.BossSplitsHud.DualDiff(65200L, 1304L)
         val formattedMin = diffMin.format()
-        check(formattedMin.contains("1:05.2") && formattedMin.contains("(1304t)")) {
-            "DualDiff must format minute+ times with mm:ss.s and tick count, got $formattedMin"
+        check(formattedMin.contains("1:05.2") && formattedMin.contains("(1:05.2)")) {
+            "DualDiff must format minute+ times with mm:ss.s and tick count in seconds, got $formattedMin"
         }
 
         check(com.asthoonlite.qol.WardrobeKeybinds.isWardrobeMenu("(1/9) Armor Sets")) { "Wardrobe title pattern match failed for armor" }
@@ -1612,6 +1612,13 @@ fun main() {
         check(com.asthoonlite.qol.ItemRarityOverlay.Rarity.fromString("LEGENDARY") == com.asthoonlite.qol.ItemRarityOverlay.Rarity.LEGENDARY) { "Rarity string parse failed" }
         check(com.asthoonlite.qol.ItemRarityOverlay.Rarity.fromString("VERY SPECIAL") == com.asthoonlite.qol.ItemRarityOverlay.Rarity.VERY_SPECIAL) { "Very special rarity parse failed" }
         check(com.asthoonlite.qol.ItemRarityOverlay.Rarity.fromString("VERY_SPECIAL") == com.asthoonlite.qol.ItemRarityOverlay.Rarity.VERY_SPECIAL) { "Very special rarity parse failed" }
+
+        // Command Shortcuts logic
+        com.asthoonlite.config.Config.commandShortcuts = mutableMapOf("dh" to "warp dh", "bz" to "bazaar")
+        check(com.asthoonlite.qol.CommandShortcuts.processCommand("dh") == "warp dh") { "Shortcut expansion for dh failed" }
+        check(com.asthoonlite.qol.CommandShortcuts.processCommand("/dh") == "warp dh") { "Shortcut expansion for /dh failed" }
+        check(com.asthoonlite.qol.CommandShortcuts.processCommand("dh 1") == "warp dh 1") { "Shortcut args appending failed" }
+        check(com.asthoonlite.qol.CommandShortcuts.processCommand("unknown") == "unknown") { "Unmapped command should remain untouched" }
     }
 
     println("Dungeon regression checks passed: scoreboard detection, terminal timing, terminal identification, candidates and click order, melody row selection, custom terminal grid, map dimensions/bounds, mob categories, tictactoe solver, secret hitbox expansion geometry, map overlay canvas, map decoration binding, legit map base, terminal pointer flight timing, terminal motion and gui, terminal pointer motion, cursor trail fade, rounded tile arcs, real cursor handback, pointer linger, pathfinding preset taxonomy, boss splits formatting, and wardrobe title validation.")

@@ -96,6 +96,22 @@ object AslCommand {
                                 }
                         )
                         .then(
+                            ClientCommands.literal("shortcut")
+                                .executes { _ ->
+                                    val mc = Minecraft.getInstance()
+                                    mc.execute { mc.setScreen(com.asthoonlite.gui.CommandShortcutsScreen()) }
+                                    1
+                                }
+                        )
+                        .then(
+                            ClientCommands.literal("shortcuts")
+                                .executes { _ ->
+                                    val mc = Minecraft.getInstance()
+                                    mc.execute { mc.setScreen(com.asthoonlite.gui.CommandShortcutsScreen()) }
+                                    1
+                                }
+                        )
+                        .then(
                             ClientCommands.literal("storage")
                                 .executes { _ ->
                                     val mc = Minecraft.getInstance()
@@ -222,6 +238,17 @@ object AslCommand {
                         .executes { _ ->
                             val mc = Minecraft.getInstance()
                             mc.execute { mc.setScreen(com.asthoonlite.gui.CommandKeybindsScreen()) }
+                            1
+                        }
+                )
+            }
+
+            for (alias in listOf("shortcuts", "commandshortcuts")) {
+                dispatcher.register(
+                    ClientCommands.literal(alias)
+                        .executes { _ ->
+                            val mc = Minecraft.getInstance()
+                            mc.execute { mc.setScreen(com.asthoonlite.gui.CommandShortcutsScreen()) }
                             1
                         }
                 )

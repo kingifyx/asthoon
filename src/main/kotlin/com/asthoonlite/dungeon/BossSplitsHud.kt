@@ -38,7 +38,15 @@ object BossSplitsHud : HudElement {
             } else {
                 String.format("%.1fs", totalSec)
             }
-            return "$timeStr §7(${ticks}t)§r"
+            val tickSec = ticks / 20.0
+            val tickStr = if (tickSec >= 60.0) {
+                val tm = (tickSec / 60).toInt()
+                val ts = tickSec % 60
+                String.format("%d:%04.1f", tm, ts)
+            } else {
+                String.format("%.1fs", tickSec)
+            }
+            return "$timeStr §7($tickStr)§r"
         }
     }
 

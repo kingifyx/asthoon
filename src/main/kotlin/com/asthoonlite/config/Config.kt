@@ -476,10 +476,15 @@ object Config {
         var speedBarX                : Int     = 10
         var speedBarY                : Int     = 200
         var speedBarScale            : Float   = 1.0f
+        var commandShortcuts         : MutableMap<String, String> = mutableMapOf("dh" to "warp dh")
     }
 
     var data = Data()
         private set
+
+    var commandShortcuts: MutableMap<String, String>
+        get() = data.commandShortcuts
+        set(v) { data.commandShortcuts = v; save() }
 
     var dungeonMapStyle: Int
         get() = data.dungeonMapStyle

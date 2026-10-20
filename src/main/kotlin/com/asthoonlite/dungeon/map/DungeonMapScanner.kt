@@ -332,7 +332,9 @@ object DungeonMapScanner {
             return@removeIf when (doorCol) {
                 MapColors.DOOR_WITHER.color -> {
                     door.type = DoorTypes.WITHER
-                    door.opened = false
+                    if (!door.opened) {
+                        door.opened = false
+                    }
                     if (
                         comp.getNeighboringRooms()
                             .mapNotNull { DungeonScanner.rooms[it.getRoomIdx()] }

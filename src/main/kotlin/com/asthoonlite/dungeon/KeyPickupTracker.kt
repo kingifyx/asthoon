@@ -66,14 +66,21 @@ object KeyPickupTracker {
     }
 
     fun register() {
-        LevelRenderEvents.END_EXTRACTION.register { _ ->
+        LevelRenderEvents.END_EXTRACTION.register { context ->
             if (!DungeonContext.inDungeon) return@register
             if (QuietMode.suppressing() && !Config.doorStreamProof) return@register
 
             val mc = Minecraft.getInstance()
             val level = mc.level ?: return@register
             val player = mc.player ?: return@register
-            val eyePos = player.eyePosition
+
+            val cam = mc.gameRenderer.mainCamera
+            val camPos = cam.position()
+            // Tracer origin at chest height below crosshair/camera to avoid head origin and screen clutter
+            val startX = camPos.x
+            val startY = camPos.y - 0.35
+            val startZ = camPos.z
+            val partialTick = context.deltaTracker().getGameTimeDeltaPartialTick(true)
 
             // 1. Scan ArmorStands wearing wither/blood key skulls
             val stands = level.getEntitiesOfClass(ArmorStand::class.java, player.boundingBox.inflate(64.0))
@@ -94,14 +101,14 @@ object KeyPickupTracker {
                 if (!isWither && !isBlood) continue
 
                 val (r, g, b) = if (isBlood) Triple(1.0f, 0.1f, 0.1f) else Triple(1.0f, 0.75f, 0.0f)
-                val x = stand.x
-                val y = stand.y + 1.2
-                val z = stand.z
+                val x = net.minecraft.util.Mth.lerp(partialTick.toDouble(), stand.xo, stand.x)
+                val y = net.minecraft.util.Mth.lerp(partialTick.toDouble(), stand.yo, stand.y) + 1.2
+                val z = net.minecraft.util.Mth.lerp(partialTick.toDouble(), stand.zo, stand.z)
                 val half = 0.35
 
                 WorldBoxRenderer.queueFilled(x - half, y, z - half, x + half, y + 0.7, z + half, r, g, b, 0.35f, throughWalls = true)
                 WorldBoxRenderer.queueOutline(x - half, y, z - half, x + half, y + 0.7, z + half, r, g, b, 1.0f, thickness = 0.02, throughWalls = true)
-                WorldBoxRenderer.queueLine(eyePos.x, eyePos.y, eyePos.z, x, y + 0.35, z, r, g, b, 0.8f, thickness = 0.03, throughWalls = true)
+                WorldBoxRenderer.queueLine(startX, startY, startZ, x, y + 0.35, z, r, g, b, 0.8f, thickness = 0.03, throughWalls = true)
             }
 
             // 2. Scan ItemEntities named Wither Key / Blood Key
@@ -114,14 +121,14 @@ object KeyPickupTracker {
                 if (!isWither && !isBlood) continue
 
                 val (r, g, b) = if (isBlood) Triple(1.0f, 0.1f, 0.1f) else Triple(1.0f, 0.75f, 0.0f)
-                val x = itemEnt.x
-                val y = itemEnt.y
-                val z = itemEnt.z
+                val x = net.minecraft.util.Mth.lerp(partialTick.toDouble(), itemEnt.xo, itemEnt.x)
+                val y = net.minecraft.util.Mth.lerp(partialTick.toDouble(), itemEnt.yo, itemEnt.y)
+                val z = net.minecraft.util.Mth.lerp(partialTick.toDouble(), itemEnt.zo, itemEnt.z)
                 val half = 0.25
 
                 WorldBoxRenderer.queueFilled(x - half, y, z - half, x + half, y + 0.5, z + half, r, g, b, 0.35f, throughWalls = true)
                 WorldBoxRenderer.queueOutline(x - half, y, z - half, x + half, y + 0.5, z + half, r, g, b, 1.0f, thickness = 0.02, throughWalls = true)
-                WorldBoxRenderer.queueLine(eyePos.x, eyePos.y, eyePos.z, x, y + 0.25, z, r, g, b, 0.8f, thickness = 0.03, throughWalls = true)
+                WorldBoxRenderer.queueLine(startX, startY, startZ, x, y + 0.25, z, r, g, b, 0.8f, thickness = 0.03, throughWalls = true)
             }
         }
     }

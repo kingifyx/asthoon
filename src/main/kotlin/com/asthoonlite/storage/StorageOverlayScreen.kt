@@ -66,7 +66,7 @@ class StorageOverlayScreen : Screen(Component.literal("Storage")) {
 
         var hoveredItem: ItemStack? = null
 
-        val allPages = (0 until 27).map { StoragePage(it) }
+        val allPages = (if (StorageSystem.unlockedPages.isNotEmpty()) StorageSystem.unlockedPages.sorted() else listOf(0)).map { StoragePage(it) }
 
         var curY = 0
         var col = 0
@@ -230,7 +230,7 @@ class StorageOverlayScreen : Screen(Component.literal("Storage")) {
             var curY = 0
             var col = 0
             var maxRowH = 0
-            val allPages = (0 until 27).map { StoragePage(it) }
+            val allPages = (if (StorageSystem.unlockedPages.isNotEmpty()) StorageSystem.unlockedPages.sorted() else listOf(0)).map { StoragePage(it) }
 
             for (page in allPages) {
                 val cached = StorageSystem.cachedPages[page.index]
