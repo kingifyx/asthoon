@@ -834,6 +834,8 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                     SectionHeader("Starred Mob ESP"),
                     ToggleRow("Starred Mob ESP", "Highlights all starred mobs and minibosses",
                         { Config.starMobEspEnabled }, { Config.starMobEspEnabled = it }),
+                    ToggleRow("  ↳ Streamproof ESP", "Make Star Mob ESP streamproof / invisible to screen capture",
+                        { Config.espExternalOverlay }, { Config.espExternalOverlay = it }),
                     WidgetRow(ModernButton(subX, 0, subW, 24, Component.literal("Star Mob Mode: " + if (Config.starMobRenderMode == 1) "Box" else "Fill")) {
                         Config.starMobRenderMode = if (Config.starMobRenderMode == 1) 0 else 1
                         init()

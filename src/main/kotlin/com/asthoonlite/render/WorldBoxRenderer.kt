@@ -138,7 +138,7 @@ object WorldBoxRenderer {
         x1: Double, y1: Double, z1: Double, x2: Double, y2: Double, z2: Double,
         r: Float, g: Float, b: Float, a: Float, throughWalls: Boolean = false
     ) {
-        if (QuietMode.suppressing()) return
+        if (QuietMode.suppressing() && !com.asthoonlite.config.Config.espExternalOverlay) return
         filledQueue.add(Box(x1, y1, z1, x2, y2, z2, r, g, b, a, throughWalls))
     }
 
@@ -148,7 +148,7 @@ object WorldBoxRenderer {
         r: Float, g: Float, b: Float, a: Float, thickness: Double = 0.02,
         throughWalls: Boolean = false
     ) {
-        if (QuietMode.suppressing()) return
+        if (QuietMode.suppressing() && !com.asthoonlite.config.Config.espExternalOverlay) return
         val t = thickness
         // 4 verticals
         edge(x1, y1, z1, x1 + t, y2, z1 + t, r, g, b, a, throughWalls)
@@ -225,8 +225,8 @@ object WorldBoxRenderer {
         lastSubmittedVertices = 0
         lastSubmittedIndices = 0
         // Second gate: quiet mode can flip between the queue pass and here,
-        // and a frame queued before it flipped must not be drawn.
-        if (QuietMode.suppressing()) { lastDrawGate = "quiet"; return }
+        // and a frame queued before it flipped must not be drawn unless streamproof ESP is active.
+        if (QuietMode.suppressing() && !com.asthoonlite.config.Config.espExternalOverlay) { lastDrawGate = "quiet"; return }
         if (filledQueue.isEmpty() && quadQueue.isEmpty()) { lastDrawGate = "empty_queue"; return }
 
         lastDrawGate = "preparing"

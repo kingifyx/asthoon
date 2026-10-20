@@ -171,7 +171,28 @@ internal object DungeonMapStyles {
         val showName = labels.names && !(labels.checks && room.checkmark == CheckmarkTypes.GREEN) &&
             room.type != RoomTypes.ENTRANCE && room.type != RoomTypes.FAIRY &&
             !(labels.hideCommon && room.type == RoomTypes.NORMAL) && !(labels.hideYellow && room.type == RoomTypes.YELLOW)
-        if (showName) room.name?.replace("\u200B", "- ")?.split(" ")?.filter { it.isNotBlank() }?.let(nameLines::addAll)
+        if (showName && room.name != null) {
+            val cleanName = room.name!!.replace("\u200B", "- ")
+            if (cleanName.length <= 11) {
+                nameLines.add(cleanName)
+            } else {
+                val words = cleanName.split(" ").filter { it.isNotBlank() }
+                if (words.size <= 1) {
+                    nameLines.add(cleanName)
+                } else {
+                    var cur = ""
+                    for (w in words) {
+                        if (cur.isEmpty()) cur = w
+                        else if (cur.length + 1 + w.length <= 11) cur += " $w"
+                        else {
+                            nameLines.add(cur)
+                            cur = w
+                        }
+                    }
+                    if (cur.isNotEmpty()) nameLines.add(cur)
+                }
+            }
+        }
         if (labels.secrets && room.totalSecrets > 0 && !(labels.checks && room.checkmark == CheckmarkTypes.GREEN)) {
             val found = if (room.checkmark == CheckmarkTypes.GREEN) max(room.totalSecrets, room.secretsCompleted).toString()
                 else room.secretsCompleted.takeIf { it >= 0 }?.toString() ?: "?"
@@ -180,8 +201,8 @@ internal object DungeonMapStyles {
         val totalLines = nameLines.size + secretLines.size
         if (totalLines > 0) {
             val maxLen = (nameLines + secretLines).maxOf { it.length }
-            val maxWidth = maxLen * 6f
-            val textScale = minOf(l.room * 0.8f / maxWidth, l.room * 0.9f / (totalLines * 9f), l.room / 20f)
+            val maxWidth = maxLen * 5.5f
+            val textScale = minOf(l.room * 0.95f / maxWidth, l.room * 0.9f / (totalLines * 9f)).coerceIn(0.35f, 0.95f)
             c.push()
             c.translate(cx, cy - totalLines * 9 * textScale / 2)
             c.scale(textScale, textScale)

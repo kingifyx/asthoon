@@ -166,7 +166,7 @@ object DungeonMap : HudElement {
             canvas.fill(0, 0, rect.size, rect.size, 0xFF000000.toInt())
             canvas.fill(1, 1, rect.size - 1, rect.size - 1, 0x5E000001.toInt())
         }
-        val labels = advanced || !Config.dungeonMapLegitBase
+        val labels = true
         DungeonMapStyles.draw(canvas, style, layout, DungeonScanner.rooms.toList(), DungeonScanner.doors.toList(), advanced,
             DungeonMapStyles.Labels(Config.dungeonMapShowNames && labels, Config.dungeonMapShowSecrets && labels,
                 Config.dungeonMapShowCheckmarks, Config.dungeonMapDontRenderCommonNames,
@@ -198,27 +198,17 @@ object DungeonMap : HudElement {
             c.push()
             c.translate(x, y)
             c.rotate(Math.toRadians(yaw + 180).toFloat())
+            val edge = (12 * size / 128f * Config.dungeonMapMarkerScale).toInt().coerceAtLeast(5)
             if (own && Config.dungeonMapDefaultGreenMarker) {
-                // Default setting: user is shown as the default green Minecraft arrow
-                val markerScale = scale * Config.dungeonMapMarkerScale * 0.35f
+                // Default setting: user is shown as the default green Minecraft arrow (Noamm style marker)
                 val greenColor = 0xFF55FF55.toInt()
-                if (style == 0) c.marker(true, (8 * markerScale).toInt().coerceIn(5, 10),
-                    (12 * markerScale).toInt().coerceIn(7, 14), markerScale, greenColor)
-                else {
-                    val edge = (12 * size / 128f * Config.dungeonMapMarkerScale).toInt().coerceAtLeast(5)
-                    c.image("textures/map/noamm/marker.png", -edge / 2, -edge / 2, edge, 7, greenColor)
-                }
+                c.image("textures/map/noamm/marker.png", -edge / 2, -edge / 2, edge, 7, greenColor)
             } else if (Config.dungeonMapPlayerHeads) {
                 // Noamm renderPlayer: rotate face and class border together, including self.
                 c.face(name, skin, -headSize / 2, -headSize / 2, headSize, color)
             } else {
-                val markerScale = scale * Config.dungeonMapMarkerScale * if (own) 0.30f else 0.40f
-                if (style == 0) c.marker(own, (8 * markerScale).toInt().coerceIn(5, 10),
-                    (12 * markerScale).toInt().coerceIn(7, 14), markerScale, color)
-                else {
-                    val edge = (12 * size / 128f * Config.dungeonMapMarkerScale).toInt().coerceAtLeast(5)
-                    c.image("textures/map/noamm/marker.png", -edge / 2, -edge / 2, edge, 7, color)
-                }
+                // Noamm style character marker across all map styles
+                c.image("textures/map/noamm/marker.png", -edge / 2, -edge / 2, edge, 7, color)
             }
             c.pop()
             if (own && Config.dungeonMapMarkerSelf && Config.dungeonMapPlayerHeads && !Config.dungeonMapDefaultGreenMarker) {
@@ -228,7 +218,7 @@ object DungeonMap : HudElement {
                 c.fill(-1, -headSize / 2 - 4, 2, -headSize / 2 - 2, color)
                 c.pop()
             }
-            if (showNames) {
+            if (showNames && !own) {
                 val label = if (Config.dungeonMapShowClassNames) {
                     val pClass = DungeonContext.playerClasses[name]
                         ?: DungeonContext.playerClasses.entries.firstOrNull { it.key.equals(name, ignoreCase = true) }?.value

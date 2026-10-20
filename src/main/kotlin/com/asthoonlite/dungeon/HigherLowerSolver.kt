@@ -100,18 +100,66 @@ object HigherLowerSolver {
     private fun queueBoxes() {
         if (!Config.higherLowerSolverEnabled) return
         if (orderedBlazeIds.isEmpty()) return
-        val level = Minecraft.getInstance().level ?: return
+        val mc = Minecraft.getInstance()
+        val level = mc.level ?: return
+        val player = mc.player
 
-        orderedBlazeIds.take(3).forEachIndexed { index, id ->
-            val entity = level.getEntity(id) ?: return@forEachIndexed
-            val box = entity.boundingBox
+        val targets = orderedBlazeIds.take(3).mapNotNull { id ->
+            val entity = level.getEntity(id)
+            if (entity != null && !entity.isRemoved && (entity !is net.minecraft.world.entity.LivingEntity || !entity.isDeadOrDying)) entity else null
+        }
+        if (targets.isEmpty()) return
+
+        targets.forEachIndexed { index, entity ->
+            // Make hitboxes around the blazes more obvious (inflate by 0.18)
+            val box = entity.boundingBox.inflate(0.18)
             val (r, g, b) = when (index) {
                 0 -> Triple(GREEN_R, GREEN_G, GREEN_B)
                 1 -> Triple(WHITE_R, WHITE_G, WHITE_B)
                 else -> Triple(RED_R, RED_G, RED_B)
             }
-            WorldBoxRenderer.queueFilled(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ, r, g, b, FILL_A)
-            WorldBoxRenderer.queueOutline(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ, r, g, b, OUTLINE_A)
+            WorldBoxRenderer.queueFilled(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ, r, g, b, 0.55f, throughWalls = true)
+            WorldBoxRenderer.queueOutline(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ, r, g, b, 0.95f, thickness = 0.035, throughWalls = true)
+        }
+
+        // Tracers pointing to the right ones:
+        // 1. Player eye to target 0 (current target) in green
+        if (player != null) {
+            val eye = player.eyePosition
+            val t0 = targets[0].position().add(0.0, targets[0].bbHeight / 2.0, 0.0)
+            WorldBoxRenderer.queueLine(
+                eye.x, eye.y - 0.2, eye.z,
+                t0.x, t0.y, t0.z,
+                GREEN_R, GREEN_G, GREEN_B, 0.85f,
+                thickness = 0.04,
+                throughWalls = true
+            )
+        }
+
+        // 2. Target 0 to target 1 in white
+        if (targets.size > 1) {
+            val t0 = targets[0].position().add(0.0, targets[0].bbHeight / 2.0, 0.0)
+            val t1 = targets[1].position().add(0.0, targets[1].bbHeight / 2.0, 0.0)
+            WorldBoxRenderer.queueLine(
+                t0.x, t0.y, t0.z,
+                t1.x, t1.y, t1.z,
+                WHITE_R, WHITE_G, WHITE_B, 0.85f,
+                thickness = 0.035,
+                throughWalls = true
+            )
+        }
+
+        // 3. Target 1 to target 2 in red
+        if (targets.size > 2) {
+            val t1 = targets[1].position().add(0.0, targets[1].bbHeight / 2.0, 0.0)
+            val t2 = targets[2].position().add(0.0, targets[2].bbHeight / 2.0, 0.0)
+            WorldBoxRenderer.queueLine(
+                t1.x, t1.y, t1.z,
+                t2.x, t2.y, t2.z,
+                RED_R, RED_G, RED_B, 0.85f,
+                thickness = 0.035,
+                throughWalls = true
+            )
         }
     }
 

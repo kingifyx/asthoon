@@ -142,9 +142,9 @@ object WaterBoardSolver : HudElement {
         if (nextClick != null) {
             val nextPos = nextClick.getPos(c, rot)
 
-            // Red when waiting for time, lights up green when ready to click
-            val boxR = if (isReady) 0f else 1f
-            val boxG = if (isReady) 1f else 0f
+            // Current click box: Green outline + fill (matching Noamm currentClickColor)
+            val boxR = 0f
+            val boxG = 1f
             val boxB = 0f
 
             WorldBoxRenderer.queueFilled(
@@ -158,20 +158,20 @@ object WaterBoardSolver : HudElement {
                 boxR, boxG, boxB, 1f, thickness = 0.03, throughWalls = true
             )
 
-            // Tracer from player eye to next click: RED when waiting, GREEN when ready
+            // Tracer from player eye to next click: GREEN always (matching Noamm renderTracer)
             val player = Minecraft.getInstance().player
             if (player != null) {
                 val eye = player.eyePosition
                 WorldBoxRenderer.queueLine(
                     eye.x, eye.y - 0.2, eye.z,
                     nextPos.x + 0.5, nextPos.y + 0.5, nextPos.z + 0.5,
-                    boxR, boxG, boxB, 0.85f,
+                    0f, 1f, 0f, 0.9f,
                     thickness = 0.04,
                     throughWalls = true
                 )
             }
 
-            // Line from next click to second click (Noamm style yellow/orange line)
+            // Line from next click to second click: YELLOW (matching Noamm nextColor)
             if (clicks.size > 1) {
                 val secondClick = clicks[1].first
                 if (nextClick != secondClick) {
@@ -179,8 +179,8 @@ object WaterBoardSolver : HudElement {
                     WorldBoxRenderer.queueLine(
                         nextPos.x + 0.5, nextPos.y + 0.5, nextPos.z + 0.5,
                         secondPos.x + 0.5, secondPos.y + 0.5, secondPos.z + 0.5,
-                        1f, 0.65f, 0f, 0.8f,
-                        thickness = 0.03,
+                        1f, 1f, 0f, 0.9f,
+                        thickness = 0.035,
                         throughWalls = true
                     )
                 }
@@ -191,11 +191,13 @@ object WaterBoardSolver : HudElement {
         for ((mech, times) in solution) {
             val lpos = mech.getPos(c, rot)
             times.drop(mech.clickCount).forEachIndexed { index, timeSeconds ->
+                val timeInTicks = (timeSeconds * 20).toInt()
                 val displayText = if (waterLeverStartMs == -1L) {
-                    if (timeSeconds <= 0.0) "§a§lCLICK"
+                    if (timeInTicks == 0) "§a§lCLICK"
                     else {
                         val color = if (timeSeconds < 2.0) "§c" else if (timeSeconds < 6.0) "§e" else "§a"
-                        "$color${"%.1f".format(java.util.Locale.US, timeSeconds)}s"
+                        val formatted = if (timeSeconds % 1.0 == 0.0) "${timeSeconds.toInt()}s" else "${"%.1f".format(java.util.Locale.US, timeSeconds)}s"
+                        "$color$formatted"
                     }
                 } else {
                     val remainingSec = timeSeconds - elapsed

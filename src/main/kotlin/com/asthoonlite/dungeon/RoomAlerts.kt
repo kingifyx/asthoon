@@ -177,6 +177,7 @@ object RoomAlerts {
         DungeonMap.resetRun()
         StarMobESP.resetRun()
         HigherLowerSolver.resetRun()
+        WeirdosSolver.resetRun()
         SecretAura.resetRun()
         SecretSounds.reset()
     }
