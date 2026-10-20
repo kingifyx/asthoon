@@ -36,7 +36,9 @@
     "MixinItemInHandRenderer",
     "MixinLivingEntity",
     "MixinLocalPlayer",
-    "MixinEffectsInInventory"
+    "MixinEffectsInInventory",
+    "ChatComponentAccessor",
+    "MixinChatScreen"
   ],
   "injectors": {
     "defaultRequire": 1

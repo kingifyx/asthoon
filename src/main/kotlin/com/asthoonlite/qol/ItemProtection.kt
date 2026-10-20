@@ -4,6 +4,8 @@ import com.asthoonlite.config.Config
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
 import net.minecraft.core.component.DataComponents
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.nbt.CompoundTag
 import net.minecraft.network.chat.Component
 import net.minecraft.world.inventory.ContainerInput
 import net.minecraft.world.inventory.Slot
@@ -12,48 +14,52 @@ import net.minecraft.world.item.Items
 
 object ItemProtection {
 
+    fun getExtraAttributes(stack: ItemStack): CompoundTag? {
+        val tag = stack.get(DataComponents.CUSTOM_DATA)?.copyTag() ?: return null
+        if (tag.contains("id") || tag.contains("uuid") || tag.contains("baseStatBoostPercentage")) return tag
+        val sub = tag.getCompoundOrEmpty("ExtraAttributes")
+        if (!sub.isEmpty) return sub
+        return tag
+    }
+
+    fun getUuid(stack: ItemStack): String? {
+        val tag = getExtraAttributes(stack) ?: return null
+        val uuid = tag.getStringOr("uuid", "")
+        return if (uuid.isNotBlank()) uuid else null
+    }
+
+    fun getSkyblockId(stack: ItemStack): String {
+        val tag = getExtraAttributes(stack)
+        val id = tag?.getStringOr("id", "") ?: ""
+        if (id.isNotBlank()) return id
+        return BuiltInRegistries.ITEM.getKey(stack.item).path
+    }
+
     fun isProtected(stack: ItemStack): Boolean {
         if ((!Config.itemProtectionEnabled && !Config.starredItemProtection) || stack.isEmpty) return false
 
-        val customData = stack.get(DataComponents.CUSTOM_DATA)?.copyTag()
-        if (customData != null) {
-            val extra = customData.getCompoundOrEmpty("ExtraAttributes")
-            val uuid = extra.getStringOr("uuid", "")
-            if (uuid.isNotEmpty() && uuid in Config.protectedUuids) return true
+        val uuid = getUuid(stack)
+        if (uuid != null && uuid in Config.protectedUuids) return true
 
-            val id = extra.getStringOr("id", "")
-            if (id.isNotEmpty() && id in Config.protectedIds) return true
-
-            if (Config.protectStarredItems) {
-                val upgradeLevel = extra.getIntOr("upgrade_level", 0)
-                if (upgradeLevel > 0) return true
-                val rarityUpgrades = extra.getIntOr("rarity_upgrades", 0)
-                if (rarityUpgrades > 0) return true
-            }
-        }
-
-        val name = stack.hoverName.string
-        if (Config.protectStarredItems && (name.contains("✪") || name.contains("★"))) {
-            return true
-        }
+        val id = getSkyblockId(stack)
+        if (id.isNotEmpty() && id in Config.protectedIds) return true
 
         return false
     }
 
     fun toggleProtection(stack: ItemStack): Boolean {
         if (stack.isEmpty) return false
-        val customData = stack.get(DataComponents.CUSTOM_DATA)?.copyTag()
-        val extra = customData?.getCompoundOrEmpty("ExtraAttributes")
-        val uuid = extra?.getStringOr("uuid", "") ?: ""
-        val id = extra?.getStringOr("id", "") ?: ""
 
-        val key = if (uuid.isNotEmpty()) uuid else id
-        if (key.isEmpty()) {
+        val uuid = getUuid(stack)
+        val id = getSkyblockId(stack)
+
+        val key = uuid ?: id
+        if (key.isBlank()) {
             notify("§cItem has no unique ID or UUID to protect.")
             return false
         }
 
-        val isUuid = uuid.isNotEmpty()
+        val isUuid = uuid != null
         val list = if (isUuid) Config.protectedUuids else Config.protectedIds
 
         val newState: Boolean

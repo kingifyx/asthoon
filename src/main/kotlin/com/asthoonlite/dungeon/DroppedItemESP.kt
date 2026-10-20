@@ -1,0 +1,61 @@
+package com.asthoonlite.dungeon
+
+import com.asthoonlite.config.Config
+import com.asthoonlite.qol.ItemRarityOverlay
+import com.asthoonlite.render.WorldBoxRenderer
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents
+import net.minecraft.client.Minecraft
+import net.minecraft.world.entity.item.ItemEntity
+
+object DroppedItemESP {
+
+    fun register() {
+        LevelRenderEvents.END_EXTRACTION.register {
+            if (!Config.droppedItemEsp) return@register
+            val mc = Minecraft.getInstance()
+            val level = mc.level ?: return@register
+            val player = mc.player ?: return@register
+
+            val entities = level.getEntitiesOfClass(ItemEntity::class.java, player.boundingBox.inflate(64.0))
+            for (entity in entities) {
+                if (entity.distanceToSqr(player) > 64.0 * 64.0) continue
+
+                val stack = entity.item
+                if (stack.isEmpty) continue
+
+                val quality = if (Config.dungeonItemQualityHighlight) ItemRarityOverlay.getDungeonQuality(stack) else 0
+                val isDungeon = ItemRarityOverlay.isDungeonItem(stack)
+                val rarity = ItemRarityOverlay.getRarity(stack)
+
+                if (quality == 0 && !isDungeon && rarity == null) continue
+
+                val (r, g, b) = when {
+                    quality >= 50 -> Triple(1.0f, 0.84f, 0.0f)
+                    quality >= 40 -> Triple(0.33f, 1.0f, 0.33f)
+                    quality > 0 -> Triple(0.33f, 1.0f, 1.0f)
+                    rarity != null -> {
+                        val c = rarity.color
+                        Triple(
+                            ((c shr 16) and 0xFF) / 255f,
+                            ((c shr 8) and 0xFF) / 255f,
+                            (c and 0xFF) / 255f
+                        )
+                    }
+                    else -> Triple(0.33f, 0.33f, 1.0f)
+                }
+
+                val bb = entity.boundingBox
+                val exp = 0.05
+                val minX = bb.minX - exp
+                val minY = bb.minY
+                val minZ = bb.minZ - exp
+                val maxX = bb.maxX + exp
+                val maxY = bb.maxY + exp
+                val maxZ = bb.maxZ + exp
+
+                WorldBoxRenderer.queueFilled(minX, minY, minZ, maxX, maxY, maxZ, r, g, b, 0.35f, throughWalls = true)
+                WorldBoxRenderer.queueOutline(minX, minY, minZ, maxX, maxY, maxZ, r, g, b, 1.0f, thickness = 0.02, throughWalls = true)
+            }
+        }
+    }
+}

@@ -174,6 +174,7 @@ public abstract class MixinHandledScreen {
             }
             return;
         }
+        com.asthoonlite.qol.WardrobeKeybinds.INSTANCE.onSlotClick(self, slot, slotId, actionType);
 
         String title = self.getTitle().getString();
         if (title.toLowerCase().contains("stash") && slot != null && slot.hasItem()) {
@@ -363,6 +364,7 @@ public abstract class MixinHandledScreen {
             com.asthoonlite.storage.StorageSystem.INSTANCE.onScreenOpenOrUpdate(self);
             com.asthoonlite.storage.StorageSystem.INSTANCE.renderStorageTabs(graphics, self, mouseX, mouseY, leftPos, topPos);
         }
+        com.asthoonlite.qol.WardrobeKeybinds.INSTANCE.onScreenOpen(self);
 
         if (!Config.INSTANCE.getTerminalSolverEnabled()) return;
         if (QuietMode.INSTANCE.suppressing()) return;

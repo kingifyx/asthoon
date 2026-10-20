@@ -465,6 +465,13 @@ object Config {
         var itemRarityBackground     : Boolean = false
         var itemRarityOpacity        : Float   = 0.25f
         var dungeonItemQualityHighlight : Boolean = false
+        var instantEquip             : Boolean = false
+        var condensedHealthDisplayMode : Int   = 0
+        var petHudShowBackground     : Boolean = false
+        var petHudShowLevel          : Boolean = false
+        var droppedItemEsp           : Boolean = true
+        var chatRightClickCopy       : Boolean = true
+        var loadoutBinds             : MutableMap<Int, Int> = mutableMapOf()
     }
 
     var data = Data()
@@ -1642,6 +1649,26 @@ object Config {
     var dungeonItemQualityHighlight: Boolean
         get() = data.dungeonItemQualityHighlight
         set(v) { data.dungeonItemQualityHighlight = v; save() }
+    var instantEquip: Boolean
+        get() = data.instantEquip
+        set(v) { data.instantEquip = v; save() }
+    var condensedHealthDisplayMode: Int
+        get() = data.condensedHealthDisplayMode
+        set(v) { data.condensedHealthDisplayMode = v.coerceIn(0, 2); save() }
+    var petHudShowBackground: Boolean
+        get() = data.petHudShowBackground
+        set(v) { data.petHudShowBackground = v; save() }
+    var petHudShowLevel: Boolean
+        get() = data.petHudShowLevel
+        set(v) { data.petHudShowLevel = v; save() }
+    var droppedItemEsp: Boolean
+        get() = data.droppedItemEsp
+        set(v) { data.droppedItemEsp = v; save() }
+    var chatRightClickCopy: Boolean
+        get() = data.chatRightClickCopy
+        set(v) { data.chatRightClickCopy = v; save() }
+    val loadoutBinds: MutableMap<Int, Int>
+        get() = data.loadoutBinds
 
     fun load() {
         if (!configDir.exists()) configDir.mkdirs()

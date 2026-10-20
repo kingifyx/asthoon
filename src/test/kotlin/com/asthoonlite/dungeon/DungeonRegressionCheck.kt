@@ -1605,7 +1605,13 @@ fun main() {
         check(com.asthoonlite.qol.WardrobeKeybinds.isWardrobeMenu("(1/9) Armor Sets")) { "Wardrobe title pattern match failed for armor" }
         check(com.asthoonlite.qol.WardrobeKeybinds.isWardrobeMenu("(2/4) Equipment Sets")) { "Wardrobe title pattern match failed for equipment" }
         check(com.asthoonlite.qol.WardrobeKeybinds.isWardrobeMenu("Wardrobe")) { "Wardrobe title pattern match failed for simple title" }
+        check(com.asthoonlite.qol.WardrobeKeybinds.isLoadoutMenu("(1/2) Loadouts")) { "Loadouts menu pattern match failed" }
+        check(com.asthoonlite.qol.WardrobeKeybinds.isLoadoutMenu("Loadouts")) { "Loadouts menu title match failed" }
         check(!com.asthoonlite.qol.WardrobeKeybinds.isWardrobeMenu("Chest")) { "Non-wardrobe title should return false" }
+
+        check(com.asthoonlite.qol.ItemRarityOverlay.Rarity.fromString("LEGENDARY") == com.asthoonlite.qol.ItemRarityOverlay.Rarity.LEGENDARY) { "Rarity string parse failed" }
+        check(com.asthoonlite.qol.ItemRarityOverlay.Rarity.fromString("VERY SPECIAL") == com.asthoonlite.qol.ItemRarityOverlay.Rarity.VERY_SPECIAL) { "Very special rarity parse failed" }
+        check(com.asthoonlite.qol.ItemRarityOverlay.Rarity.fromString("VERY_SPECIAL") == com.asthoonlite.qol.ItemRarityOverlay.Rarity.VERY_SPECIAL) { "Very special rarity parse failed" }
     }
 
     println("Dungeon regression checks passed: scoreboard detection, terminal timing, terminal identification, candidates and click order, melody row selection, custom terminal grid, map dimensions/bounds, mob categories, tictactoe solver, secret hitbox expansion geometry, map overlay canvas, map decoration binding, legit map base, terminal pointer flight timing, terminal motion and gui, terminal pointer motion, cursor trail fade, rounded tile arcs, real cursor handback, pointer linger, pathfinding preset taxonomy, boss splits formatting, and wardrobe title validation.")

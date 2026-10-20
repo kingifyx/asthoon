@@ -4,6 +4,7 @@ import com.asthoonlite.config.Config
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.core.component.DataComponents
+import net.minecraft.nbt.CompoundTag
 import net.minecraft.world.inventory.Slot
 import net.minecraft.world.item.ItemStack
 
@@ -21,7 +22,7 @@ object ItemRarityOverlay {
         VERY_SPECIAL(0xFFAA0000.toInt());
 
         companion object {
-            fun fromString(str: String): Rarity? = when (str.uppercase()) {
+            fun fromString(str: String): Rarity? = when (str.uppercase().replace("_", " ")) {
                 "COMMON" -> COMMON
                 "UNCOMMON" -> UNCOMMON
                 "RARE" -> RARE
@@ -30,16 +31,25 @@ object ItemRarityOverlay {
                 "MYTHIC" -> MYTHIC
                 "DIVINE" -> DIVINE
                 "SPECIAL" -> SPECIAL
-                "VERY_SPECIAL", "VERY SPECIAL" -> VERY_SPECIAL
+                "VERY SPECIAL" -> VERY_SPECIAL
                 else -> null
             }
         }
     }
 
+    fun getExtraAttributes(stack: ItemStack): CompoundTag? {
+        val tag = stack.get(DataComponents.CUSTOM_DATA)?.copyTag() ?: return null
+        if (tag.contains("id") || tag.contains("uuid") || tag.contains("baseStatBoostPercentage") || tag.contains("rarity")) {
+            return tag
+        }
+        val sub = tag.getCompoundOrEmpty("ExtraAttributes")
+        if (!sub.isEmpty) return sub
+        return tag
+    }
+
     fun getRarity(stack: ItemStack): Rarity? {
         if (stack.isEmpty) return null
-        val customData = stack.get(DataComponents.CUSTOM_DATA)?.copyTag()
-        val extra = customData?.getCompoundOrEmpty("ExtraAttributes")
+        val extra = getExtraAttributes(stack)
         if (extra != null) {
             val rarityStr = extra.getStringOr("rarity", "")
             if (rarityStr.isNotEmpty()) {
@@ -50,11 +60,12 @@ object ItemRarityOverlay {
 
         // Check lore lines
         val lore = stack.get(DataComponents.LORE)
-        if (lore != null && lore.lines.isNotEmpty()) {
-            for (line in lore.lines.reversed()) {
+        if (lore != null) {
+            for (line in lore.lines().reversed()) {
                 val str = line.string.uppercase()
                 for (r in Rarity.entries) {
-                    if (str.contains(r.name.replace("_", " "))) {
+                    val name = r.name.replace("_", " ")
+                    if (str.contains(name)) {
                         return r
                     }
                 }
@@ -66,9 +77,32 @@ object ItemRarityOverlay {
 
     fun getDungeonQuality(stack: ItemStack): Int {
         if (stack.isEmpty) return 0
-        val customData = stack.get(DataComponents.CUSTOM_DATA)?.copyTag()
-        val extra = customData?.getCompoundOrEmpty("ExtraAttributes") ?: return 0
+        val extra = getExtraAttributes(stack) ?: return 0
         return extra.getIntOr("baseStatBoostPercentage", 0)
+    }
+
+    fun isDungeonItem(stack: ItemStack): Boolean {
+        if (stack.isEmpty) return false
+        if (getDungeonQuality(stack) > 0) return true
+        val extra = getExtraAttributes(stack)
+        if (extra != null) {
+            if (extra.getIntOr("item_tier", 0) > 0) return true
+            if (extra.getIntOr("dungeon_item_level", 0) > 0) return true
+            if (extra.getStringOr("dungeon_floor", "").isNotEmpty()) return true
+        }
+        val lore = stack.get(DataComponents.LORE)
+        if (lore != null) {
+            for (line in lore.lines()) {
+                val s = line.string.uppercase()
+                if (s.contains("DUNGEON ITEM") || s.contains("DUNGEON SWORD") ||
+                    s.contains("DUNGEON BOW") || s.contains("DUNGEON HELMET") ||
+                    s.contains("DUNGEON CHESTPLATE") || s.contains("DUNGEON LEGGINGS") ||
+                    s.contains("DUNGEON BOOTS") || s.contains("DUNGEON")) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     fun drawSlotBackground(graphics: GuiGraphicsExtractor, slot: Slot) {
@@ -76,21 +110,22 @@ object ItemRarityOverlay {
         if (stack.isEmpty) return
 
         val quality = if (Config.dungeonItemQualityHighlight) getDungeonQuality(stack) else 0
-        val rarity = if (Config.itemRarityBackground) getRarity(stack) else null
+        val isDungeon = isDungeonItem(stack)
+        val rarity = getRarity(stack)
 
         val sx = slot.x
         val sy = slot.y
 
-        // Dungeon item quality highlight (less transparent, vibrant)
+        // Dungeon item quality highlight (vibrant, less transparent like Noamm)
         if (quality > 0) {
             val (fillColor, borderColor) = when {
-                quality >= 50 -> 0x75FFD700.toInt() to 0xE0FFD700.toInt() // 50% max roll: bright gold
-                quality >= 40 -> 0x6055FF55.toInt() to 0xC055FF55.toInt() // 40-49%: bright green
-                else -> 0x5055FFFF.toInt() to 0xA055FFFF.toInt()          // <40%: cyan
+                quality >= 50 -> 0x90FFD700.toInt() to 0xFFFFD700.toInt() // 50% max roll: bright gold
+                quality >= 40 -> 0x8055FF55.toInt() to 0xFF55FF55.toInt() // 40-49%: bright green
+                else -> 0x7055FFFF to 0xFF55FFFF.toInt()          // <40%: cyan
             }
             // Fill
             graphics.fill(sx, sy, sx + 16, sy + 16, fillColor)
-            // Border outline
+            // 1px Border outline
             graphics.fill(sx, sy, sx + 16, sy + 1, borderColor)
             graphics.fill(sx, sy + 15, sx + 16, sy + 16, borderColor)
             graphics.fill(sx, sy, sx + 1, sy + 16, borderColor)
@@ -98,11 +133,28 @@ object ItemRarityOverlay {
             return
         }
 
-        // Standard rarity background (good subtle transparency)
-        if (rarity != null) {
-            val alpha = (Config.itemRarityOpacity * 255).toInt().coerceIn(10, 255)
-            val fillColor = (alpha shl 24) or (rarity.color and 0x00FFFFFF)
+        // Dungeon mob drop / dungeon item without quality roll (highlighted based on rarity, less transparent)
+        if (Config.dungeonItemQualityHighlight && isDungeon && rarity != null) {
+            val fillColor = (0x75 shl 24) or (rarity.color and 0x00FFFFFF)
+            val borderColor = (0xFF shl 24) or (rarity.color and 0x00FFFFFF)
             graphics.fill(sx, sy, sx + 16, sy + 16, fillColor)
+            graphics.fill(sx, sy, sx + 16, sy + 1, borderColor)
+            graphics.fill(sx, sy + 15, sx + 16, sy + 16, borderColor)
+            graphics.fill(sx, sy, sx + 1, sy + 16, borderColor)
+            graphics.fill(sx + 15, sy, sx + 16, sy + 16, borderColor)
+            return
+        }
+
+        // Standard rarity background (user customizable opacity)
+        if (Config.itemRarityBackground && rarity != null) {
+            val alpha = (Config.itemRarityOpacity * 255).toInt().coerceIn(30, 255)
+            val fillColor = (alpha shl 24) or (rarity.color and 0x00FFFFFF)
+            val borderColor = ((alpha * 1.5f).toInt().coerceIn(60, 255) shl 24) or (rarity.color and 0x00FFFFFF)
+            graphics.fill(sx, sy, sx + 16, sy + 16, fillColor)
+            graphics.fill(sx, sy, sx + 16, sy + 1, borderColor)
+            graphics.fill(sx, sy + 15, sx + 16, sy + 16, borderColor)
+            graphics.fill(sx, sy, sx + 1, sy + 16, borderColor)
+            graphics.fill(sx + 15, sy, sx + 16, sy + 16, borderColor)
         }
     }
 

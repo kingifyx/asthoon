@@ -536,12 +536,24 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                     { Config.etherwarpEnabled }, { Config.etherwarpEnabled = it }),
                 ToggleRow("Condensed Health Bar", "Sleek health bar showing numbers and percentage",
                     { Config.condensedHealthBar }, { Config.condensedHealthBar = it }),
+                WidgetRow(ModernButton(subX, 0, subW, 24, Component.literal("Health Display: " + when (Config.condensedHealthDisplayMode) {
+                    1 -> "Percentage Only"
+                    2 -> "Integer Only"
+                    else -> "Both"
+                })) {
+                    Config.condensedHealthDisplayMode = (Config.condensedHealthDisplayMode + 1) % 3
+                    init()
+                }),
                 ToggleRow("  ↳ Hide Vanilla Hearts", "Hides the vanilla heart bar",
                     { Config.hideVanillaHearts }, { Config.hideVanillaHearts = it }),
                 ToggleRow("Hide Food Bar", "Hides the hunger/food bar completely",
                     { Config.hideFoodBar }, { Config.hideFoodBar = it }),
                 ToggleRow("Pet HUD Display", "Shows active pet on screen",
                     { Config.petDisplayEnabled }, { Config.petDisplayEnabled = it }),
+                ToggleRow("  ↳ Show Pet Background", "Shows background panel and accent bar",
+                    { Config.petHudShowBackground }, { Config.petHudShowBackground = it }),
+                ToggleRow("  ↳ Show Pet Level", "Shows [Lvl xx] prefix in pet display",
+                    { Config.petHudShowLevel }, { Config.petHudShowLevel = it }),
                 WidgetRow(ModernButton(subX, 0, subW, 24, Component.literal("Edit Pet HUD Position & Scale")) {
                     minecraft.setScreen(PetHudEditorScreen())
                 }),
@@ -551,8 +563,6 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 SectionHeader("Item Protection"),
                 ToggleRow("Starred Item Protection", "Adds star indicator in inventory and prevents voiding/dropping",
                     { Config.starredItemProtection }, { Config.starredItemProtection = it }),
-                ToggleRow("  ↳ Auto-Protect Starred Items", "Automatically protects starred and master-starred items",
-                    { Config.protectStarredItems }, { Config.protectStarredItems = it }),
                 WidgetRow(run {
                     btnStarProtectionKey = ModernButton(subX, 0, subW, 24, Component.literal(starProtectionKeyLabel())) {
                         listeningForStarProtectionKey = true
@@ -562,6 +572,8 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 }),
 
                 SectionHeader("Command Keybinds"),
+                ToggleRow("Right-Click Chat Copy", "Right-click any chat message in chat screen to copy it to clipboard",
+                    { Config.chatRightClickCopy }, { Config.chatRightClickCopy = it }),
                 WidgetRow(ModernButton(fullX, 0, fullW, 24, Component.literal("Edit Command Keybinds (GUI)...")) {
                     minecraft.setScreen(com.asthoonlite.gui.CommandKeybindsScreen(this))
                 }),
@@ -596,6 +608,8 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 }),
                 ToggleRow("Dungeon Quality Highlight", "Highlights dungeon drops based on quality (50% max roll) like Noamm",
                     { Config.dungeonItemQualityHighlight }, { Config.dungeonItemQualityHighlight = it }),
+                ToggleRow("Dropped Items ESP", "Highlights mob drops and dungeon items on the ground with glowing boxes",
+                    { Config.droppedItemEsp }, { Config.droppedItemEsp = it }),
 
                 SectionHeader("Camera & Visuals"),
                 ToggleRow("OptiFine C-Zoom", "Hold C to zoom in smoothly with mouse sensitivity scaling",
@@ -610,6 +624,8 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                     { Config.fullbrightEnabled }, { Config.fullbrightEnabled = it }),
                 ToggleRow("Right Click Swing Animation", "Plays hand swing animation when right-clicking items",
                     { Config.rightClickSwing }, { Config.rightClickSwing = it }),
+                ToggleRow("Instant Hotbar Swap", "Instantly equip held items when switching hotbar slots (1.8 style)",
+                    { Config.instantEquip }, { Config.instantEquip = it }),
                 ToggleRow("Custom Item Animations", "Custom hand scale, position, and swing duration",
                     { Config.customItemModelEnabled }, { Config.customItemModelEnabled = it }),
                 WidgetRow(IntSlider(subX, 0, subW, 24, 1, 30, Config.swingDuration, "Swing Duration: ", " ticks") {
