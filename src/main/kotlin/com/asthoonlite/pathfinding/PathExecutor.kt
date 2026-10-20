@@ -524,7 +524,7 @@ object PathExecutor {
             val toTargetHz = target.z - player.z
             val currentBpsH = player.deltaMovement.horizontalDistance() * 20.0
             if (!isAirborneBonzo && bonzoState == BonzoState.IDLE && player.onGround() && distH <= 1.8) {
-                if (launchParams.isRedirection && distH <= 1.2 && currentBpsH > 5.0) {
+                if (launchParams.isRedirection && distH <= 1.5 && currentBpsH > 4.0) {
                     mc.options.keyUp.setDown(false)
                     mc.options.keyDown.setDown(true)
                     mc.options.keySprint.setDown(false)
@@ -618,7 +618,9 @@ object PathExecutor {
             val destDx = if (nextTarget != null) nextTarget.x - player.x else 0.0
             val destDz = if (nextTarget != null) nextTarget.z - player.z else 0.0
             val destDistH = hypot(destDx, destDz)
-            val hasSufficientSpeed = if (destDistH >= 14.0 && player.onGround() && !isAirborneBonzo && !launchParams.isRedirection) {
+            val hasSufficientSpeed = if (launchParams.isRedirection) {
+                currentBpsH <= 4.0
+            } else if (destDistH >= 14.0 && player.onGround() && !isAirborneBonzo) {
                 currentBpsH >= 8.0
             } else {
                 true
@@ -797,6 +799,7 @@ object PathExecutor {
         }
 
         val canChasmJump = hasGapToTarget && isHighSpeed && player.onGround() && !isDescending &&
+            nodeType != RouteNodeType.BONZO_STAFF &&
             KinematicTrajectory.canPredictiveChasmJump(
                 level = level,
                 playerPos = Vec3(player.x, player.y, player.z),
@@ -1005,7 +1008,7 @@ object PathExecutor {
 
 
         val moveYaw = if (moveSpeedH > 0.15) (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat() else targetYaw
-        val hasLedgeAhead = !isDropping && (nodeType != RouteNodeType.BONZO_STAFF || distH > 1.8) && distH > 0.6 &&
+        val hasLedgeAhead = !isDropping && (nodeType != RouteNodeType.BONZO_STAFF) && distH > 0.6 &&
             (isLedgeOrGapAhead(level, player, moveYaw, maxLedgeDist, isDropping = isDropping) ||
              isLedgeOrGapAhead(level, player, targetYaw, maxLedgeDist, isDropping = isDropping) ||
              KinematicTrajectory.shouldPredictiveLedgeJump(level, Vec3(player.x, player.y, player.z), player.deltaMovement, Vec3(target.x, target.y, target.z), player.onGround()))
@@ -1221,7 +1224,7 @@ object PathExecutor {
             stateGroundBelow.`is`(BlockTags.STAIRS) || stateGroundBelow.`is`(BlockTags.SLABS)
 
         // Auto gap jump: trigger on WALK nodes or approach across chasms to Bonzo launch pads!
-        val canAutoGapJump = (nodeType == RouteNodeType.WALK || (nodeType == RouteNodeType.BONZO_STAFF && distH > 1.8)) && player.onGround() && isLedge && distH > 0.4 && !isCrouchNode && !isDescending
+        val canAutoGapJump = (nodeType == RouteNodeType.WALK) && player.onGround() && isLedge && distH > 0.4 && !isCrouchNode && !isDescending
         val isObstacleCollision = !isDescending && player.horizontalCollision && player.onGround() && nodeType != RouteNodeType.BREAK && !isApproachingBreak && !isSteppingOnStairsOrSlabs
         val isElevationStep = !isDescending && !isSteppingOnStairsOrSlabs && target.y > player.y + 0.60 && distH < 2.5 && player.onGround() && nodeType != RouteNodeType.BREAK && !isApproachingBreak
 
@@ -1264,7 +1267,7 @@ object PathExecutor {
             isCrossingGap = true
         }
 
-        if (!isApproaching || isBonzoRunway || (nodeType == RouteNodeType.BONZO_STAFF && distH <= 1.8) || (isApproachingStationary && !isCrossingGapToStationary)) {
+        if (!isApproaching || isBonzoRunway || nodeType == RouteNodeType.BONZO_STAFF || (isApproachingStationary && !isCrossingGapToStationary)) {
             jumpTicksRemaining = 0
             mc.options.keyJump.setDown(false)
         } else {
@@ -2257,6 +2260,11 @@ object PathExecutor {
         player.swing(InteractionHand.MAIN_HAND)
         mc.gameMode?.useItem(player, InteractionHand.MAIN_HAND)
         PathfindCapture.notifyBonzoShot("AUTO_EXECUTOR")
+
+        // Immediately flick camera forward towards flight destination so movement input and flight direction are 100% aligned
+        player.yRot = params.destYaw
+        player.xRot = 10.0f
+        bonzoLaunchYaw = params.destYaw
 
         val off = getCurrentRouteOffset(player)
         val offsetStr = if (off != null) "targetOffset=[dx=${"%+.2f".format(Locale.ROOT, off.dx)}, dy=${"%+.2f".format(Locale.ROOT, off.dy)}, dz=${"%+.2f".format(Locale.ROOT, off.dz)}, distH=${"%.2f".format(Locale.ROOT, off.distH)}m]" else ""

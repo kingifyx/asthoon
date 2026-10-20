@@ -142,7 +142,7 @@ object KinematicTrajectory {
         val neededImpulseDist = (distH - airSprintTravel).coerceAtLeast(1.0)
         val reqV0 = (neededImpulseDist / decaySum).coerceIn(0.5, 2.2)
 
-        val vApproach = 0.55
+        val vApproach = if (isRedirection) 0.0 else 0.55
         val blastImpulse = 1.45
         val cosTheta = ((reqV0 - vApproach) / blastImpulse).coerceIn(0.20, 0.95)
         val calcPitch = Math.toDegrees(Math.acos(cosTheta)).toFloat()
@@ -157,13 +157,17 @@ object KinematicTrajectory {
         }
         val minPitch = when {
             deltaY > 1.5 -> (48.0f + deltaY.toFloat() * 2.0f).coerceIn(52.0f, 62.0f)
-            isRedirection -> 35.0f
+            isRedirection -> 58.0f
             else -> 28.0f
         }
-        val boundedPitch = calcPitch.coerceIn(minPitch, maxPitchForRange)
+        val boundedPitch = if (isRedirection) {
+            calcPitch.coerceIn(58.0f, 72.0f)
+        } else {
+            calcPitch.coerceIn(minPitch, maxPitchForRange)
+        }
 
         // If recorded pitch is provided, preserve it
-        if (recordedPitch in 20.0f..88.0f) {
+        if (recordedPitch in 50.0f..88.0f) {
             return recordedPitch
         }
         return boundedPitch
@@ -196,21 +200,19 @@ object KinematicTrajectory {
             destYaw
         }
 
-        val turnAngle = Mth.wrapDegrees(destYaw - currentHeadingYaw)
+        val approachHeading = runwayHeadingYaw ?: currentHeadingYaw
+        val turnAngle = abs(Mth.wrapDegrees(destYaw - approachHeading))
+        val isStraightRunway = turnAngle <= 15.0f
+        val isRedirection = !isStraightRunway
 
-        // Desired horizontal launch velocity vector
+        // Required impulse vector from blast: ΔV = V_desired - V_current
         val targetLaunchSpeed = (targetLaunchBps / 20.0).coerceIn(0.9, 1.4)
         val destDir = if (destDistH > 0.01) Vec3(destDx / destDistH, 0.0, destDz / destDistH) else Vec3(0.0, 0.0, 1.0)
         val desiredVel = destDir.scale(targetLaunchSpeed)
-
-        // Required impulse vector from blast: ΔV = V_desired - V_current
         val currentHorizVel = Vec3(playerVel.x, 0.0, playerVel.z)
         val requiredImpulse = desiredVel.subtract(currentHorizVel)
         val impulseLen = requiredImpulse.horizontalDistance()
         val impulseDir = if (impulseLen > 0.01) requiredImpulse.scale(1.0 / impulseLen) else destDir
-
-        val isStraightRunway = runwayHeadingYaw != null && abs(Mth.wrapDegrees(destYaw - runwayHeadingYaw)) < 15.0f
-        val isRedirection = !isStraightRunway && (abs(turnAngle) >= 15.0f || (impulseLen > 0.55 && abs(turnAngle) >= 13.0f))
 
         // Predicted player position at detonation (accounting for forward velocity without overshooting the blast center)
         val blastOffsetDist = if (isRedirection) 1.25 else 1.15
