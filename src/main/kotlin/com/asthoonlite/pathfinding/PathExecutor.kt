@@ -92,6 +92,7 @@ object PathExecutor {
     private var cameraYawVelocity = 0f
     private var cameraPitchVelocity = 0f
     private var aimedThisTick = false
+    private var lastCorridorAim: Vec3? = null
 
     // Specialized node states
     private var terminalScreenWasOpen = false
@@ -172,6 +173,7 @@ object PathExecutor {
         cameraYawVelocity = 0f
         cameraPitchVelocity = 0f
         aimedThisTick = false
+        lastCorridorAim = null
         try {
             val mc = Minecraft.getInstance()
             mc.options.keyAttack.setDown(false)
@@ -798,8 +800,12 @@ object PathExecutor {
             }
         }
 
+        val isApproachingBonzoRunway = nodeType == RouteNodeType.BONZO_STAFF &&
+            !player.isInLava && !player.isInWater &&
+            distH <= 2.2 && player.y >= target.y - 1.5 && player.y <= target.y + 2.5
+
         val canChasmJump = hasGapToTarget && isHighSpeed && player.onGround() && !isDescending &&
-            nodeType != RouteNodeType.BONZO_STAFF &&
+            !isApproachingBonzoRunway &&
             KinematicTrajectory.canPredictiveChasmJump(
                 level = level,
                 playerPos = Vec3(player.x, player.y, player.z),
@@ -828,6 +834,7 @@ object PathExecutor {
                 } else null
             }
         } else null
+        lastCorridorAim = corridorAim
 
         val currentBpsH = player.deltaMovement.horizontalDistance() * 20.0
         val lookaheadDist = (currentBpsH * 0.30).coerceIn(1.8, 5.0)
@@ -1008,7 +1015,7 @@ object PathExecutor {
 
 
         val moveYaw = if (moveSpeedH > 0.15) (-Math.toDegrees(atan2(player.deltaMovement.x, player.deltaMovement.z))).toFloat() else targetYaw
-        val hasLedgeAhead = !isDropping && (nodeType != RouteNodeType.BONZO_STAFF) && distH > 0.6 &&
+        val hasLedgeAhead = !isDropping && !isApproachingBonzoRunway && distH > 0.6 &&
             (isLedgeOrGapAhead(level, player, moveYaw, maxLedgeDist, isDropping = isDropping) ||
              isLedgeOrGapAhead(level, player, targetYaw, maxLedgeDist, isDropping = isDropping) ||
              KinematicTrajectory.shouldPredictiveLedgeJump(level, Vec3(player.x, player.y, player.z), player.deltaMovement, Vec3(target.x, target.y, target.z), player.onGround()))
@@ -1034,9 +1041,6 @@ object PathExecutor {
             stationaryMovement(offset, player.deltaMovement, player.y - target.y, landingSupport)
         } else null
         val isApproaching = stationaryMotion == null || isApproachingNode(offset, stationaryMotion, player.y - target.y, landingSupport)
-        val isApproachingBonzoRunway = nodeType == RouteNodeType.BONZO_STAFF &&
-            !player.isInLava && !player.isInWater &&
-            distH <= 2.5 && player.y >= target.y - 1.5 && player.y <= target.y + 2.5
         val maxStationaryDistH = if (isDeviceNode) 0.8 else 0.35
         val isSettledStationary = isStationaryDest && distH <= maxStationaryDistH && player.deltaMovement.horizontalDistance() <= 0.10
         if (isSettledStationary && player.onGround()) {
@@ -1267,7 +1271,7 @@ object PathExecutor {
             isCrossingGap = true
         }
 
-        if (!isApproaching || isBonzoRunway || nodeType == RouteNodeType.BONZO_STAFF || (isApproachingStationary && !isCrossingGapToStationary)) {
+        if (!isApproaching || isBonzoRunway || isApproachingBonzoRunway || (isApproachingStationary && !isCrossingGapToStationary)) {
             jumpTicksRemaining = 0
             mc.options.keyJump.setDown(false)
         } else {
@@ -1534,11 +1538,37 @@ object PathExecutor {
             }
         }
 
-        // 3. If launchYaw points into open air/void (e.g. edge of a catwalk), probe the solid floor directly under player's feet
+        // 3. Test steep ground pitch directly near feet along launchYaw (82° - 88°) to hit platform edge under player
+        for (steepPitch in listOf(82.0f, 85.0f, 88.0f)) {
+            val clipVec = player.eyePosition.add(Vec3.directionFromRotation(steepPitch, launchYaw).scale(2.5))
+            val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
+            if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 2.2) {
+                return LaunchSurfaceResult(true, steepPitch, launchYaw)
+            }
+        }
+
+        // 4. If launchYaw points into open air/void (e.g. edge of a platform/catwalk over a drop):
+        // Probe towards the solid platform block under/behind player's feet
+        val standingBlockPos = BlockPos.containing(player.x, player.y - 0.5, player.z)
+        val blockState = level.getBlockState(standingBlockPos)
+        if (!blockState.isAir && !blockState.`is`(Blocks.LAVA) && !blockState.getCollisionShape(level, standingBlockPos).isEmpty) {
+            val blockCenter = Vec3.atCenterOf(standingBlockPos).add(0.0, 0.5, 0.0)
+            val toBlock = blockCenter.subtract(player.eyePosition)
+            val blockDistH = hypot(toBlock.x, toBlock.z)
+            val blockYaw = (-Math.toDegrees(atan2(toBlock.x, toBlock.z))).toFloat()
+            val blockPitch = (-Math.toDegrees(atan2(toBlock.y, blockDistH.coerceAtLeast(0.05)))).toFloat().coerceIn(60.0f, 88.0f)
+            val clipVec = player.eyePosition.add(toBlock.normalize().scale(toBlock.length() + 0.5))
+            val hit = level.clip(ClipContext(player.eyePosition, clipVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
+            if (hit.type == HitResult.Type.BLOCK && player.eyePosition.distanceTo(hit.location) <= 2.5) {
+                return LaunchSurfaceResult(true, blockPitch, blockYaw)
+            }
+        }
+
+        // 5. Final fallback directly under feet
         val downVec = player.eyePosition.add(0.0, -2.5, 0.0)
         val downHit = level.clip(ClipContext(player.eyePosition, downVec, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
         if (downHit.type == HitResult.Type.BLOCK && downHit.location.y <= player.eyePosition.y - 1.0) {
-            return LaunchSurfaceResult(true, 76.0f, launchYaw)
+            return LaunchSurfaceResult(true, 88.0f, launchYaw)
         }
 
         return LaunchSurfaceResult(false, (if (basePitch in 20.0f..88.0f) basePitch else 55.0f), launchYaw)
@@ -1867,8 +1897,8 @@ object PathExecutor {
                 val runwayHeadingYaw = if (prevNode != null && hypot(target.x - prevNode.x, target.z - prevNode.z) > 0.2) {
                     (-Math.toDegrees(atan2(target.x - prevNode.x, target.z - prevNode.z))).toFloat()
                 } else runwayYaw
-                val isStraightRunway = abs(Mth.wrapDegrees(flightYaw - runwayHeadingYaw)) < 15.0f
-                val isTurnRedirection = !isStraightRunway && turnAngle >= 14.0f
+                val isStraightRunway = abs(Mth.wrapDegrees(flightYaw - runwayHeadingYaw)) <= 30.0f
+                val isTurnRedirection = !isStraightRunway && turnAngle >= 30.0f
 
                 val preAimPlan = if (isTurnRedirection) {
                     calculateKinematicBonzoAim(
@@ -1926,7 +1956,7 @@ object PathExecutor {
 
                 val finalGoalYaw = if (target.hasLookNode) {
                     preYaw
-                } else if (distH <= 1.2) {
+                } else if (distH <= 1.2 && isTurnRedirection) {
                     val tYaw = ((1.2 - distH) / 1.2).toFloat().coerceIn(0f, 1f)
                     val blendYaw = tYaw * tYaw * (3.0f - 2.0f * tYaw)
                     runwayYaw + Mth.wrapDegrees(adjustedPreYaw - runwayYaw) * blendYaw
@@ -1989,12 +2019,16 @@ object PathExecutor {
                 } else {
                     0.0
                 }
-                val aimX = if (lookaheadBlend > 0.0 && nextTarget != null) {
+                val aimX = if (lastCorridorAim != null) {
+                    lastCorridorAim!!.x
+                } else if (lookaheadBlend > 0.0 && nextTarget != null) {
                     target.x * (1.0 - lookaheadBlend) + nextTarget.x * lookaheadBlend
                 } else {
                     target.x
                 }
-                val aimZ = if (lookaheadBlend > 0.0 && nextTarget != null) {
+                val aimZ = if (lastCorridorAim != null) {
+                    lastCorridorAim!!.z
+                } else if (lookaheadBlend > 0.0 && nextTarget != null) {
                     target.z * (1.0 - lookaheadBlend) + nextTarget.z * lookaheadBlend
                 } else {
                     target.z
@@ -2023,7 +2057,7 @@ object PathExecutor {
         val isPropelling = bonzoState == BonzoState.POST_FIRE_PROPEL
         val baseRate = if (isHighSpeed) 0.85 else 0.50
         val rate = when {
-            isPropelling -> 0.50
+            isPropelling -> 0.85
             isBreakAim -> 2.5
             isFastAim -> 0.60
             else -> baseRate
@@ -2033,13 +2067,13 @@ object PathExecutor {
         val deltaPitch = (goalPitch - player.xRot)
 
         val maxFrameYawStep = when {
-            isPropelling -> 18.0f * dtTicks
+            isPropelling -> 35.0f * dtTicks
             isBreakAim -> 60.0f * dtTicks
             isFastAim -> 25.0f * dtTicks
             else -> (if (isHighSpeed) 22.0f else 14.0f) * dtTicks
         }
         val maxFramePitchStep = when {
-            isPropelling -> 14.0f * dtTicks
+            isPropelling -> 24.0f * dtTicks
             isBreakAim -> 45.0f * dtTicks
             isFastAim -> 18.0f * dtTicks
             else -> (if (isHighSpeed) 12.0f else 8.0f) * dtTicks
@@ -2261,9 +2295,15 @@ object PathExecutor {
         mc.gameMode?.useItem(player, InteractionHand.MAIN_HAND)
         PathfindCapture.notifyBonzoShot("AUTO_EXECUTOR")
 
-        // Immediately flick camera forward towards flight destination so movement input and flight direction are 100% aligned
+        // Synchronously orient camera forward towards flight destination:
+        // Set both current and old rotation to prevent 1-frame renderer flick/stutter,
+        // and zero out any residual camera velocity
+        player.yRotO = params.destYaw
+        player.xRotO = 10.0f
         player.yRot = params.destYaw
         player.xRot = 10.0f
+        cameraYawVelocity = 0f
+        cameraPitchVelocity = 0f
         bonzoLaunchYaw = params.destYaw
 
         val off = getCurrentRouteOffset(player)

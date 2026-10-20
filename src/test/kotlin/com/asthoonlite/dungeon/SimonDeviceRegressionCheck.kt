@@ -1369,6 +1369,17 @@ internal fun simonDeviceRegressionChecks() {
     // Player 4.25m away from Simon console pad must not be marked as arrived/completed
     val simonPadDist = 4.25
     check(simonPadDist > 0.8) { "Player 4.25m away from Simon console must not satisfy the 0.8m pad arrival radius" }
+
+    // 53. Bonzo node approach runway distance guard (niggap3 Node 1 -> Node 2)
+    // At distH = 8.35m on the catwalk, isApproachingBonzoRunway must be false so chasm/ledge jump is not suppressed
+    fun isBonzoRunwayApproach(nodeType: String, distH: Double): Boolean =
+        nodeType == "BONZO_STAFF" && distH <= 2.2
+
+    val catwalkApproaching = isBonzoRunwayApproach("BONZO_STAFF", 8.35)
+    check(!catwalkApproaching) { "Catwalk approach 8.35m from Bonzo pad must not be marked as runway approach" }
+
+    val padApproaching = isBonzoRunwayApproach("BONZO_STAFF", 1.80)
+    check(padApproaching) { "Player within 2.2m of Bonzo pad must enter runway approach to hold grounded stance" }
 }
 
 
