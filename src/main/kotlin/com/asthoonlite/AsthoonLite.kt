@@ -129,8 +129,8 @@ object AsthoonLite : ClientModInitializer {
         // ── QOL & Visuals & Splits ───────────────────────────────────────────
         com.asthoonlite.qol.CommandKeybinds.register()
         com.asthoonlite.qol.WardrobeKeybinds.register()
-        com.asthoonlite.hud.CondensedHealthHud.register()
         com.asthoonlite.qol.ZoomHandler.register()
+        com.asthoonlite.hud.SpeedBarHud.register()
         com.asthoonlite.dungeon.BossSplitsHud.register()
         com.asthoonlite.dungeon.DoorESP.register()
         com.asthoonlite.dungeon.KeyPickupTracker.register()

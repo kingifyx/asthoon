@@ -29,13 +29,14 @@ object PetHudOverlay : HudElement {
     }
 
     private fun getPetLabel(pet: PetTracker.ActivePet): String {
-        return if (Config.petHudShowLevel) {
+        val raw = if (Config.petHudShowLevel) {
             pet.display
         } else {
             pet.name.ifBlank {
                 pet.display.replace(Regex("""^\[Lvl \d+\]\s*"""), "")
             }
         }
+        return raw.replace(Regex("""[♥❤\u2665\u2764\uE010]"""), "").trim()
     }
 
     fun render(context: GuiGraphicsExtractor) {

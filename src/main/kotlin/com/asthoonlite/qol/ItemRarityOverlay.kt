@@ -132,13 +132,10 @@ object ItemRarityOverlay {
         val sx = slot.x
         val sy = slot.y
 
-        // Dungeon item quality highlight (only for redundant mob drops)
+        // Dungeon item quality highlight (only for redundant mob drops: deep crimson red)
         if (Config.dungeonItemQualityHighlight && isMobDrop && quality > 0) {
-            val (fillColor, borderColor) = when {
-                quality >= 50 -> 0x90FFD700.toInt() to 0xFFFFD700.toInt() // 50% max roll: bright gold
-                quality >= 40 -> 0x8055FF55.toInt() to 0xFF55FF55.toInt() // 40-49%: bright green
-                else -> 0x7055FFFF to 0xFF55FFFF.toInt()          // <40%: cyan
-            }
+            val fillColor = 0x70B8001F.toInt()
+            val borderColor = 0xFFDC143C.toInt()
             // Fill
             graphics.fill(sx, sy, sx + 16, sy + 16, fillColor)
             // 1px Border outline

@@ -100,4 +100,11 @@ public abstract class MixinMinecraft {
         }
     }
 
+    @Inject(method = "setScreen", at = @At("HEAD"), cancellable = true)
+    private void asthoonlite$suppressStorageTransitionClose(net.minecraft.client.gui.screens.Screen screen, CallbackInfo ci) {
+        if (com.asthoonlite.storage.StorageSystem.INSTANCE.shouldSuppressScreenClose(screen)) {
+            ci.cancel();
+        }
+    }
+
 }

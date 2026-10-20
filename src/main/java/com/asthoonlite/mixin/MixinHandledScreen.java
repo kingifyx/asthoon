@@ -53,6 +53,50 @@ public abstract class MixinHandledScreen {
     private static final int NEUTRAL_COLOR = 0xE6262B36;
     private static final int LABEL_COLOR = 0xFFFFFFFF;
 
+    @Inject(method = "onClose", at = @At("HEAD"))
+    private void asthoonlite_onContainerClose(CallbackInfo ci) {
+        com.asthoonlite.qol.WardrobeKeybinds.INSTANCE.onScreenClose();
+    }
+
+    @Inject(
+        method = "hasClickedOutside(DDII)Z",
+        at = @At("HEAD"),
+        cancellable = true
+    )
+    private void asthoonlite$hasClickedOutsideStorage(double mouseX, double mouseY, int left, int top, CallbackInfoReturnable<Boolean> cir) {
+        if (com.asthoonlite.storage.StorageSystem.INSTANCE.isOverlayActive((AbstractContainerScreen<?>) (Object) this)) {
+            cir.setReturnValue(false);
+        }
+    }
+
+    @Inject(
+        method = "extractLabels(Lnet/minecraft/client/gui/GuiGraphicsExtractor;II)V",
+        at = @At("HEAD"),
+        cancellable = true
+    )
+    private void asthoonlite$cancelStorageLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY, CallbackInfo ci) {
+        if (com.asthoonlite.storage.StorageSystem.INSTANCE.isOverlayActive((AbstractContainerScreen<?>) (Object) this)) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(
+        method = "extractContents(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
+        at = @At("TAIL")
+    )
+    private void asthoonlite$renderStorageOverlay(
+        GuiGraphicsExtractor graphics,
+        int mouseX,
+        int mouseY,
+        float partialTicks,
+        CallbackInfo ci
+    ) {
+        AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
+        if (com.asthoonlite.storage.StorageSystem.INSTANCE.isOverlayActive(self)) {
+            com.asthoonlite.storage.StorageSystem.INSTANCE.renderOverlay(graphics, self, mouseX, mouseY);
+        }
+    }
+
     @Inject(
         method = "keyPressed(Lnet/minecraft/client/input/KeyEvent;)Z",
         at = @At("HEAD"),
@@ -60,6 +104,12 @@ public abstract class MixinHandledScreen {
     )
     private void asthoonlite_onContainerKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
+        if (com.asthoonlite.storage.StorageSystem.INSTANCE.isOverlayActive(self)) {
+            if (com.asthoonlite.storage.StorageSystem.INSTANCE.handleKeyPressed(event)) {
+                cir.setReturnValue(true);
+                return;
+            }
+        }
         if (com.asthoonlite.qol.CommandKeybinds.INSTANCE.handleKeyInput(event.key(), 1)) {
             cir.setReturnValue(true);
             return;
@@ -102,8 +152,8 @@ public abstract class MixinHandledScreen {
                 return;
             }
         }
-        if (com.asthoonlite.storage.StorageSystem.INSTANCE.isStorageScreen(self)) {
-            if (com.asthoonlite.storage.StorageSystem.INSTANCE.handleMouseClick(self, event.x(), event.y(), leftPos, topPos)) {
+        if (com.asthoonlite.storage.StorageSystem.INSTANCE.isOverlayActive(self)) {
+            if (com.asthoonlite.storage.StorageSystem.INSTANCE.handleMouseClick(self, event.x(), event.y(), event.button(), doubleClick)) {
                 cir.setReturnValue(true);
                 return;
             }
@@ -138,16 +188,34 @@ public abstract class MixinHandledScreen {
 
     @Inject(method = "mouseReleased(Lnet/minecraft/client/input/MouseButtonEvent;)Z", at = @At("HEAD"), cancellable = true)
     private void asthoonlite_customRelease(MouseButtonEvent event, CallbackInfoReturnable<Boolean> cir) {
+        if (com.asthoonlite.storage.StorageSystem.INSTANCE.isOverlayActive((AbstractContainerScreen<?>) (Object) this)) {
+            if (com.asthoonlite.storage.StorageSystem.INSTANCE.handleMouseRelease()) {
+                cir.setReturnValue(true);
+                return;
+            }
+        }
         if (TermGui.INSTANCE.active((AbstractContainerScreen<?>) (Object) this)) cir.setReturnValue(true);
     }
 
     @Inject(method = "mouseDragged(Lnet/minecraft/client/input/MouseButtonEvent;DD)Z", at = @At("HEAD"), cancellable = true)
     private void asthoonlite_customDrag(MouseButtonEvent event, double dx, double dy, CallbackInfoReturnable<Boolean> cir) {
+        if (com.asthoonlite.storage.StorageSystem.INSTANCE.isOverlayActive((AbstractContainerScreen<?>) (Object) this)) {
+            if (com.asthoonlite.storage.StorageSystem.INSTANCE.handleMouseDrag(event.x(), event.y(), dx, dy)) {
+                cir.setReturnValue(true);
+                return;
+            }
+        }
         if (TermGui.INSTANCE.active((AbstractContainerScreen<?>) (Object) this)) cir.setReturnValue(true);
     }
 
     @Inject(method = "mouseScrolled(DDDD)Z", at = @At("HEAD"), cancellable = true)
     private void asthoonlite_customScroll(double x, double y, double horizontal, double vertical, CallbackInfoReturnable<Boolean> cir) {
+        if (com.asthoonlite.storage.StorageSystem.INSTANCE.isOverlayActive((AbstractContainerScreen<?>) (Object) this)) {
+            if (com.asthoonlite.storage.StorageSystem.INSTANCE.handleMouseScroll(vertical)) {
+                cir.setReturnValue(true);
+                return;
+            }
+        }
         if (TermGui.INSTANCE.active((AbstractContainerScreen<?>) (Object) this)) cir.setReturnValue(true);
     }
 
@@ -269,6 +337,7 @@ public abstract class MixinHandledScreen {
         CallbackInfo ci
     ) {
         if (TerminalCursor.INSTANCE.ownsCursor()) ci.cancel();
+        if (com.asthoonlite.storage.StorageSystem.INSTANCE.isOverlayActive((AbstractContainerScreen<?>) (Object) this)) ci.cancel();
     }
 
     @Inject(
@@ -297,7 +366,8 @@ public abstract class MixinHandledScreen {
 
     @Inject(
         method = "extractSlot(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/world/inventory/Slot;II)V",
-        at = @At("HEAD")
+        at = @At("HEAD"),
+        cancellable = true
     )
     private void asthoonlite_onSlotRenderHead(
         GuiGraphicsExtractor graphics,
@@ -306,6 +376,10 @@ public abstract class MixinHandledScreen {
         int mouseY,
         CallbackInfo ci
     ) {
+        if (com.asthoonlite.storage.StorageSystem.INSTANCE.isOverlayActive((AbstractContainerScreen<?>) (Object) this)) {
+            ci.cancel();
+            return;
+        }
         com.asthoonlite.qol.ItemRarityOverlay.INSTANCE.drawSlotBackground(graphics, slot);
     }
 
@@ -362,7 +436,6 @@ public abstract class MixinHandledScreen {
         }
         if (com.asthoonlite.storage.StorageSystem.INSTANCE.isStorageScreen(self)) {
             com.asthoonlite.storage.StorageSystem.INSTANCE.onScreenOpenOrUpdate(self);
-            com.asthoonlite.storage.StorageSystem.INSTANCE.renderStorageTabs(graphics, self, mouseX, mouseY, leftPos, topPos);
         }
         com.asthoonlite.qol.WardrobeKeybinds.INSTANCE.onScreenOpen(self);
 

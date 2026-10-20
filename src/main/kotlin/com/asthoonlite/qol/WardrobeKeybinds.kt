@@ -4,6 +4,7 @@ import com.asthoonlite.config.Config
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen
+import net.minecraft.core.component.DataComponents
 import net.minecraft.sounds.SoundEvents
 import net.minecraft.world.inventory.ContainerInput
 import net.minecraft.world.inventory.Slot
@@ -18,6 +19,7 @@ object WardrobeKeybinds {
     @Volatile var pendingLoadoutIndex: Int? = null
     @Volatile var pendingLoadoutTime = 0L
     @Volatile private var closeDelayTicks = -1
+    private var targetScreenToClose: AbstractContainerScreen<*>? = null
 
     fun register() {
         ClientTickEvents.END_CLIENT_TICK.register { mc ->
@@ -25,7 +27,11 @@ object WardrobeKeybinds {
                 closeDelayTicks--
                 if (closeDelayTicks == 0) {
                     closeDelayTicks = -1
-                    mc.player?.closeContainer()
+                    val target = targetScreenToClose
+                    targetScreenToClose = null
+                    if (target != null && mc.screen === target) {
+                        mc.player?.closeContainer()
+                    }
                 }
             }
 
@@ -58,6 +64,12 @@ object WardrobeKeybinds {
 
     fun isWardrobeMenu(title: String): Boolean = isLoadoutMenu(title)
 
+    fun onScreenClose() {
+        pendingLoadoutIndex = null
+        closeDelayTicks = -1
+        targetScreenToClose = null
+    }
+
     fun triggerLoadout(index: Int) {
         val mc = Minecraft.getInstance()
         val player = mc.player ?: return
@@ -83,10 +95,19 @@ object WardrobeKeybinds {
             val player = mc.player ?: return
             val gameMode = mc.gameMode ?: return
 
+            val item = menu.slots[slot].item
+            val lore = item.get(DataComponents.LORE)?.lines()?.map { it.string.lowercase() }
+            val alreadyEquipped = lore?.any { it.contains("currently equipped") || it.contains("already equipped") } == true
+
+            pendingLoadoutIndex = null
+            if (alreadyEquipped) {
+                return
+            }
+
             gameMode.handleContainerInput(menu.containerId, slot, 0, ContainerInput.PICKUP, player)
             player.playSound(SoundEvents.ARMOR_EQUIP_GENERIC.value(), 1.0f, 1.0f)
-            pendingLoadoutIndex = null
             if (Config.wardrobeAutoClose) {
+                targetScreenToClose = screen
                 closeDelayTicks = 2
             }
         }
@@ -121,10 +142,19 @@ object WardrobeKeybinds {
                 val player = mc.player ?: return true
                 val gameMode = mc.gameMode ?: return true
 
+                val item = menu.slots[targetSlot].item
+                val lore = item.get(DataComponents.LORE)?.lines()?.map { it.string.lowercase() }
+                val alreadyEquipped = lore?.any { it.contains("currently equipped") || it.contains("already equipped") } == true
+
+                if (alreadyEquipped) {
+                    return true
+                }
+
                 gameMode.handleContainerInput(menu.containerId, targetSlot, 0, ContainerInput.PICKUP, player)
                 player.playSound(SoundEvents.ARMOR_EQUIP_GENERIC.value(), 1.0f, 1.0f)
 
                 if (Config.wardrobeAutoClose) {
+                    targetScreenToClose = screen
                     closeDelayTicks = 2
                 }
                 return true
@@ -148,11 +178,19 @@ object WardrobeKeybinds {
             (!title.lowercase().contains("loadout") && targetSlot in 36..44)
 
         if (isTarget && slot != null && slot.hasItem()) {
+            val lore = slot.item.get(DataComponents.LORE)?.lines()?.map { it.string.lowercase() }
+            val alreadyEquipped = lore?.any { it.contains("currently equipped") || it.contains("already equipped") } == true
+
+            if (alreadyEquipped) {
+                return false
+            }
+
             val mc = Minecraft.getInstance()
             val player = mc.player ?: return false
             player.playSound(SoundEvents.ARMOR_EQUIP_GENERIC.value(), 1.0f, 1.0f)
 
             if (Config.wardrobeAutoClose) {
+                targetScreenToClose = screen
                 closeDelayTicks = 2
             }
         }

@@ -534,18 +534,8 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 SectionHeader("HUD & Interface"),
                 ToggleRow("Etherwarp Highlight", "Highlights etherwarp target block with filled cube and outline",
                     { Config.etherwarpEnabled }, { Config.etherwarpEnabled = it }),
-                ToggleRow("Condensed Health Bar", "Sleek health bar showing numbers and percentage",
-                    { Config.condensedHealthBar }, { Config.condensedHealthBar = it }),
-                WidgetRow(ModernButton(subX, 0, subW, 24, Component.literal("Health Display: " + when (Config.condensedHealthDisplayMode) {
-                    1 -> "Percentage Only"
-                    2 -> "Integer Only"
-                    else -> "Both"
-                })) {
-                    Config.condensedHealthDisplayMode = (Config.condensedHealthDisplayMode + 1) % 3
-                    init()
-                }),
-                ToggleRow("  ↳ Hide Vanilla Hearts", "Hides the vanilla heart bar",
-                    { Config.hideVanillaHearts }, { Config.hideVanillaHearts = it }),
+                ToggleRow("Speed Bar", "Sleek HUD bar displaying current player movement speed",
+                    { Config.speedBarEnabled }, { Config.speedBarEnabled = it }),
                 ToggleRow("Hide Food Bar", "Hides the hunger/food bar completely",
                     { Config.hideFoodBar }, { Config.hideFoodBar = it }),
                 ToggleRow("Pet HUD Display", "Shows active pet on screen",

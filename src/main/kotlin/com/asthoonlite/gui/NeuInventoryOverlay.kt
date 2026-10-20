@@ -38,11 +38,16 @@ object NeuInventoryOverlay {
         val mc = Minecraft.getInstance()
         val font = mc.font
 
+        // Note: extractSlots already translated pose by (leftPos, topPos)
+        // so coordinates are relative to inventory top-left (0, 0)
+        val relMouseX = mouseX - leftPos
+        val relMouseY = mouseY - topPos
+
         val btnWidth = 24
         val btnHeight = 22
         val gap = 4
-        val startX = leftPos - btnWidth - 6
-        var startY = topPos + 10
+        val startX = -btnWidth - 6
+        var startY = 10
 
         // Draw sidebar container background
         val totalH = buttons.size * (btnHeight + gap) + 4
@@ -50,7 +55,7 @@ object NeuInventoryOverlay {
         outlineRoundedRect(graphics, startX - 3, startY - 3, startX + btnWidth + 3, startY + totalH, 0xFF1E90FF.toInt(), 4)
 
         for (btn in buttons) {
-            val isHovered = mouseX in startX..(startX + btnWidth) && mouseY in startY..(startY + btnHeight)
+            val isHovered = relMouseX in startX..(startX + btnWidth) && relMouseY in startY..(startY + btnHeight)
             val bg = if (isHovered) 0xFF0D3B66.toInt() else 0xDD121B28.toInt()
             val border = if (isHovered) 0xFF00FFFF.toInt() else 0x882A3A4E.toInt()
 
@@ -73,9 +78,9 @@ object NeuInventoryOverlay {
             startY += btnHeight + gap
         }
 
-        // Equipment panel on right
-        val eqX = leftPos + 180
-        val eqY = topPos + 10
+        // Equipment panel on right (vanilla inventory width is 176)
+        val eqX = 176 + 6
+        val eqY = 10
         val eqWidth = 24
 
         val eqTotalH = equipmentButtons.size * (btnHeight + gap) + 4
@@ -84,7 +89,7 @@ object NeuInventoryOverlay {
 
         var curEqY = eqY
         for (eq in equipmentButtons) {
-            val isHovered = mouseX in eqX..(eqX + eqWidth) && mouseY in curEqY..(curEqY + btnHeight)
+            val isHovered = relMouseX in eqX..(eqX + eqWidth) && relMouseY in curEqY..(curEqY + btnHeight)
             val bg = if (isHovered) 0xFF004D40.toInt() else 0xDD121B28.toInt()
             val border = if (isHovered) 0xFF00E676.toInt() else 0x882A3A4E.toInt()
 
@@ -109,14 +114,17 @@ object NeuInventoryOverlay {
 
     fun handleMouseClick(screen: InventoryScreen, mouseX: Double, mouseY: Double, leftPos: Int, topPos: Int): Boolean {
         if (!Config.neuInventoryGui) return false
+        val relX = mouseX - leftPos
+        val relY = mouseY - topPos
+
         val btnWidth = 24
         val btnHeight = 22
         val gap = 4
-        val startX = leftPos - btnWidth - 6
-        var startY = topPos + 10
+        val startX = -btnWidth - 6
+        var startY = 10
 
         for (btn in buttons) {
-            if (mouseX >= startX && mouseX <= startX + btnWidth && mouseY >= startY && mouseY <= startY + btnHeight) {
+            if (relX >= startX && relX <= startX + btnWidth && relY >= startY && relY <= startY + btnHeight) {
                 val player = Minecraft.getInstance().player ?: return true
                 player.closeContainer()
                 player.connection.sendCommand(btn.command)
@@ -125,11 +133,11 @@ object NeuInventoryOverlay {
             startY += btnHeight + gap
         }
 
-        val eqX = leftPos + 180
-        val eqY = topPos + 10
+        val eqX = 176 + 6
+        val eqY = 10
         val eqWidth = 24
         val eqTotalH = equipmentButtons.size * (btnHeight + gap)
-        if (mouseX >= eqX && mouseX <= eqX + eqWidth && mouseY >= eqY && mouseY <= eqY + eqTotalH) {
+        if (relX >= eqX && relX <= eqX + eqWidth && relY >= eqY && relY <= eqY + eqTotalH) {
             val player = Minecraft.getInstance().player ?: return true
             player.closeContainer()
             player.connection.sendCommand("equipment")

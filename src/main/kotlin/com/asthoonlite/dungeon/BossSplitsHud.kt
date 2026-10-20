@@ -233,18 +233,6 @@ object BossSplitsHud : HudElement {
             maxWidth = maxOf(maxWidth, font.width(line))
         }
 
-        val totalHeight = lines.size * (font.lineHeight + 2) + 6
-        fillRoundedRect(
-            context,
-            -4, -4, maxWidth + 6, totalHeight,
-            0xDD0D1F35.toInt(), 4
-        )
-        outlineRoundedRect(
-            context,
-            -4, -4, maxWidth + 6, totalHeight,
-            0xFF1E90FF.toInt(), 4
-        )
-
         var curY = 0
         for (line in lines) {
             context.text(font, line, 0, curY, 0xFFFFFFFF.toInt())

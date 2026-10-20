@@ -96,6 +96,14 @@ object AslCommand {
                                 }
                         )
                         .then(
+                            ClientCommands.literal("storage")
+                                .executes { _ ->
+                                    val mc = Minecraft.getInstance()
+                                    mc.execute { mc.setScreen(com.asthoonlite.storage.StorageOverlayScreen()) }
+                                    1
+                                }
+                        )
+                        .then(
                             ClientCommands.literal("protect")
                                 .executes { _ ->
                                     val mc = Minecraft.getInstance()

@@ -133,16 +133,36 @@ object ItemProtection {
 
     fun isSellMenu(screen: AbstractContainerScreen<*>): Boolean {
         val title = screen.title.string.lowercase()
-        if (title.contains("trades") || title.contains("shop") || title.contains("merchant") || title.contains("sell")) {
+        if (title.contains("trades") || title.contains("shop") || title.contains("merchant") ||
+            title.contains("sell") || title.contains("ophelia") || title.contains("cookie") ||
+            title.contains("bazaar") || title.contains("forge") || title.contains("blacksmith") ||
+            title.contains("alchemist") || title.contains("librarian") || title.contains("armorsmith") ||
+            title.contains("weaponsmith") || title.contains("builder")) {
             return true
         }
+
         val slots = screen.menu.slots
-        val checkLimit = minOf(54, slots.size)
+        val upperSlotCount = maxOf(0, slots.size - 36)
+        val checkLimit = minOf(54, upperSlotCount)
         for (i in 0 until checkLimit) {
             val item = slots[i].item
             if (item.isEmpty) continue
-            if (item.`is`(Items.HOPPER) && item.hoverName.string.contains("Sell Item", ignoreCase = true)) {
+
+            val name = item.hoverName.string.lowercase()
+            if (name.contains("sell item") || name.contains("sell inventory") || name.contains("buyback")) {
                 return true
+            }
+
+            val loreComp = item.get(DataComponents.LORE)
+            if (loreComp != null) {
+                for (line in loreComp.lines()) {
+                    val s = line.string.lowercase()
+                    if (s.contains("click to buy") || s.contains("click to buyback") ||
+                        s.contains("click an item in your inventory to sell") ||
+                        s.contains("click to sell") || s.contains("cost:") || s.contains("buy price")) {
+                        return true
+                    }
+                }
             }
         }
         return false

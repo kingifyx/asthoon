@@ -29,20 +29,7 @@ object DroppedItemESP {
                 val quality = ItemRarityOverlay.getDungeonQuality(stack)
                 val rarity = ItemRarityOverlay.getRarity(stack)
 
-                val (r, g, b) = when {
-                    quality >= 50 -> Triple(1.0f, 0.84f, 0.0f)
-                    quality >= 40 -> Triple(0.33f, 1.0f, 0.33f)
-                    quality > 0 -> Triple(0.33f, 1.0f, 1.0f)
-                    rarity != null -> {
-                        val c = rarity.color
-                        Triple(
-                            ((c shr 16) and 0xFF) / 255f,
-                            ((c shr 8) and 0xFF) / 255f,
-                            (c and 0xFF) / 255f
-                        )
-                    }
-                    else -> Triple(0.33f, 0.33f, 1.0f)
-                }
+                val (r, g, b) = Triple(0.85f, 0.08f, 0.15f) // Deep crimson red
 
                 val bb = entity.boundingBox
                 val exp = 0.05

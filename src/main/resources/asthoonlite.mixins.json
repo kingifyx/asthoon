@@ -37,6 +37,7 @@
     "MixinLivingEntity",
     "MixinLocalPlayer",
     "MixinEffectsInInventory",
+    "MixinContainerScreen",
     "ChatComponentAccessor",
     "MixinChatScreen",
     "MixinRenderSectionRegion",

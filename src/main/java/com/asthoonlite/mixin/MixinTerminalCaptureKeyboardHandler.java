@@ -17,4 +17,13 @@ public class MixinTerminalCaptureKeyboardHandler {
         GoldorRouteShortcut.onKeyboardInput(window, key.key(), action);
         TerminalCapture.rawKey(window, key.key(), key.scancode(), key.modifiers(), action, System.nanoTime());
     }
+
+    @Inject(method = "charTyped(JLnet/minecraft/client/input/CharacterEvent;)V", at = @At("HEAD"), cancellable = true)
+    private void asthoonlite$storageCharTyped(long window, net.minecraft.client.input.CharacterEvent event, CallbackInfo ci) {
+        if (com.asthoonlite.storage.StorageSystem.INSTANCE.isSearchFocused()) {
+            if (com.asthoonlite.storage.StorageSystem.INSTANCE.handleCharTyped(event)) {
+                ci.cancel();
+            }
+        }
+    }
 }

@@ -472,6 +472,10 @@ object Config {
         var droppedItemEsp           : Boolean = true
         var chatRightClickCopy       : Boolean = true
         var loadoutBinds             : MutableMap<Int, Int> = mutableMapOf()
+        var speedBarEnabled          : Boolean = true
+        var speedBarX                : Int     = 10
+        var speedBarY                : Int     = 200
+        var speedBarScale            : Float   = 1.0f
     }
 
     var data = Data()
@@ -1669,6 +1673,18 @@ object Config {
         set(v) { data.chatRightClickCopy = v; save() }
     val loadoutBinds: MutableMap<Int, Int>
         get() = data.loadoutBinds
+    var speedBarEnabled: Boolean
+        get() = data.speedBarEnabled
+        set(v) { data.speedBarEnabled = v; save() }
+    var speedBarX: Int
+        get() = data.speedBarX
+        set(v) { data.speedBarX = v; save() }
+    var speedBarY: Int
+        get() = data.speedBarY
+        set(v) { data.speedBarY = v; save() }
+    var speedBarScale: Float
+        get() = data.speedBarScale
+        set(v) { data.speedBarScale = v; save() }
 
     fun load() {
         if (!configDir.exists()) configDir.mkdirs()
