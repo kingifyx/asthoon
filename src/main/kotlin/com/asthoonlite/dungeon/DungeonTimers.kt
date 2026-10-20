@@ -39,6 +39,14 @@ object DungeonTimers : HudElement {
     private var secretTick = -1
     private var runStartMillis = 0L
 
+    // User-requested Storm (P2) tick timer, Waiting for P3 tick timer, and Goldor death tick timer
+    private var p2StormTicks = -1
+    private var p2StormActive = false
+    private var waitP3Ticks = -1
+    private var waitP3Active = false
+    private var goldorDeathTicks = -1
+    private var goldorActive = false
+
     fun register() {
         HudElementRegistry.addLast(
             Identifier.fromNamespaceAndPath(AsthoonLite.MOD_ID, "dungeon_timers"), this
@@ -62,6 +70,13 @@ object DungeonTimers : HudElement {
             if (deathTick == 0) deathTick = 40
             if (secretTick > 0) secretTick--
             if (secretTick == 0 && !isBoss()) secretTick = 20
+
+            if (p2StormActive) p2StormTicks++
+            if (waitP3Active) waitP3Ticks++
+            if (goldorActive) {
+                goldorDeathTicks--
+                if (goldorDeathTicks <= 0) goldorDeathTicks = 60
+            }
         }
     }
 
@@ -92,18 +107,30 @@ object DungeonTimers : HudElement {
             "[BOSS] Storm: Pathetic Maxor, just like expected." -> {
                 stormPad = 20
                 stormActive = true
+                p2StormTicks = 0
+                p2StormActive = true
             }
             "[BOSS] Storm: I should have known that I stood no chance." -> {
                 goldor = 104
                 stormActive = false
                 stormPad = -1
                 stormElapsedTicks = -1
+                p2StormActive = false
+                waitP3Ticks = 0
+                waitP3Active = true
             }
             "[BOSS] Goldor: Who dares trespass into my domain?" -> {
                 goldorFrenzy = 60
+                waitP3Active = false
+                goldorActive = true
+                goldorDeathTicks = 60
             }
             "[BOSS] Necron: I'm afraid, your journey ends now." -> necron = 60
-            "The Core entrance is opening!" -> goldorFrenzy = -1
+            "The Core entrance is opening!" -> {
+                goldorFrenzy = -1
+                goldorActive = false
+                goldorDeathTicks = -1
+            }
         }
     }
 
@@ -121,6 +148,9 @@ object DungeonTimers : HudElement {
         stormElapsedTicks = -1; stormActive = false
         deathTick = -1; secretTick = -1
         runStartMillis = System.currentTimeMillis()
+        p2StormTicks = -1; p2StormActive = false
+        waitP3Ticks = -1; waitP3Active = false
+        goldorDeathTicks = -1; goldorActive = false
     }
 
     private fun fmt(ticks: Int): String = String.format("%.2fs", ticks / 20f)
@@ -132,6 +162,26 @@ object DungeonTimers : HudElement {
         if (mc.level == null || mc.player == null) return
 
         val lines = ArrayList<String>()
+        if (p2StormTicks >= 0) {
+            val sec = String.format("%.2fs", p2StormTicks / 20f)
+            val state = if (p2StormActive) "§9Storm (P2): §f${p2StormTicks}t (§b$sec§f)" else "§7Storm (P2) Done: §f${p2StormTicks}t (§b$sec§f)"
+            lines += state
+        }
+        if (waitP3Ticks >= 0) {
+            val sec = String.format("%.2fs", waitP3Ticks / 20f)
+            val state = if (waitP3Active) "§eWaiting P3: §f${waitP3Ticks}t (§b$sec§f)" else "§7Wait P3 Done: §f${waitP3Ticks}t (§b$sec§f)"
+            lines += state
+        }
+        if (goldorDeathTicks >= 0) {
+            val dt = goldorDeathTicks
+            val color = when {
+                dt > 30 -> "§a"
+                dt in 15..30 -> "§e"
+                else -> "§c"
+            }
+            val sec = String.format("%.2fs", dt / 20f)
+            lines += "$color Death Tick: §f${dt}t ($color$sec§f)"
+        }
         if (maxor > 0) lines += "Maxor ${fmt(maxor)}"
         if (storm > 0) lines += "Storm ${fmt(storm)}"
         if (stormElapsedTicks >= 0) {

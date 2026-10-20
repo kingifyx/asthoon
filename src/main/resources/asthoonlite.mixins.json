@@ -24,7 +24,18 @@
     "MinecraftAccessor",
     "AbstractContainerScreenAccessor",
     "GuiGraphicsExtractorAccessor",
-    "IMEPreeditOverlayAccessor"
+    "IMEPreeditOverlayAccessor",
+    "MixinGui",
+    "MixinScreenEffectRenderer",
+    "MixinEntityRenderDispatcher",
+    "MixinParticleEngine",
+    "MixinSoundManager",
+    "MixinCamera",
+    "MixinMouseHandler",
+    "MixinLightmap",
+    "MixinItemInHandRenderer",
+    "MixinLivingEntity",
+    "MixinLocalPlayer"
   ],
   "injectors": {
     "defaultRequire": 1

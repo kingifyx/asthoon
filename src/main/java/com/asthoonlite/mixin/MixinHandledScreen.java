@@ -60,6 +60,22 @@ public abstract class MixinHandledScreen {
     )
     private void asthoonlite_onContainerKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
+        if (com.asthoonlite.qol.CommandKeybinds.INSTANCE.handleKeyInput(event.key(), 1)) {
+            cir.setReturnValue(true);
+            return;
+        }
+        if (com.asthoonlite.qol.WardrobeKeybinds.INSTANCE.handleKeyPressed(self, event.key())) {
+            cir.setReturnValue(true);
+            return;
+        }
+        if (event.key() == Config.INSTANCE.getProtectKeybind()) {
+            Slot hovered = ((AbstractContainerScreenAccessor) self).getHoveredSlot();
+            if (hovered != null && hovered.hasItem()) {
+                com.asthoonlite.qol.ItemProtection.INSTANCE.toggleProtection(hovered.getItem());
+                cir.setReturnValue(true);
+                return;
+            }
+        }
         if (TermGui.INSTANCE.active(self)) {
             TermGui.INSTANCE.keyPressed(self, event);
             cir.setReturnValue(true);
@@ -77,6 +93,22 @@ public abstract class MixinHandledScreen {
     )
     private void asthoonlite_onContainerMouseClicked(MouseButtonEvent event, boolean doubleClick, CallbackInfoReturnable<Boolean> cir) {
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
+        int leftPos = ((AbstractContainerScreenAccessor) self).getLeftPos();
+        int topPos = ((AbstractContainerScreenAccessor) self).getTopPos();
+
+        if (self instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen inv) {
+            if (com.asthoonlite.gui.NeuInventoryOverlay.INSTANCE.handleMouseClick(inv, event.x(), event.y(), leftPos, topPos)) {
+                cir.setReturnValue(true);
+                return;
+            }
+        }
+        if (com.asthoonlite.storage.StorageSystem.INSTANCE.isStorageScreen(self)) {
+            if (com.asthoonlite.storage.StorageSystem.INSTANCE.handleMouseClick(self, event.x(), event.y(), leftPos, topPos)) {
+                cir.setReturnValue(true);
+                return;
+            }
+        }
+
         if (InputCapture.INSTANCE.isCapturing()) {
             InputCapture.INSTANCE.onTerminalMousePress(event.button(), event.x(), event.y());
         }
@@ -132,6 +164,10 @@ public abstract class MixinHandledScreen {
         CallbackInfo ci
     ) {
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
+        if (com.asthoonlite.qol.ItemProtection.INSTANCE.shouldBlockSlotClick(self, slot, slotId, actionType)) {
+            ci.cancel();
+            return;
+        }
         if (self.getTitle().getString().startsWith("Pets")) {
             if (slot != null) {
                 PetTracker.INSTANCE.handleSlotClick(self, slot, slotId);
@@ -269,6 +305,9 @@ public abstract class MixinHandledScreen {
         int mouseY,
         CallbackInfo ci
     ) {
+        if (com.asthoonlite.qol.ItemProtection.INSTANCE.isProtected(slot.getItem())) {
+            graphics.text(Minecraft.getInstance().font, "§aP", slot.x + 1, slot.y + 1, 0xFF55FF55);
+        }
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
         if (self.getTitle().getString().toLowerCase().contains("stash")) {
             InventoryAutoClicker.INSTANCE.clearSkymyceWorthlessItems();
@@ -301,9 +340,20 @@ public abstract class MixinHandledScreen {
         int mouseY,
         CallbackInfo ci
     ) {
+        AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
+        int leftPos = ((AbstractContainerScreenAccessor) self).getLeftPos();
+        int topPos = ((AbstractContainerScreenAccessor) self).getTopPos();
+
+        if (self instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen inv) {
+            com.asthoonlite.gui.NeuInventoryOverlay.INSTANCE.render(graphics, inv, mouseX, mouseY, leftPos, topPos);
+        }
+        if (com.asthoonlite.storage.StorageSystem.INSTANCE.isStorageScreen(self)) {
+            com.asthoonlite.storage.StorageSystem.INSTANCE.onScreenOpenOrUpdate(self);
+            com.asthoonlite.storage.StorageSystem.INSTANCE.renderStorageTabs(graphics, self, mouseX, mouseY, leftPos, topPos);
+        }
+
         if (!Config.INSTANCE.getTerminalSolverEnabled()) return;
         if (QuietMode.INSTANCE.suppressing()) return;
-        AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
         String title = self.getTitle().getString();
         TerminalSolver.Kind kind = TerminalSolver.INSTANCE.kindOf(title);
         if (kind == null) return;

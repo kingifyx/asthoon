@@ -1588,7 +1588,27 @@ fun main() {
         }
     }
 
-    println("Dungeon regression checks passed: scoreboard detection, terminal timing, terminal identification, candidates and click order, melody row selection, custom terminal grid, map dimensions/bounds, mob categories, tictactoe solver, secret hitbox expansion geometry, map overlay canvas, map decoration binding, legit map base, terminal pointer flight timing, terminal motion and gui, terminal pointer motion, cursor trail fade, rounded tile arcs, real cursor handback, pointer linger, and pathfinding preset taxonomy.")
+    // ── Boss Splits DualDiff Formatting & Wardrobe Titles ──
+    run {
+        val diffSec = com.asthoonlite.dungeon.BossSplitsHud.DualDiff(25400L, 508L)
+        val formattedSec = diffSec.format()
+        check(formattedSec.contains("25.4s") && formattedSec.contains("(508t)")) {
+            "DualDiff must format sub-minute times with tenths and tick count, got $formattedSec"
+        }
+
+        val diffMin = com.asthoonlite.dungeon.BossSplitsHud.DualDiff(65200L, 1304L)
+        val formattedMin = diffMin.format()
+        check(formattedMin.contains("1:05.2") && formattedMin.contains("(1304t)")) {
+            "DualDiff must format minute+ times with mm:ss.s and tick count, got $formattedMin"
+        }
+
+        check(com.asthoonlite.qol.WardrobeKeybinds.isWardrobeMenu("(1/9) Armor Sets")) { "Wardrobe title pattern match failed for armor" }
+        check(com.asthoonlite.qol.WardrobeKeybinds.isWardrobeMenu("(2/4) Equipment Sets")) { "Wardrobe title pattern match failed for equipment" }
+        check(com.asthoonlite.qol.WardrobeKeybinds.isWardrobeMenu("Wardrobe")) { "Wardrobe title pattern match failed for simple title" }
+        check(!com.asthoonlite.qol.WardrobeKeybinds.isWardrobeMenu("Chest")) { "Non-wardrobe title should return false" }
+    }
+
+    println("Dungeon regression checks passed: scoreboard detection, terminal timing, terminal identification, candidates and click order, melody row selection, custom terminal grid, map dimensions/bounds, mob categories, tictactoe solver, secret hitbox expansion geometry, map overlay canvas, map decoration binding, legit map base, terminal pointer flight timing, terminal motion and gui, terminal pointer motion, cursor trail fade, rounded tile arcs, real cursor handback, pointer linger, pathfinding preset taxonomy, boss splits formatting, and wardrobe title validation.")
 }
 
 /**

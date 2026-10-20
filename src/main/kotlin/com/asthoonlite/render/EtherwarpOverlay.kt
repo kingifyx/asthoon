@@ -33,6 +33,12 @@ object EtherwarpOverlay {
     private const val OUTLINE_B = 1f
     private const val OUTLINE_A = 1.0f
 
+    // Darker navy fill for the whole block volume
+    private const val FILL_R = 0x10 / 255f
+    private const val FILL_G = 0x28 / 255f
+    private const val FILL_B = 0x55 / 255f
+    private const val FILL_A = 0.38f
+
     @Volatile private var targetPos: BlockPos? = null
 
     fun register() {
@@ -70,15 +76,13 @@ object EtherwarpOverlay {
 
     private fun queueBox(pos: BlockPos) {
         // Expand the target slightly so the box stays visible instead of
-        // z-fighting with the block faces. The outline is intentionally
-        // outside the block mesh while the fill remains inside it.
+        // z-fighting with the block faces.
         val pad = 0.035
         val x1 = pos.x.toDouble() - pad; val y1 = pos.y.toDouble() - pad; val z1 = pos.z.toDouble() - pad
         val x2 = pos.x.toDouble() + 1.0 + pad; val y2 = pos.y.toDouble() + 1.0 + pad; val z2 = pos.z.toDouble() + 1.0 + pad
 
-        // Outline-only rendering avoids painting over the target block's own
-        // mesh. The tiny outward expansion keeps the border from z-fighting
-        // with the block face.
+        // Highlight the entire block volume with a darker navy fill, surrounded by a brighter accent outline
+        WorldBoxRenderer.queueFilled(x1, y1, z1, x2, y2, z2, FILL_R, FILL_G, FILL_B, FILL_A, throughWalls = true)
         WorldBoxRenderer.queueOutline(x1, y1, z1, x2, y2, z2, OUTLINE_R, OUTLINE_G, OUTLINE_B, OUTLINE_A, thickness = 0.035, throughWalls = true)
     }
 }

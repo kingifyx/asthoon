@@ -126,6 +126,12 @@ object AsthoonLite : ClientModInitializer {
         WeaponAutoClicker.register()
         InventoryAutoClicker.register()
 
+        // ── QOL & Visuals & Splits ───────────────────────────────────────────
+        com.asthoonlite.qol.CommandKeybinds.register()
+        com.asthoonlite.hud.CondensedHealthHud.register()
+        com.asthoonlite.qol.ZoomHandler.register()
+        com.asthoonlite.dungeon.BossSplitsHud.register()
+
         com.asthoonlite.utils.InputCapture.register()
         com.asthoonlite.pathfinding.PathPresetManager.init()
         com.asthoonlite.pathfinding.PathfindCapture.register()

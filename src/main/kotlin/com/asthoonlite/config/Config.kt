@@ -34,211 +34,211 @@ object Config {
         File(configDir, "asthoonLite.json")
     }
 
-    data class Data(
+    class Data {
         // ── QOL ───────────────────────────────────────────────────────────
         // Everything below defaults to OFF: a fresh install of the mod does
         // nothing until you turn features on yourself via /asl.
-        var etherwarpEnabled        : Boolean = false,
-        var petDisplayEnabled       : Boolean = false,
-        var petMenuHighlightEnabled : Boolean = false,
-        var petDisplayX             : Int     = 4,
-        var petDisplayY             : Int     = 4,
-        var petDisplayScale         : Float   = 1.0f,
+        var etherwarpEnabled        : Boolean = false
+        var petDisplayEnabled       : Boolean = false
+        var petMenuHighlightEnabled : Boolean = false
+        var petDisplayX             : Int     = 4
+        var petDisplayY             : Int     = 4
+        var petDisplayScale         : Float   = 1.0f
 
         // ── Dungeon ───────────────────────────────────────────────────────
-        var roomClearAlertEnabled   : Boolean = false,
-        var roomClearNoBlood        : Boolean = false,
-        var roomClearOnlyKey        : Boolean = false,
-        var roomSecretAlertEnabled  : Boolean = false,
-        var secretItemPickupSoundEnabled : Boolean = false,
-        var quizSolverEnabled       : Boolean = false,
-        var weirdosSolverEnabled    : Boolean = false,
-        var higherLowerSolverEnabled: Boolean = false,
-        var ticTacToeSolverEnabled  : Boolean = false,
-        var iceFillSolverEnabled    : Boolean = false,
-        var icePathSolverEnabled    : Boolean = false,
-        var waterBoardSolverEnabled : Boolean = false,
-        var boulderSolverEnabled    : Boolean = false,
-        var creeperBeamSolverEnabled: Boolean = false,
-        var teleportMazeSolverEnabled: Boolean = false,
-        var lividSolverEnabled      : Boolean = false,
-        var starMobEspEnabled       : Boolean = false,
-        var starMobEspThroughWalls : Boolean = false,
+        var roomClearAlertEnabled   : Boolean = false
+        var roomClearNoBlood        : Boolean = false
+        var roomClearOnlyKey        : Boolean = false
+        var roomSecretAlertEnabled  : Boolean = false
+        var secretItemPickupSoundEnabled : Boolean = false
+        var quizSolverEnabled       : Boolean = false
+        var weirdosSolverEnabled    : Boolean = false
+        var higherLowerSolverEnabled: Boolean = false
+        var ticTacToeSolverEnabled  : Boolean = false
+        var iceFillSolverEnabled    : Boolean = false
+        var icePathSolverEnabled    : Boolean = false
+        var waterBoardSolverEnabled : Boolean = false
+        var boulderSolverEnabled    : Boolean = false
+        var creeperBeamSolverEnabled: Boolean = false
+        var teleportMazeSolverEnabled: Boolean = false
+        var lividSolverEnabled      : Boolean = false
+        var starMobEspEnabled       : Boolean = false
+        var starMobEspThroughWalls : Boolean = false
         // false = one flat color for every starred/miniboss mob (starMobColor).
         // true  = color-coded by mob category, like devonian's BoxStarMob.
-        var starMobEspByType        : Boolean = false,
-        var starMobLineWidth        : Double  = 3.0,
-        var starMobFillAlpha        : Double  = 0.25,
-        var starMobShowFullShadow   : Boolean = true,
-        var starMobColor            : Int     = 0xFF00FFFF.toInt(), // cyan
-        var starMobChonkColor       : Int     = 0xFFFF0080.toInt(), // withermancer/lord/commander/super archer
-        var starMobFelColor         : Int     = 0xFF00FF80.toInt(),
-        var starMobMinibossColor    : Int     = 0xFFEB01A5.toInt(), // lost adventurer/diamond guy/king midas
-        var starMobShadowAssassinColor : Int  = 0xFFFF0000.toInt(),
-        var starMobSmColor          : Int     = 0xFFFF8000.toInt(), // skeleton master
+        var starMobEspByType        : Boolean = false
+        var starMobLineWidth        : Double  = 3.0
+        var starMobFillAlpha        : Double  = 0.25
+        var starMobShowFullShadow   : Boolean = true
+        var starMobColor            : Int     = 0xFF00FFFF.toInt() // cyan
+        var starMobChonkColor       : Int     = 0xFFFF0080.toInt() // withermancer/lord/commander/super archer
+        var starMobFelColor         : Int     = 0xFF00FF80.toInt()
+        var starMobMinibossColor    : Int     = 0xFFEB01A5.toInt() // lost adventurer/diamond guy/king midas
+        var starMobShadowAssassinColor : Int  = 0xFFFF0000.toInt()
+        var starMobSmColor          : Int     = 0xFFFF8000.toInt() // skeleton master
 
-        var dungeonMapEnabled       : Boolean = false,
-        var dungeonMapAlwaysShow    : Boolean = true,
-        var dungeonMapFullGrid      : Boolean = true,
-        var dungeonMapX             : Int     = 12,
-        var dungeonMapY             : Int     = 42,
-        var dungeonMapScale         : Float   = 1.66f,
-        var dungeonMapShowNames     : Boolean = true,
-        var dungeonMapShowSecrets   : Boolean = true,
-        var dungeonMapShowCheckmarks: Boolean = true,
-        var dungeonMapDontRenderCommonNames : Boolean = false,
-        var dungeonMapDontRenderYellowName : Boolean = false,
-        var dungeonMapDontRenderFairyCheckmark : Boolean = false,
-        var dungeonMapHideInBoss    : Boolean = false,
-        var dungeonMapPlayerHeads   : Boolean = true,
-        var dungeonMapMarkerSelf    : Boolean = true,
-        var dungeonMapPlayerNames   : Boolean = true,
-        var dungeonMapNamesOnlyLeap : Boolean = false,
-        var dungeonMapPlayerHeadScale : Float = 1.0f,
-        var dungeonMapMarkerScale   : Float   = 1.0f,
+        var dungeonMapEnabled       : Boolean = false
+        var dungeonMapAlwaysShow    : Boolean = true
+        var dungeonMapFullGrid      : Boolean = true
+        var dungeonMapX             : Int     = 12
+        var dungeonMapY             : Int     = 42
+        var dungeonMapScale         : Float   = 1.66f
+        var dungeonMapShowNames     : Boolean = true
+        var dungeonMapShowSecrets   : Boolean = true
+        var dungeonMapShowCheckmarks: Boolean = true
+        var dungeonMapDontRenderCommonNames : Boolean = false
+        var dungeonMapDontRenderYellowName : Boolean = false
+        var dungeonMapDontRenderFairyCheckmark : Boolean = false
+        var dungeonMapHideInBoss    : Boolean = false
+        var dungeonMapPlayerHeads   : Boolean = true
+        var dungeonMapMarkerSelf    : Boolean = true
+        var dungeonMapPlayerNames   : Boolean = true
+        var dungeonMapNamesOnlyLeap : Boolean = false
+        var dungeonMapPlayerHeadScale : Float = 1.0f
+        var dungeonMapMarkerScale   : Float   = 1.0f
         // Off (default) = only markers that resolve to a real teammate are
         // drawn, so Hypixel's mob/waypoint markers never show up as heads.
         // On = dump every non-frame decoration from the map packet.
-        var dungeonMapAllDecorations : Boolean = false,
+        var dungeonMapAllDecorations : Boolean = false
 
         // ── Dungeon: F7/M7 ──────────────────────────────────────────────
-        var dungeonTickTimersEnabled : Boolean = false,
-        var dungeonTimerX            : Int     = 4,
-        var dungeonTimerY            : Int     = 170,
-        var bloodRoomSolverEnabled   : Boolean = false,
-        var campHelperShowTimer      : Boolean = false,
-        var campHelperPlaySound      : Boolean = false,
-        var campHelperSoundThreshold : Double  = 1.3,
-        var campHelperLineWidth      : Double  = 3.0,
-        var dragonPhaseEnabled       : Boolean = false,
-        var dragonPowerPriority      : Boolean = false,
-        var dragonHudX               : Int     = 4,
-        var dragonHudY               : Int     = 170,
-        var terminalSolverEnabled    : Boolean = false,
-        var autoTerminalEnabled     : Boolean = false,
+        var dungeonTickTimersEnabled : Boolean = false
+        var dungeonTimerX            : Int     = 4
+        var dungeonTimerY            : Int     = 170
+        var bloodRoomSolverEnabled   : Boolean = false
+        var campHelperShowTimer      : Boolean = false
+        var campHelperPlaySound      : Boolean = false
+        var campHelperSoundThreshold : Double  = 1.3
+        var campHelperLineWidth      : Double  = 3.0
+        var dragonPhaseEnabled       : Boolean = false
+        var dragonPowerPriority      : Boolean = false
+        var dragonHudX               : Int     = 4
+        var dragonHudY               : Int     = 170
+        var terminalSolverEnabled    : Boolean = false
+        var autoTerminalEnabled     : Boolean = false
         // Random Delay defaults on with a window that is wider downward than
         // upward around the mean: NoammAddons ships the same shape (a gaussian
         // between a min and a max, random on out of the box), and a fixed
         // interval is what a metronome looks like, not a hand.
-        var autoTerminalRandomDelay : Boolean = true,
-        var autoTerminalFirstClickDelayMs : Int = 430,
-        var autoTerminalMelodyFirstClickDelayMs : Int = 0,
-        var autoTerminalClickDelayMs : Int = 180,
-        var autoTerminalBreakThresholdMs : Int = 500,
-        var autoTerminalMinRandomDelayMs : Int = 150,
-        var autoTerminalMaxRandomDelayMs : Int = 240,
-        var autoTerminalMelodySkip  : Boolean = false,
-        var autoTerminalNoBreak     : Boolean = false,
-        var autoTerminalDontSkipFirst : Boolean = false,
-        var autoTerminalAnnounceMelody : Boolean = false,
-        var autoTerminalMelodyMessage : String = "melody",
+        var autoTerminalRandomDelay : Boolean = true
+        var autoTerminalFirstClickDelayMs : Int = 430
+        var autoTerminalMelodyFirstClickDelayMs : Int = 0
+        var autoTerminalClickDelayMs : Int = 180
+        var autoTerminalBreakThresholdMs : Int = 500
+        var autoTerminalMinRandomDelayMs : Int = 150
+        var autoTerminalMaxRandomDelayMs : Int = 240
+        var autoTerminalMelodySkip  : Boolean = false
+        var autoTerminalNoBreak     : Boolean = false
+        var autoTerminalDontSkipFirst : Boolean = false
+        var autoTerminalAnnounceMelody : Boolean = false
+        var autoTerminalMelodyMessage : String = "melody"
         // Per-terminal-type switches default ON: "Auto Terminal" on its own has
         // to solve something. A config where they are all off is treated as
         // "no filter chosen" rather than "nothing may run" — see
         // AutoTerminal.isTypeEnabled. They stay real toggles, so switching a
         // type off still stops it.
-        var autoTermColors          : Boolean = true,
-        var autoTermMelody          : Boolean = true,
-        var autoTermNumbers         : Boolean = true,
-        var autoTermRedGreen        : Boolean = true,
-        var autoTermRubix           : Boolean = true,
-        var autoTermStartsWith      : Boolean = true,
-        var autoI4Enabled           : Boolean = false,
-        var autoSimonSaysEnabled    : Boolean = false,
-        var autoSimonSaysStart      : Boolean = false,
-        var blockWrongDeviceClicks : Boolean = false,
-        var instantSimonSaysEnabled : Boolean = false,
-        var secretHitboxesEnabled   : Boolean = false,
-        var leverHitboxEnabled      : Boolean = false,
-        var buttonHitboxEnabled     : Boolean = false,
-        var skullHitboxEnabled      : Boolean = false,
-        var mushroomHitboxEnabled   : Boolean = false,
-        var secretHitboxVanillaOutline : Boolean = true,
-        var secretHitboxHideOutline : Boolean = false,
-        var secretHitboxSize        : Int     = 100,
-        var moddedHitboxDisplayEnabled : Boolean = false,
-        var pressedHitboxEnabled    : Boolean = false,
-        var pressedHitboxDuration   : Int     = 500,
-        var relicAuraEnabled        : Boolean = false,
-        var secretAuraEnabled       : Boolean = false,
-        var secretAuraRange         : Int     = 6,
-        var secretAuraFov            : Int     = 90,
-        var secretAuraBreakBlocks    : Boolean = false,
-        var autoCloseSecretChest    : Boolean = false,
-        var secretSoundEnabled      : Boolean = false,
-        var maskDisplayEnabled       : Boolean = false,
-        var maskHudX                 : Int     = 4,
-        var maskHudY                 : Int     = 240,
+        var autoTermColors          : Boolean = true
+        var autoTermMelody          : Boolean = true
+        var autoTermNumbers         : Boolean = true
+        var autoTermRedGreen        : Boolean = true
+        var autoTermRubix           : Boolean = true
+        var autoTermStartsWith      : Boolean = true
+        var autoI4Enabled           : Boolean = false
+        var autoSimonSaysEnabled    : Boolean = false
+        var autoSimonSaysStart      : Boolean = false
+        var blockWrongDeviceClicks : Boolean = false
+        var instantSimonSaysEnabled : Boolean = false
+        var secretHitboxesEnabled   : Boolean = false
+        var leverHitboxEnabled      : Boolean = false
+        var buttonHitboxEnabled     : Boolean = false
+        var skullHitboxEnabled      : Boolean = false
+        var mushroomHitboxEnabled   : Boolean = false
+        var secretHitboxVanillaOutline : Boolean = true
+        var secretHitboxHideOutline : Boolean = false
+        var secretHitboxSize        : Int     = 100
+        var moddedHitboxDisplayEnabled : Boolean = false
+        var pressedHitboxEnabled    : Boolean = false
+        var pressedHitboxDuration   : Int     = 500
+        var relicAuraEnabled        : Boolean = false
+        var secretAuraEnabled       : Boolean = false
+        var secretAuraRange         : Int     = 6
+        var secretAuraFov            : Int     = 90
+        var secretAuraBreakBlocks    : Boolean = false
+        var autoCloseSecretChest    : Boolean = false
+        var secretSoundEnabled      : Boolean = false
+        var maskDisplayEnabled       : Boolean = false
+        var maskHudX                 : Int     = 4
+        var maskHudY                 : Int     = 240
 
         // ── Mining ────────────────────────────────────────────────────────
-        var pickaxeAbilityTimerEnabled : Boolean = false,
-        var pickaxeTimerX            : Int   = 4,
-        var pickaxeTimerY            : Int   = 40,
-        var pickaxeTimerScale        : Float = 1.0f,
+        var pickaxeAbilityTimerEnabled : Boolean = false
+        var pickaxeTimerX            : Int   = 4
+        var pickaxeTimerY            : Int   = 40
+        var pickaxeTimerScale        : Float = 1.0f
 
         // ── Fishing ───────────────────────────────────────────────────────
-        var fishBiteAlertEnabled    : Boolean = false,
+        var fishBiteAlertEnabled    : Boolean = false
 
         // ── Nucleus ───────────────────────────────────────────────────────
-        var autoNucleusWarpEnabled  : Boolean = false,
-        var autoNucleusWarpMinSec   : Double  = 0.3,
-        var autoNucleusWarpMaxSec   : Double  = 0.7,
+        var autoNucleusWarpEnabled  : Boolean = false
+        var autoNucleusWarpMinSec   : Double  = 0.3
+        var autoNucleusWarpMaxSec   : Double  = 0.7
 
         // ── Funny ─────────────────────────────────────────────────────────
         // Unwired / removed: right-click autoclicker. Retained for on-disk config backward compatibility.
-        var autoClickerEnabled      : Boolean = false,
-        var autoClickerCps          : Int     = 10,
-        var autoClickerKey           : Int     = -1,
-        var weaponAutoClickerEnabled : Boolean = false,
-        var weaponAutoClickerCps     : Int     = 7,
-        var inventoryAutoClickerEnabled : Boolean = false,
-        var inventoryAutoClickerCps     : Int     = 5,
-        var inventoryAutoClickerKey     : Int     = -1,
+        var autoClickerEnabled      : Boolean = false
+        var autoClickerCps          : Int     = 10
+        var autoClickerKey           : Int     = -1
+        var weaponAutoClickerEnabled : Boolean = false
+        var weaponAutoClickerCps     : Int     = 7
+        var inventoryAutoClickerEnabled : Boolean = false
+        var inventoryAutoClickerCps     : Int     = 5
+        var inventoryAutoClickerKey     : Int     = -1
 
         // ── Session ─────────────────────────────────────────────────────────
-        var quietModeEnabled        : Boolean = false,
-        var quietModeKey            : Int     = -1,
+        var quietModeEnabled        : Boolean = false
+        var quietModeKey            : Int     = -1
 
         // ── Window separation ───────────────────────────────────────────────
-        var dungeonMapExternalWindow: Boolean = false,
-        var dungeonMapLegitBase    : Boolean = true,
-        var dungeonMapWindowX      : Int     = -1,
-        var dungeonMapWindowY      : Int     = -1,
-        var espExternalOverlay     : Boolean = false,
-        var autoTerminalCursorGlide: Boolean = true,
-        var starMobOutlineOnly     : Boolean = true,
+        var dungeonMapExternalWindow: Boolean = false
+        var dungeonMapLegitBase    : Boolean = true
+        var dungeonMapWindowX      : Int     = -1
+        var dungeonMapWindowY      : Int     = -1
+        var espExternalOverlay     : Boolean = false
+        var autoTerminalCursorGlide: Boolean = true
+        var starMobOutlineOnly     : Boolean = true
 
         // ── AutoTerminal pointer (visual only; clicks still go by packet) ─
         // Appended at the end of Data so existing config files keep loading.
-        var autoTerminalCursorSpeed : Int = 100,  // % of natural travel speed
-        var autoTerminalCursorArc   : Int = 25,   // % of distance bowed off-straight
-        var autoTerminalCursorJitter: Int = 35,   // % tremor while travelling
+        var autoTerminalCursorSpeed : Int = 100  // % of natural travel speed
+        var autoTerminalCursorArc   : Int = 25   // % of distance bowed off-straight
+        var autoTerminalCursorJitter: Int = 35   // % tremor while travelling
         // Melody ships three content rows now, so the trip between two of them
         // fits the click beat easily enough for the drawn pointer to keep up
         // with the packets — which is the whole point of having one on screen.
-        var autoTerminalCursorMelody: Boolean = true,
+        var autoTerminalCursorMelody: Boolean = true
         // Two pointers on one screen is one pointer too many: the real cursor
         // steps aside for the drawn one while it is up.
-        var autoTerminalCursorHideReal: Boolean = true,
+        var autoTerminalCursorHideReal: Boolean = true
         // Terminals outside a real dungeon run (p3 simulator, practice worlds):
         // the screen title alone is what identifies a terminal, so the dungeon
         // check is only ever a safety net.
-        var autoTerminalAnywhere: Boolean = true,
+        var autoTerminalAnywhere: Boolean = true
 
         // ── Per-block hitbox size (each a multiplier on secretHitboxSize) ──
         // Separated so a lever can be left forgiving while a button stays
         // close to stock, which is what one shared slider could never do.
         // Appended at the end of Data: existing config files keep loading.
-        var secretLeverHitboxSize   : Int = 100,
-        var secretButtonHitboxSize  : Int = 100,
-        var secretSkullHitboxSize   : Int = 100,
-        var secretMushroomHitboxSize: Int = 100,
+        var secretLeverHitboxSize   : Int = 100
+        var secretButtonHitboxSize  : Int = 100
+        var secretSkullHitboxSize   : Int = 100
+        var secretMushroomHitboxSize: Int = 100
 
         // ── Settings screen ─────────────────────────────────────────────────
         // Section headers the player has folded away. Keyed by title rather
         // than index, so renaming or reordering a section only ever costs one
         // row coming back open — it can never fold the wrong one.
-        var collapsedSections: MutableSet<String> = mutableSetOf(),
+        var collapsedSections: MutableSet<String> = mutableSetOf()
 
         // ── Custom terminal GUI ─────────────────────────────────────────────
         // A grid centred in screen space instead of highlights painted onto
@@ -246,18 +246,18 @@ object Config {
         // On by default: this is the look the clicker and the drawn pointer
         // are built to sit on top of, so a fresh config gets all three.
         // Appended at the end of Data: existing config files keep loading.
-        var termGuiEnabled   : Boolean = true,
-        var termGuiSize      : Float   = 2.0f,
-        var termGuiMelodySize: Float   = 1.5f,
-        var termGuiGap       : Int     = 2,
-        var termGuiRoundness : Int     = 2,
+        var termGuiEnabled   : Boolean = true
+        var termGuiSize      : Float   = 2.0f
+        var termGuiMelodySize: Float   = 1.5f
+        var termGuiGap       : Int     = 2
+        var termGuiRoundness : Int     = 2
 
         // CSS timing curve for the pointer, percent mapping to 0..1. Melody and
         // the pane terminals share it; the shape is the whole of the accel.
-        var autoTerminalEaseX1: Int = 20,
-        var autoTerminalEaseY1: Int = 0,
-        var autoTerminalEaseX2: Int = 0,
-        var autoTerminalEaseY2: Int = 100,
+        var autoTerminalEaseX1: Int = 20
+        var autoTerminalEaseY1: Int = 0
+        var autoTerminalEaseX2: Int = 0
+        var autoTerminalEaseY2: Int = 100
 
         // ── How imperfect a hand is ────────────────────────────────────────
         // Appended at the end of Data, same as the pointer block above, so
@@ -267,7 +267,7 @@ object Config {
         // easing jitter, the pre-move hesitation, and the overshoot that
         // carries past the pane before settling. 0 is a machine: every hop
         // over the same distance is the same hop.
-        var autoTerminalHumanize: Int = 50,
+        var autoTerminalHumanize: Int = 50
 
         // ── What the clicker looks like on screen ──────────────────────────
         // Appended at the end of Data, same as the blocks above, so existing
@@ -279,84 +279,176 @@ object Config {
         // pane that was just clicked on the custom grid, so a click leaves a
         // mark instead of a cursor that lands somewhere and says nothing about
         // which pane it was for.
-        var autoTerminalHudProgress: Boolean = true,
-        var termGuiClickFlash      : Boolean = true,
+        var autoTerminalHudProgress: Boolean = true
+        var termGuiClickFlash      : Boolean = true
 
         // Which candidate the clicker takes when several are ready at once —
         // NoammAddons' Click Order dropdown, in his numbering so the settings
         // row can print the same words: 0 None (slot order), 1 Random,
         // 2 Human (nearest to where the pointer already is), 3 Skizo (furthest).
-        var autoTerminalClickOrder : Int = 2,
+        var autoTerminalClickOrder : Int = 2
 
         // 0 = Osu cursor, 1 = Normal (User arrow) cursor
-        var autoTerminalCursorStyle: Int = 0,
+        var autoTerminalCursorStyle: Int = 0
 
         // 0 = Normal, 1 = Human, 2 = Legit
-        var autoTerminalMode       : Int = 1,
+        var autoTerminalMode       : Int = 1
 
         // Local practice and terminal input recording. Existing config keys stay intact.
-        var terminalSimulatorAutoEnabled: Boolean = false,
-        var terminalSimulatorPingMs: Int = 0,
-        var terminalInputLoggingEnabled: Boolean = false,
-        var terminalSimulatorNoMelody: Boolean = false,
+        var terminalSimulatorAutoEnabled: Boolean = false
+        var terminalSimulatorPingMs: Int = 0
+        var terminalInputLoggingEnabled: Boolean = false
+        var terminalSimulatorNoMelody: Boolean = false
 
         // ── Hitbox environment & visibility ─────────────────────────────────
-        var secretHitboxAnywhere: Boolean = true,
-        var secretHitboxThroughWalls: Boolean = true,
+        var secretHitboxAnywhere: Boolean = true
+        var secretHitboxThroughWalls: Boolean = true
 
         // ── Simon Says Fast Mode ─────────────────────────────────────────────
-        var autoSimonSaysFast: Boolean = false,
+        var autoSimonSaysFast: Boolean = false
 
         // ── ESP Toggles ──────────────────────────────────────────────────────
-        var starMobEspBats: Boolean = false,
+        var starMobEspBats: Boolean = false
 
         // ── Secret Triggerbot ────────────────────────────────────────────────
-        var secretTriggerBotEnabled: Boolean = false,
+        var secretTriggerBotEnabled: Boolean = false
 
         // ── Terminals & Aura Toggles ─────────────────────────────────────────
-        var terminalAuraEnabled        : Boolean = false,
-        var terminalTriggerBotEnabled   : Boolean = false,
-        var terminalHighlightEnabled    : Boolean = false,
-        var terminalAuraRange          : Double  = 4.5,
+        var terminalAuraEnabled        : Boolean = false
+        var terminalTriggerBotEnabled   : Boolean = false
+        var terminalHighlightEnabled    : Boolean = false
+        var terminalAuraRange          : Double  = 4.5
 
         // ── Secret Aura Options ──────────────────────────────────────────────
-        var secretAuraThroughWalls     : Boolean = true,
-        var secretAuraVisualizer       : Boolean = false,
+        var secretAuraThroughWalls     : Boolean = true
+        var secretAuraVisualizer       : Boolean = false
 
         // ── Pathfinding Options ──────────────────────────────────────────────
-        var pathfindingEnabled         : Boolean = false,
-        var activePathfindingPresetId  : String  = "",
-        var pathfindingDebugRender     : Boolean = true,
+        var pathfindingEnabled         : Boolean = false
+        var activePathfindingPresetId  : String  = ""
+        var pathfindingDebugRender     : Boolean = true
 
         // ── Triggerbot Cooldowns ─────────────────────────────────────────────
-        var secretTriggerBotCooldown   : Double  = 10.0,
-        var terminalTriggerBotCooldown : Double  = 10.0,
+        var secretTriggerBotCooldown   : Double  = 10.0
+        var terminalTriggerBotCooldown : Double  = 10.0
 
-        var dungeonMapStyle: Int = 0, // 0 = Devonian, 1 = Noamm
-        var dungeonMapEditMode: Boolean = false,
-        var starMobRenderMode: Int = 0, // 0 = Fill, 1 = Box
-        var goldorRouteKey: Int = -1,
-        var lastPathfindingPresetId: String = "",
+        var dungeonMapStyle: Int = 0 // 0 = Devonian, 1 = Noamm
+        var dungeonMapEditMode: Boolean = false
+        var starMobRenderMode: Int = 0 // 0 = Fill, 1 = Box
+        var goldorRouteKey: Int = -1
+        var lastPathfindingPresetId: String = ""
 
         // ── New Features & Refinements ───────────────────────────────────────
-        var dungeonMapShowClassNames : Boolean = true,
-        var dungeonMapStreamProof    : Boolean = false, // false = direct full HUD map without external stream proof window
-        var dungeonMapDefaultGreenMarker : Boolean = true, // default user marker is green Minecraft arrow
-        var dungeonMapWhiteRoomNames : Boolean = true,
-        var autoArrowAlignEnabled    : Boolean = false,
-        var autoLampsEnabled         : Boolean = false,
+        var dungeonMapShowClassNames : Boolean = true
+        var dungeonMapStreamProof    : Boolean = false // false = direct full HUD map without external stream proof window
+        var dungeonMapDefaultGreenMarker : Boolean = true // default user marker is green Minecraft arrow
+        var dungeonMapWhiteRoomNames : Boolean = true
+        var autoArrowAlignEnabled    : Boolean = false
+        var autoLampsEnabled         : Boolean = false
 
         // ── Non-Map HUD Positions & Scales (Editable via /asl gui) ───────────
-        var alertHudX                : Int     = -1, // -1 means default center
-        var alertHudY                : Int     = -1,
-        var alertHudScale            : Float   = 2.5f,
-        var termProgressHudX         : Int     = -1, // -1 means default center
-        var termProgressHudY         : Int     = -1,
-        var termProgressHudScale     : Float   = 1.0f,
-        var maskHudScale             : Float   = 1.0f,
-        var dragonHudScale           : Float   = 1.0f,
-        var dungeonTimerScale        : Float   = 1.0f,
-    )
+        var alertHudX                : Int     = -1 // -1 means default center
+        var alertHudY                : Int     = -1
+        var alertHudScale            : Float   = 2.5f
+        var termProgressHudX         : Int     = -1 // -1 means default center
+        var termProgressHudY         : Int     = -1
+        var termProgressHudScale     : Float   = 1.0f
+        var maskHudScale             : Float   = 1.0f
+        var dragonHudScale           : Float   = 1.0f
+        var dungeonTimerScale        : Float   = 1.0f
+
+        // ── Item Protection ──────────────────────────────────────────────────
+        var itemProtectionEnabled    : Boolean = false
+        var protectStarredItems      : Boolean = true
+        var protectKeybind           : Int     = 76 // GLFW_KEY_L
+        var protectedUuids           : MutableSet<String> = mutableSetOf()
+        var protectedIds             : MutableSet<String> = mutableSetOf()
+
+        // ── Command Keybinds ─────────────────────────────────────────────────
+        var commandBinds             : MutableMap<Int, String> = mutableMapOf()
+
+        // ── Fast Wardrobe ────────────────────────────────────────────────────
+        var wardrobeKeybindsEnabled  : Boolean = false
+        var wardrobeAutoClose        : Boolean = true
+
+        // ── Condensed Health & Food Bar ──────────────────────────────────────
+        var condensedHealthBar       : Boolean = false
+        var hideFoodBar              : Boolean = false
+        var hideVanillaHearts        : Boolean = false
+        var condensedHealthX         : Int     = -1
+        var condensedHealthY         : Int     = -1
+        var condensedHealthScale     : Float   = 1.0f
+
+        // ── Clutter Removal ──────────────────────────────────────────────────
+        var hideExplosionParticles   : Boolean = false
+        var hideEntityFire           : Boolean = false
+        var hideFireOverlay          : Boolean = false
+        var hideBlockBreakParticles  : Boolean = false
+
+        // ── NEU Inventory & Storage ──────────────────────────────────────────
+        var neuInventoryGui          : Boolean = false
+        var storageOverlayEnabled    : Boolean = false
+
+        // ── Zoom & Fullbright ────────────────────────────────────────────────
+        var zoomKey                  : Int     = 67 // GLFW_KEY_C
+        var zoomMultiplier           : Float   = 0.35f
+        var fullbrightEnabled        : Boolean = false
+
+        // ── Custom Item Animations & Scaling ─────────────────────────────────
+        var customItemModelEnabled   : Boolean = false
+        var swingDuration            : Int     = 14
+        var mainHandScale            : Float   = 0.67f
+        var offHandScale             : Float   = 0.80f
+        var mainHandX                : Float   = 0.0f
+        var mainHandY                : Float   = 0.0f
+        var mainHandZ                : Float   = 0.0f
+
+        // ── Sound Muter ──────────────────────────────────────────────────────
+        var soundMuterEnabled        : Boolean = false
+        var mutedSounds              : MutableSet<String> = mutableSetOf(
+            "minecraft:block.slime_block.break",
+            "minecraft:entity.blaze.shoot",
+            "minecraft:entity.drowned.ambient",
+            "minecraft:entity.drowned.ambient_water",
+            "minecraft:entity.drowned.death",
+            "minecraft:entity.drowned.death_water",
+            "minecraft:entity.drowned.hurt",
+            "minecraft:entity.drowned.hurt_water",
+            "minecraft:entity.drowned.shoot",
+            "minecraft:entity.drowned.step",
+            "minecraft:entity.drowned.swim",
+            "minecraft:entity.ender_dragon.flap",
+            "minecraft:entity.ender_dragon.growl",
+            "minecraft:entity.experience_orb.pickup",
+            "minecraft:entity.generic.explode",
+            "minecraft:entity.ghast.shoot",
+            "minecraft:entity.magma_cube.jump",
+            "minecraft:entity.magma_cube.squish",
+            "minecraft:entity.slime.jump",
+            "minecraft:entity.slime.jump_small",
+            "minecraft:entity.slime.squish",
+            "minecraft:entity.slime.squish_small",
+            "minecraft:entity.strider.ambient",
+            "minecraft:entity.strider.death",
+            "minecraft:entity.strider.eat",
+            "minecraft:entity.strider.happy",
+            "minecraft:entity.strider.hurt",
+            "minecraft:entity.strider.retreat",
+            "minecraft:entity.strider.saddle",
+            "minecraft:entity.strider.step",
+            "minecraft:entity.strider.step_lava",
+            "minecraft:entity.zombie.converted_to_drowned",
+            "minecraft:item.firecharge.use"
+        )
+
+        // ── Boss Timers & Splits (F7/M7) ─────────────────────────────────────
+        var stormTickTimerEnabled    : Boolean = false
+        var goldorDeathTickTimerEnabled : Boolean = false
+        var bossSplitsEnabled        : Boolean = false
+        var bossSplitsX              : Int     = -1
+        var bossSplitsY              : Int     = -1
+        var bossSplitsScale          : Float   = 1.0f
+    }
 
     var data = Data()
         private set
@@ -1353,6 +1445,140 @@ object Config {
     var dungeonTimerScale: Float
         get() = data.dungeonTimerScale
         set(v) { data.dungeonTimerScale = v.coerceIn(0.5f, 3.0f); save() }
+
+    // ── Item Protection ──────────────────────────────────────────────────
+    var itemProtectionEnabled: Boolean
+        get() = data.itemProtectionEnabled
+        set(v) { data.itemProtectionEnabled = v; save() }
+    var protectStarredItems: Boolean
+        get() = data.protectStarredItems
+        set(v) { data.protectStarredItems = v; save() }
+    var protectKeybind: Int
+        get() = data.protectKeybind
+        set(v) { data.protectKeybind = v; save() }
+    var protectedUuids: MutableSet<String>
+        get() = data.protectedUuids
+        set(v) { data.protectedUuids = v; save() }
+    var protectedIds: MutableSet<String>
+        get() = data.protectedIds
+        set(v) { data.protectedIds = v; save() }
+
+    // ── Command Keybinds ─────────────────────────────────────────────────
+    var commandBinds: MutableMap<Int, String>
+        get() = data.commandBinds
+        set(v) { data.commandBinds = v; save() }
+
+    // ── Fast Wardrobe ────────────────────────────────────────────────────
+    var wardrobeKeybindsEnabled: Boolean
+        get() = data.wardrobeKeybindsEnabled
+        set(v) { data.wardrobeKeybindsEnabled = v; save() }
+    var wardrobeAutoClose: Boolean
+        get() = data.wardrobeAutoClose
+        set(v) { data.wardrobeAutoClose = v; save() }
+
+    // ── Condensed Health & Food Bar ──────────────────────────────────────
+    var condensedHealthBar: Boolean
+        get() = data.condensedHealthBar
+        set(v) { data.condensedHealthBar = v; save() }
+    var hideFoodBar: Boolean
+        get() = data.hideFoodBar
+        set(v) { data.hideFoodBar = v; save() }
+    var hideVanillaHearts: Boolean
+        get() = data.hideVanillaHearts
+        set(v) { data.hideVanillaHearts = v; save() }
+    var condensedHealthX: Int
+        get() = data.condensedHealthX
+        set(v) { data.condensedHealthX = v; save() }
+    var condensedHealthY: Int
+        get() = data.condensedHealthY
+        set(v) { data.condensedHealthY = v; save() }
+    var condensedHealthScale: Float
+        get() = data.condensedHealthScale
+        set(v) { data.condensedHealthScale = v.coerceIn(0.5f, 3.0f); save() }
+
+    // ── Clutter Removal ──────────────────────────────────────────────────
+    var hideExplosionParticles: Boolean
+        get() = data.hideExplosionParticles
+        set(v) { data.hideExplosionParticles = v; save() }
+    var hideEntityFire: Boolean
+        get() = data.hideEntityFire
+        set(v) { data.hideEntityFire = v; save() }
+    var hideFireOverlay: Boolean
+        get() = data.hideFireOverlay
+        set(v) { data.hideFireOverlay = v; save() }
+    var hideBlockBreakParticles: Boolean
+        get() = data.hideBlockBreakParticles
+        set(v) { data.hideBlockBreakParticles = v; save() }
+
+    // ── NEU Inventory & Storage ──────────────────────────────────────────
+    var neuInventoryGui: Boolean
+        get() = data.neuInventoryGui
+        set(v) { data.neuInventoryGui = v; save() }
+    var storageOverlayEnabled: Boolean
+        get() = data.storageOverlayEnabled
+        set(v) { data.storageOverlayEnabled = v; save() }
+
+    // ── Zoom & Fullbright ────────────────────────────────────────────────
+    var zoomKey: Int
+        get() = data.zoomKey
+        set(v) { data.zoomKey = v; save() }
+    var zoomMultiplier: Float
+        get() = data.zoomMultiplier
+        set(v) { data.zoomMultiplier = v.coerceIn(0.1f, 1.0f); save() }
+    var fullbrightEnabled: Boolean
+        get() = data.fullbrightEnabled
+        set(v) { data.fullbrightEnabled = v; save() }
+
+    // ── Custom Item Animations & Scaling ─────────────────────────────────
+    var customItemModelEnabled: Boolean
+        get() = data.customItemModelEnabled
+        set(v) { data.customItemModelEnabled = v; save() }
+    var swingDuration: Int
+        get() = data.swingDuration
+        set(v) { data.swingDuration = v.coerceIn(1, 40); save() }
+    var mainHandScale: Float
+        get() = data.mainHandScale
+        set(v) { data.mainHandScale = v.coerceIn(0.1f, 3.0f); save() }
+    var offHandScale: Float
+        get() = data.offHandScale
+        set(v) { data.offHandScale = v.coerceIn(0.1f, 3.0f); save() }
+    var mainHandX: Float
+        get() = data.mainHandX
+        set(v) { data.mainHandX = v; save() }
+    var mainHandY: Float
+        get() = data.mainHandY
+        set(v) { data.mainHandY = v; save() }
+    var mainHandZ: Float
+        get() = data.mainHandZ
+        set(v) { data.mainHandZ = v; save() }
+
+    // ── Sound Muter ──────────────────────────────────────────────────────
+    var soundMuterEnabled: Boolean
+        get() = data.soundMuterEnabled
+        set(v) { data.soundMuterEnabled = v; save() }
+    var mutedSounds: MutableSet<String>
+        get() = data.mutedSounds
+        set(v) { data.mutedSounds = v; save() }
+
+    // ── Boss Timers & Splits (F7/M7) ─────────────────────────────────────
+    var stormTickTimerEnabled: Boolean
+        get() = data.stormTickTimerEnabled
+        set(v) { data.stormTickTimerEnabled = v; save() }
+    var goldorDeathTickTimerEnabled: Boolean
+        get() = data.goldorDeathTickTimerEnabled
+        set(v) { data.goldorDeathTickTimerEnabled = v; save() }
+    var bossSplitsEnabled: Boolean
+        get() = data.bossSplitsEnabled
+        set(v) { data.bossSplitsEnabled = v; save() }
+    var bossSplitsX: Int
+        get() = data.bossSplitsX
+        set(v) { data.bossSplitsX = v; save() }
+    var bossSplitsY: Int
+        get() = data.bossSplitsY
+        set(v) { data.bossSplitsY = v; save() }
+    var bossSplitsScale: Float
+        get() = data.bossSplitsScale
+        set(v) { data.bossSplitsScale = v.coerceIn(0.5f, 3.0f); save() }
 
     fun load() {
         if (!configDir.exists()) configDir.mkdirs()

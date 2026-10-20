@@ -528,8 +528,14 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
         return when (tab) {
             Tab.QOL -> listOf(
                 SectionHeader("HUD & Interface"),
-                ToggleRow("Etherwarp Highlight", "Highlights etherwarp target block",
+                ToggleRow("Etherwarp Highlight", "Highlights etherwarp target block with filled cube and outline",
                     { Config.etherwarpEnabled }, { Config.etherwarpEnabled = it }),
+                ToggleRow("Condensed Health Bar", "Sleek health bar showing numbers and percentage",
+                    { Config.condensedHealthBar }, { Config.condensedHealthBar = it }),
+                ToggleRow("  ↳ Hide Vanilla Hearts", "Hides the vanilla heart bar",
+                    { Config.hideVanillaHearts }, { Config.hideVanillaHearts = it }),
+                ToggleRow("Hide Food Bar", "Hides the hunger/food bar completely",
+                    { Config.hideFoodBar }, { Config.hideFoodBar = it }),
                 ToggleRow("Pet HUD Display", "Shows active pet on screen",
                     { Config.petDisplayEnabled }, { Config.petDisplayEnabled = it }),
                 WidgetRow(ModernButton(subX, 0, subW, 24, Component.literal("Edit Pet HUD Position & Scale")) {
@@ -537,6 +543,60 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 }),
                 ToggleRow("Pet Menu Highlight", "Glows active pet in Pets GUI",
                     { Config.petMenuHighlightEnabled }, { Config.petMenuHighlightEnabled = it }),
+
+                SectionHeader("Item Protection"),
+                ToggleRow("Item Protection", "Prevents dropping or selling protected items",
+                    { Config.itemProtectionEnabled }, { Config.itemProtectionEnabled = it }),
+                ToggleRow("  ↳ Protect Starred Items", "Automatically protects starred and master-starred items",
+                    { Config.protectStarredItems }, { Config.protectStarredItems = it }),
+                WidgetRow(ModernButton(subX, 0, subW, 24, Component.literal("Protect Keybind: L (Hold/Hover item to protect)")) {
+                    // Informative button or future rebind
+                }),
+
+                SectionHeader("Command Keybinds"),
+                WidgetRow(ModernButton(fullX, 0, fullW, 24, Component.literal("View Command Keybinds (/asl binds)")) {
+                    com.asthoonlite.qol.CommandKeybinds.listBinds()
+                }),
+
+                SectionHeader("Wardrobe & Loadouts"),
+                ToggleRow("Wardrobe Keybinds", "Use keys 1-9 to equip wardrobe loadouts instantly",
+                    { Config.wardrobeKeybindsEnabled }, { Config.wardrobeKeybindsEnabled = it }),
+                ToggleRow("  ↳ Auto Close on Equip", "Automatically closes menu after equipping loadout",
+                    { Config.wardrobeAutoClose }, { Config.wardrobeAutoClose = it }),
+
+                SectionHeader("Clutter Removal"),
+                ToggleRow("Hide Explosion Particles", "Removes explosion particle spam",
+                    { Config.hideExplosionParticles }, { Config.hideExplosionParticles = it }),
+                ToggleRow("Hide Fire Overlay", "Stops fire from obscuring your screen",
+                    { Config.hideFireOverlay }, { Config.hideFireOverlay = it }),
+                ToggleRow("Hide Entity Fire", "Do not render fire animations on players and mobs",
+                    { Config.hideEntityFire }, { Config.hideEntityFire = it }),
+                ToggleRow("Hide Block Breaking Particles", "Removes debris particles when breaking blocks",
+                    { Config.hideBlockBreakParticles }, { Config.hideBlockBreakParticles = it }),
+
+                SectionHeader("Inventory & Storage"),
+                ToggleRow("NEU Inventory Style", "Clean NEU 1.8.9 themed sidebar and equipment slots",
+                    { Config.neuInventoryGui }, { Config.neuInventoryGui = it }),
+                ToggleRow("Storage Overlay", "Quick tabs and preview for Ender Chests & Backpacks",
+                    { Config.storageOverlayEnabled }, { Config.storageOverlayEnabled = it }),
+
+                SectionHeader("Camera & Visuals"),
+                ToggleRow("OptiFine C-Zoom", "Hold C to zoom in smoothly like OptiFine",
+                    { Config.zoomMultiplier < 0.99f }, {
+                        Config.zoomMultiplier = if (it) 0.35f else 1.0f
+                    }),
+                ToggleRow("Fullbright", "Brightens the world without torches or night vision",
+                    { Config.fullbrightEnabled }, { Config.fullbrightEnabled = it }),
+                ToggleRow("Custom Item Animations", "Custom hand scale, position, and swing duration",
+                    { Config.customItemModelEnabled }, { Config.customItemModelEnabled = it }),
+                WidgetRow(IntSlider(subX, 0, subW, 24, 1, 30, Config.swingDuration, "Swing Duration: ", " ticks") {
+                    Config.swingDuration = it
+                }),
+
+                SectionHeader("Audio"),
+                ToggleRow("Sound Muter", "Mutes annoying sounds (explosions, slimes, blazes, drowned, dragon flap)",
+                    { Config.soundMuterEnabled }, { Config.soundMuterEnabled = it }),
+
                 SectionHeader("Session"),
                 ToggleRow("Quiet Mode", "Hides map, terminal GUI, HUD and world highlights",
                     { Config.quietModeEnabled }, { QuietMode.setEnabled(it) }),
@@ -915,6 +975,12 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                     SectionHeader("Boss Phases & Timers"),
                     ToggleRow("F7 / M7 Tick Timers", "Run split timer, phase tracker and alerts",
                         { Config.dungeonTickTimersEnabled }, { Config.dungeonTickTimersEnabled = it }),
+                    ToggleRow("  ↳ Storm (P2) Phase Tick Timer", "Starts counting ticks at start of Storm until phase ends",
+                        { Config.stormTickTimerEnabled }, { Config.stormTickTimerEnabled = it }),
+                    ToggleRow("  ↳ Goldor Death Tick Timer", "Countdown timer changing color as death tick approaches in P3",
+                        { Config.goldorDeathTickTimerEnabled }, { Config.goldorDeathTickTimerEnabled = it }),
+                    ToggleRow("Dungeon Splits HUD", "Displays Blood Open/Clear/Done, P1, P2, P3 (S1-S4), P4, P5, Total Boss (real & tick time)",
+                        { Config.bossSplitsEnabled }, { Config.bossSplitsEnabled = it }),
                     ToggleRow("M7 Dragon Phase", "Dragon boxes, spawn timers, priority and health",
                         { Config.dragonPhaseEnabled }, { Config.dragonPhaseEnabled = it }),
                     ToggleRow("  ↳ Power Priority", "Use higher-power dragon priority order",

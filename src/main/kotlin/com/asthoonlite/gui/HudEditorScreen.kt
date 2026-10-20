@@ -28,7 +28,9 @@ class HudEditorScreen : Screen(Component.literal("AsthoonLite HUD Editor")) {
         DRAGON("Dragon Phase HUD"),
         DUNGEON_TIMERS("Dungeon Timers"),
         PICKAXE_TIMER("Pickaxe Ability Timer"),
-        TERMINAL_PROGRESS("Terminal Progress HUD")
+        TERMINAL_PROGRESS("Terminal Progress HUD"),
+        CONDENSED_HEALTH("Condensed Health Bar"),
+        BOSS_SPLITS("Dungeon Boss Splits")
     }
 
     private data class ElementBox(
@@ -94,6 +96,14 @@ class HudEditorScreen : Screen(Component.literal("AsthoonLite HUD Editor")) {
         Config.termProgressHudY = -1
         Config.termProgressHudScale = 1.0f
 
+        Config.condensedHealthX = -1
+        Config.condensedHealthY = -1
+        Config.condensedHealthScale = 1.0f
+
+        Config.bossSplitsX = -1
+        Config.bossSplitsY = -1
+        Config.bossSplitsScale = 1.0f
+
         Config.save()
     }
 
@@ -139,6 +149,20 @@ class HudEditorScreen : Screen(Component.literal("AsthoonLite HUD Editor")) {
         val tpy = if (Config.termProgressHudY >= 0) Config.termProgressHudY else (height / 10)
         list.add(ElementBox(HudElementTarget.TERMINAL_PROGRESS, tpx, tpy, tpW, tpH))
 
+        // 8. Condensed Health Bar
+        val chW = (120 * Config.condensedHealthScale).toInt()
+        val chH = (12 * Config.condensedHealthScale).toInt()
+        val chx = if (Config.condensedHealthX >= 0) Config.condensedHealthX else (width / 2 - chW / 2)
+        val chy = if (Config.condensedHealthY >= 0) Config.condensedHealthY else (height - 48)
+        list.add(ElementBox(HudElementTarget.CONDENSED_HEALTH, chx, chy, chW, chH))
+
+        // 9. Dungeon Boss Splits
+        val bsW = (130 * Config.bossSplitsScale).toInt()
+        val bsH = (90 * Config.bossSplitsScale).toInt()
+        val bsx = if (Config.bossSplitsX >= 0) Config.bossSplitsX else 10
+        val bsy = if (Config.bossSplitsY >= 0) Config.bossSplitsY else 140
+        list.add(ElementBox(HudElementTarget.BOSS_SPLITS, bsx, bsy, bsW, bsH))
+
         return list
     }
 
@@ -171,6 +195,8 @@ class HudEditorScreen : Screen(Component.literal("AsthoonLite HUD Editor")) {
                 HudElementTarget.DUNGEON_TIMERS -> String.format("%.1fx", Config.dungeonTimerScale)
                 HudElementTarget.PICKAXE_TIMER -> String.format("%.1fx", Config.pickaxeTimerScale)
                 HudElementTarget.TERMINAL_PROGRESS -> String.format("%.1fx", Config.termProgressHudScale)
+                HudElementTarget.CONDENSED_HEALTH -> String.format("%.1fx", Config.condensedHealthScale)
+                HudElementTarget.BOSS_SPLITS -> String.format("%.1fx", Config.bossSplitsScale)
             }
             context.text(font, "${box.target.label} ($scaleStr)", box.x + 3, box.y + 3, 0xFFFFFFFF.toInt())
         }
@@ -207,6 +233,8 @@ class HudEditorScreen : Screen(Component.literal("AsthoonLite HUD Editor")) {
                 HudElementTarget.DUNGEON_TIMERS -> { Config.dungeonTimerX = newX; Config.dungeonTimerY = newY }
                 HudElementTarget.PICKAXE_TIMER -> { Config.pickaxeTimerX = newX; Config.pickaxeTimerY = newY }
                 HudElementTarget.TERMINAL_PROGRESS -> { Config.termProgressHudX = newX; Config.termProgressHudY = newY }
+                HudElementTarget.CONDENSED_HEALTH -> { Config.condensedHealthX = newX; Config.condensedHealthY = newY }
+                HudElementTarget.BOSS_SPLITS -> { Config.bossSplitsX = newX; Config.bossSplitsY = newY }
             }
             return true
         }
@@ -226,6 +254,8 @@ class HudEditorScreen : Screen(Component.literal("AsthoonLite HUD Editor")) {
                     HudElementTarget.DUNGEON_TIMERS -> Config.dungeonTimerScale = (Config.dungeonTimerScale + step).coerceIn(0.5f, 3.0f)
                     HudElementTarget.PICKAXE_TIMER -> Config.pickaxeTimerScale = (Config.pickaxeTimerScale + step).coerceIn(0.5f, 3.0f)
                     HudElementTarget.TERMINAL_PROGRESS -> Config.termProgressHudScale = (Config.termProgressHudScale + step).coerceIn(0.5f, 3.0f)
+                    HudElementTarget.CONDENSED_HEALTH -> Config.condensedHealthScale = (Config.condensedHealthScale + step).coerceIn(0.5f, 3.0f)
+                    HudElementTarget.BOSS_SPLITS -> Config.bossSplitsScale = (Config.bossSplitsScale + step).coerceIn(0.5f, 3.0f)
                 }
                 Config.save()
                 return true

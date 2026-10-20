@@ -691,7 +691,11 @@ internal fun simonDeviceRegressionChecks() {
     check(legacyRouteConfig.goldorRouteKey == -1 && legacyRouteConfig.lastPathfindingPresetId == "" && legacyRouteConfig.activePathfindingPresetId == "existing-route") {
         "Legacy configs must retain the active route with the Goldor shortcut unbound"
     }
-    val rememberedRoute = Config.Data(goldorRouteKey = 82, lastPathfindingPresetId = "played-route", activePathfindingPresetId = "")
+    val rememberedRoute = Config.Data().apply {
+        goldorRouteKey = 82
+        lastPathfindingPresetId = "played-route"
+        activePathfindingPresetId = ""
+    }
     val restoredRoute = Gson().fromJson(Gson().toJson(rememberedRoute), Config.Data::class.java)
     check(restoredRoute.goldorRouteKey == 82 && restoredRoute.lastPathfindingPresetId == "played-route" && restoredRoute.activePathfindingPresetId == "") {
         "The keybind and last played route must survive stopping and config reload"

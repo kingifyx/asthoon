@@ -33,6 +33,11 @@ public abstract class MixinClientPacketListener {
         DungeonTimers.INSTANCE.onServerTime(packet);
     }
 
+    @Inject(method = "setActionBarText(Lnet/minecraft/network/protocol/game/ClientboundSetActionBarTextPacket;)V", at = @At("TAIL"))
+    private void asthoonlite_onActionBar(ClientboundSetActionBarTextPacket packet, CallbackInfo ci) {
+        com.asthoonlite.hud.CondensedHealthHud.INSTANCE.onActionBarPacket(packet);
+    }
+
     @Inject(method = "handleAddEntity(Lnet/minecraft/network/protocol/game/ClientboundAddEntityPacket;)V", at = @At("TAIL"))
     private void asthoonlite_onAddEntity(ClientboundAddEntityPacket packet, CallbackInfo ci) {
         DragonPhase.INSTANCE.onDragonPacket(packet);

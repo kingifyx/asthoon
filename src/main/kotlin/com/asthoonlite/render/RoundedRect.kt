@@ -91,3 +91,19 @@ fun fillRoundedRect(
         }
     }
 }
+
+fun outlineRoundedRect(
+    graphics: GuiGraphicsExtractor,
+    x0: Int,
+    y0: Int,
+    x1: Int,
+    y1: Int,
+    argb: Int,
+    radius: Int
+) {
+    val r = radius.coerceAtLeast(0)
+    graphics.fill(x0 + r, y0, x1 - r, y0 + 1, argb)
+    graphics.fill(x0 + r, y1 - 1, x1 - r, y1, argb)
+    graphics.fill(x0, y0 + r, x0 + 1, y1 - r, argb)
+    graphics.fill(x1 - 1, y0 + r, x1, y1 - r, argb)
+}

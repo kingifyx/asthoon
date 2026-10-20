@@ -2,6 +2,7 @@ package com.asthoonlite.command
 
 import com.asthoonlite.AsthoonLite
 import com.asthoonlite.gui.AsthoonLiteScreen
+import com.mojang.brigadier.arguments.StringArgumentType
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands
 import net.minecraft.client.Minecraft
@@ -52,6 +53,44 @@ object AslCommand {
                             ClientCommands.literal("gui")
                                 .executes { _ ->
                                     openHudEditorScreen()
+                                    1
+                                }
+                        )
+                        .then(
+                            ClientCommands.literal("bind")
+                                .then(
+                                    ClientCommands.argument("command", StringArgumentType.greedyString())
+                                        .executes { ctx ->
+                                            val cmd = StringArgumentType.getString(ctx, "command")
+                                            com.asthoonlite.qol.CommandKeybinds.startBinding(cmd)
+                                            1
+                                        }
+                                )
+                        )
+                        .then(
+                            ClientCommands.literal("binds")
+                                .executes { _ ->
+                                    com.asthoonlite.qol.CommandKeybinds.listBinds()
+                                    1
+                                }
+                        )
+                        .then(
+                            ClientCommands.literal("unbindall")
+                                .executes { _ ->
+                                    com.asthoonlite.qol.CommandKeybinds.clearBinds()
+                                    1
+                                }
+                        )
+                        .then(
+                            ClientCommands.literal("protect")
+                                .executes { _ ->
+                                    val mc = Minecraft.getInstance()
+                                    val held = mc.player?.mainHandItem
+                                    if (held != null && !held.isEmpty) {
+                                        com.asthoonlite.qol.ItemProtection.toggleProtection(held)
+                                    } else {
+                                        com.asthoonlite.qol.ItemProtection.notify("§c[AsthoonLite] You must hold an item to toggle protection.")
+                                    }
                                     1
                                 }
                         )
