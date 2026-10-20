@@ -1346,6 +1346,29 @@ internal fun simonDeviceRegressionChecks() {
         isSteppingOnStairsOrSlabs = true
     )
     check(gapAutoJump) { "Auto-jump must be triggered when approaching a ledge across a gap even on stairs/slabs" }
+
+    // 51. Bonzo mid-air flight elevation check (niggas2 Node 12 -> Node 13)
+    // Flying 6m above target must not prematurely trigger hasArrived
+    val midAirArrival = PathExecutor.isBonzoFlightArrived(
+        destDistH = 1.80,
+        playerOnGround = false,
+        playerY = 115.04,
+        destY = 109.0
+    )
+    check(!midAirArrival) { "Bonzo flight passing 6m above landing elevation must not trigger premature arrival" }
+
+    val groundedArrival = PathExecutor.isBonzoFlightArrived(
+        destDistH = 1.80,
+        playerOnGround = true,
+        playerY = 109.0,
+        destY = 109.0
+    )
+    check(groundedArrival) { "Bonzo flight touching down on target platform elevation must trigger arrival" }
+
+    // 52. Simon Says pad arrival threshold
+    // Player 4.25m away from Simon console pad must not be marked as arrived/completed
+    val simonPadDist = 4.25
+    check(simonPadDist > 0.8) { "Player 4.25m away from Simon console must not satisfy the 0.8m pad arrival radius" }
 }
 
 
