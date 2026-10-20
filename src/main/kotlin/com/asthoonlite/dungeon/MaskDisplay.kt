@@ -63,7 +63,13 @@ object MaskDisplay : HudElement {
         if (!Config.maskDisplayEnabled || !DungeonContext.inDungeon) return
         val now = System.currentTimeMillis()
         val mc = Minecraft.getInstance()
-        var y = Config.maskHudY
+        val scale = Config.maskHudScale.coerceIn(0.5f, 3.0f)
+        val pose = context.pose()
+        pose.pushMatrix()
+        pose.translate(Config.maskHudX.toFloat(), Config.maskHudY.toFloat())
+        pose.scale(scale, scale)
+
+        var y = 0
 
         for (i in masks.indices) {
             val mask = masks[i]
@@ -94,8 +100,10 @@ object MaskDisplay : HudElement {
                     color = 0xFF55FF55.toInt()
                 }
             }
-            context.text(mc.font, text, Config.maskHudX, y, color)
+            context.text(mc.font, text, 0, y, color)
             y += mc.font.lineHeight + 2
         }
+
+        pose.popMatrix()
     }
 }

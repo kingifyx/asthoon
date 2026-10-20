@@ -159,29 +159,41 @@ internal object DungeonMapStyles {
         val center = roomCenter(cells)
         val cx = l.centerX(center.first)
         val cy = l.centerY(center.second)
-        val textColor = when (room.checkmark) {
+        val secretColor = when (room.checkmark) {
             CheckmarkTypes.GREEN -> 0xFF55FF55.toInt()
             CheckmarkTypes.FAILED -> 0xFFFF5555.toInt()
             CheckmarkTypes.WHITE -> -1
             else -> 0xFFAAAAAA.toInt()
         }
-        val lines = ArrayList<String>()
+        val nameColor = if (com.asthoonlite.config.Config.dungeonMapWhiteRoomNames) -1 else secretColor
+        val nameLines = ArrayList<String>()
+        val secretLines = ArrayList<String>()
         val showName = labels.names && !(labels.checks && room.checkmark == CheckmarkTypes.GREEN) &&
             room.type != RoomTypes.ENTRANCE && room.type != RoomTypes.FAIRY &&
             !(labels.hideCommon && room.type == RoomTypes.NORMAL) && !(labels.hideYellow && room.type == RoomTypes.YELLOW)
-        if (showName) room.name?.replace("\u200B", "- ")?.split(" ")?.filter { it.isNotBlank() }?.let(lines::addAll)
+        if (showName) room.name?.replace("\u200B", "- ")?.split(" ")?.filter { it.isNotBlank() }?.let(nameLines::addAll)
         if (labels.secrets && room.totalSecrets > 0 && !(labels.checks && room.checkmark == CheckmarkTypes.GREEN)) {
             val found = if (room.checkmark == CheckmarkTypes.GREEN) max(room.totalSecrets, room.secretsCompleted).toString()
                 else room.secretsCompleted.takeIf { it >= 0 }?.toString() ?: "?"
-            lines.add("$found/${room.totalSecrets}")
+            secretLines.add("$found/${room.totalSecrets}")
         }
-        if (lines.isNotEmpty()) {
-            val maxWidth = lines.maxOf { it.length } * 6f
-            val textScale = minOf(l.room * 0.8f / maxWidth, l.room * 0.9f / (lines.size * 9f), l.room / 20f)
+        val totalLines = nameLines.size + secretLines.size
+        if (totalLines > 0) {
+            val maxLen = (nameLines + secretLines).maxOf { it.length }
+            val maxWidth = maxLen * 6f
+            val textScale = minOf(l.room * 0.8f / maxWidth, l.room * 0.9f / (totalLines * 9f), l.room / 20f)
             c.push()
-            c.translate(cx, cy - lines.size * 9 * textScale / 2)
+            c.translate(cx, cy - totalLines * 9 * textScale / 2)
             c.scale(textScale, textScale)
-            lines.forEachIndexed { index, line -> c.text(line, 0, index * 9, textColor, true) }
+            var lineIdx = 0
+            for (line in nameLines) {
+                c.text(line, 0, lineIdx * 9, nameColor, true)
+                lineIdx++
+            }
+            for (line in secretLines) {
+                c.text(line, 0, lineIdx * 9, secretColor, true)
+                lineIdx++
+            }
             c.pop()
         } else if (labels.checks && !(labels.hideFairyCheck && room.type == RoomTypes.FAIRY)) {
             if (advanced && !room.explored && room.name != null) return
@@ -210,13 +222,14 @@ internal object DungeonMapStyles {
     private fun doorColor(door: DungeonDoor, style: Int): Int = when (door.type) {
         DoorTypes.ENTRANCE -> roomColor(style, RoomTypes.ENTRANCE, true)
         DoorTypes.BLOOD -> roomColor(style, RoomTypes.BLOOD, true)
-        DoorTypes.WITHER -> if (style == 1 && door.opened) roomColor(style, RoomTypes.NORMAL, true) else 0xFF101010.toInt()
+        DoorTypes.WITHER -> if (style == 1 && door.opened) roomColor(style, RoomTypes.NORMAL, true) else 0xFF000000.toInt()
         DoorTypes.NORMAL -> {
-            val room = if (style == 1) {
+            if (style == 0) 0xFF5C340E.toInt() // Devonian's exact RGB(92, 52, 14) normal door color
+            else {
                 val colored = door.rooms.filter { it.type != RoomTypes.NORMAL }
-                if (colored.size == 2) colored.firstOrNull { it.type != RoomTypes.FAIRY } else colored.firstOrNull()
-            } else door.rooms.minByOrNull { it.type.prio }
-            roomColor(style, room?.type ?: RoomTypes.NORMAL, true)
+                val room = if (colored.size == 2) colored.firstOrNull { it.type != RoomTypes.FAIRY } else colored.firstOrNull()
+                roomColor(style, room?.type ?: RoomTypes.NORMAL, true)
+            }
         }
     }
 

@@ -51,8 +51,13 @@ object DungeonMap : HudElement {
     internal data class RenderRoute(val hudAdvanced: Boolean, val external: Boolean)
 
     /** Full Map Overlay owns the second layer; the older external-window key stays serialized. */
+    internal fun renderRoute(fullGrid: Boolean, streamProof: Boolean, overlayAvailable: Boolean): RenderRoute =
+        if (!fullGrid) RenderRoute(false, false)
+        else if (streamProof && overlayAvailable) RenderRoute(false, true)
+        else RenderRoute(true, false)
+
     internal fun renderRoute(fullGrid: Boolean, overlayAvailable: Boolean): RenderRoute =
-        RenderRoute(fullGrid && !overlayAvailable, fullGrid && overlayAvailable)
+        renderRoute(fullGrid, streamProof = true, overlayAvailable = overlayAvailable)
 
     private var registered = false
     private var extractions = 0L
@@ -125,7 +130,7 @@ object DungeonMap : HudElement {
             return
         }
         val rect = screenRect(mc.window.guiScaledWidth, mc.window.guiScaledHeight)
-        val route = renderRoute(Config.dungeonMapFullGrid, MapOverlayWindow.isAvailable)
+        val route = renderRoute(Config.dungeonMapFullGrid, Config.dungeonMapStreamProof, MapOverlayWindow.isAvailable)
         lastRect = rect
         lastRoute = route
         drawMap(HudMapCanvas(context), mc, rect, advanced = route.hudAdvanced)
@@ -152,9 +157,15 @@ object DungeonMap : HudElement {
             DungeonMapScanner.mapOffsetZ.takeIf { it >= 0 } ?: 5)
         canvas.push()
         canvas.translate(rect.x.toFloat(), rect.y.toFloat())
-        // Border stays inside the rectangle, so the external frame covers the entire HUD frame.
-        canvas.fill(0, 0, rect.size, rect.size, 0xFF090B10.toInt())
-        canvas.fill(1, 1, rect.size - 1, rect.size - 1, 0xFF0D1F35.toInt())
+        if (style == 1) {
+            // Noamm Addons: crisp white border with 50-alpha white background
+            canvas.fill(0, 0, rect.size, rect.size, 0xFFFFFFFF.toInt())
+            canvas.fill(1, 1, rect.size - 1, rect.size - 1, 0x32FFFFFF.toInt())
+        } else {
+            // Devonian: dark themed border and deep background
+            canvas.fill(0, 0, rect.size, rect.size, 0xFF000000.toInt())
+            canvas.fill(1, 1, rect.size - 1, rect.size - 1, 0x5E000001.toInt())
+        }
         val labels = advanced || !Config.dungeonMapLegitBase
         DungeonMapStyles.draw(canvas, style, layout, DungeonScanner.rooms.toList(), DungeonScanner.doors.toList(), advanced,
             DungeonMapStyles.Labels(Config.dungeonMapShowNames && labels, Config.dungeonMapShowSecrets && labels,
@@ -181,13 +192,23 @@ object DungeonMap : HudElement {
             val color = DungeonContext.classColor(name)
             val headSize = ((if (style == 1) 12 * size / 128f else 9 * scale / 1.66f) * Config.dungeonMapPlayerHeadScale)
                 .toInt().coerceIn(6, 24)
-            val inset = if (Config.dungeonMapPlayerHeads) headSize / 2 + 3f else 8f
+            val inset = if (Config.dungeonMapPlayerHeads && !(own && Config.dungeonMapDefaultGreenMarker)) headSize / 2 + 3f else 8f
             val x = l.centerX(gx).coerceIn(inset.coerceAtMost(size / 2f), (size - inset).coerceAtLeast(size / 2f))
             val y = l.centerY(gz).coerceIn(inset.coerceAtMost(size / 2f), (size - inset).coerceAtLeast(size / 2f))
             c.push()
             c.translate(x, y)
             c.rotate(Math.toRadians(yaw + 180).toFloat())
-            if (Config.dungeonMapPlayerHeads) {
+            if (own && Config.dungeonMapDefaultGreenMarker) {
+                // Default setting: user is shown as the default green Minecraft arrow
+                val markerScale = scale * Config.dungeonMapMarkerScale * 0.35f
+                val greenColor = 0xFF55FF55.toInt()
+                if (style == 0) c.marker(true, (8 * markerScale).toInt().coerceIn(5, 10),
+                    (12 * markerScale).toInt().coerceIn(7, 14), markerScale, greenColor)
+                else {
+                    val edge = (12 * size / 128f * Config.dungeonMapMarkerScale).toInt().coerceAtLeast(5)
+                    c.image("textures/map/noamm/marker.png", -edge / 2, -edge / 2, edge, 7, greenColor)
+                }
+            } else if (Config.dungeonMapPlayerHeads) {
                 // Noamm renderPlayer: rotate face and class border together, including self.
                 c.face(name, skin, -headSize / 2, -headSize / 2, headSize, color)
             } else {
@@ -200,15 +221,30 @@ object DungeonMap : HudElement {
                 }
             }
             c.pop()
-            if (own && Config.dungeonMapMarkerSelf && Config.dungeonMapPlayerHeads) {
+            if (own && Config.dungeonMapMarkerSelf && Config.dungeonMapPlayerHeads && !Config.dungeonMapDefaultGreenMarker) {
                 c.push()
                 c.translate(x, y)
                 c.rotate(Math.toRadians(yaw + 180).toFloat())
                 c.fill(-1, -headSize / 2 - 4, 2, -headSize / 2 - 2, color)
                 c.pop()
             }
-            if (showNames) c.text(name.take(4), x.toInt().coerceIn(12, (size - 12).coerceAtLeast(12)),
-                (y + headSize / 2 + 3).toInt().coerceAtMost(size - 9), color, true)
+            if (showNames) {
+                val label = if (Config.dungeonMapShowClassNames) {
+                    val pClass = DungeonContext.playerClasses[name]
+                        ?: DungeonContext.playerClasses.entries.firstOrNull { it.key.equals(name, ignoreCase = true) }?.value
+                    when (pClass) {
+                        DungeonContext.PlayerClass.ARCHER -> "Arch"
+                        DungeonContext.PlayerClass.MAGE -> "Mage"
+                        DungeonContext.PlayerClass.TANK -> "Tank"
+                        DungeonContext.PlayerClass.BERSERK -> "Bers"
+                        DungeonContext.PlayerClass.HEALER -> "Heal"
+                        else -> name.take(4)
+                    }
+                } else name.take(4)
+
+                c.text(label, x.toInt().coerceIn(12, (size - 12).coerceAtLeast(12)),
+                    (y + headSize / 2 + 3).toInt().coerceAtMost(size - 9), color, true)
+            }
         }
         fun gx(x: Double) = ((x - cornerStart.x - halfRoomSize) / roomDoorCombinedSize).toFloat()
         fun gz(z: Double) = ((z - cornerStart.z - halfRoomSize) / roomDoorCombinedSize).toFloat()

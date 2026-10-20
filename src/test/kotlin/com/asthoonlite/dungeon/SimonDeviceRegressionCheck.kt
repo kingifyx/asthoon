@@ -260,10 +260,12 @@ internal fun simonDeviceRegressionChecks() {
         com.asthoonlite.pathfinding.RouteNodeType.TERMINAL,
         com.asthoonlite.pathfinding.RouteNodeType.SIMON_SAYS,
         com.asthoonlite.pathfinding.RouteNodeType.ARROWS_ALIGN,
+        com.asthoonlite.pathfinding.RouteNodeType.LAMPS,
+        com.asthoonlite.pathfinding.RouteNodeType.LEVER,
         com.asthoonlite.pathfinding.RouteNodeType.TIMEOUT,
         com.asthoonlite.pathfinding.RouteNodeType.INTERACT,
         com.asthoonlite.pathfinding.RouteNodeType.BREAK
-    )) { "M7 routes must allow WALK, BONZO_STAFF, JUMP, CROUCH, TERMINAL, SIMON_SAYS, ARROWS_ALIGN, TIMEOUT, INTERACT, and BREAK (no AOTV / Etherwarp)" }
+    )) { "M7 routes must allow WALK, BONZO_STAFF, JUMP, CROUCH, TERMINAL, SIMON_SAYS, ARROWS_ALIGN, LAMPS, LEVER, TIMEOUT, INTERACT, and BREAK (no AOTV / Etherwarp)" }
 
     // 4. Node swapping and drag-and-drop reordering
     val preset = com.asthoonlite.pathfinding.PathPreset(

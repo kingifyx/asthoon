@@ -98,6 +98,7 @@ object AsthoonLite : ClientModInitializer {
         com.asthoonlite.dungeon.TerminalProgressHud.register()
         F7Devices.register()
         ArrowAlignSolver.register()
+        com.asthoonlite.dungeon.LampsDeviceSolver.register()
         SecretHitboxes.register()
         SecretAura.register()
         com.asthoonlite.dungeon.SecretTriggerBot.register()

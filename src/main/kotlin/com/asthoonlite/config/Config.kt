@@ -337,6 +337,25 @@ object Config {
         var starMobRenderMode: Int = 0, // 0 = Fill, 1 = Box
         var goldorRouteKey: Int = -1,
         var lastPathfindingPresetId: String = "",
+
+        // ── New Features & Refinements ───────────────────────────────────────
+        var dungeonMapShowClassNames : Boolean = true,
+        var dungeonMapStreamProof    : Boolean = false, // false = direct full HUD map without external stream proof window
+        var dungeonMapDefaultGreenMarker : Boolean = true, // default user marker is green Minecraft arrow
+        var dungeonMapWhiteRoomNames : Boolean = true,
+        var autoArrowAlignEnabled    : Boolean = false,
+        var autoLampsEnabled         : Boolean = false,
+
+        // ── Non-Map HUD Positions & Scales (Editable via /asl gui) ───────────
+        var alertHudX                : Int     = -1, // -1 means default center
+        var alertHudY                : Int     = -1,
+        var alertHudScale            : Float   = 2.5f,
+        var termProgressHudX         : Int     = -1, // -1 means default center
+        var termProgressHudY         : Int     = -1,
+        var termProgressHudScale     : Float   = 1.0f,
+        var maskHudScale             : Float   = 1.0f,
+        var dragonHudScale           : Float   = 1.0f,
+        var dungeonTimerScale        : Float   = 1.0f,
     )
 
     var data = Data()
@@ -1274,6 +1293,66 @@ object Config {
     var terminalTriggerBotCooldown: Double
         get() = data.terminalTriggerBotCooldown.coerceIn(0.5, 60.0)
         set(v) { data.terminalTriggerBotCooldown = v.coerceIn(0.5, 60.0); save() }
+
+    var dungeonMapShowClassNames: Boolean
+        get() = data.dungeonMapShowClassNames
+        set(v) { data.dungeonMapShowClassNames = v; save() }
+
+    var dungeonMapStreamProof: Boolean
+        get() = data.dungeonMapStreamProof
+        set(v) { data.dungeonMapStreamProof = v; save() }
+
+    var dungeonMapDefaultGreenMarker: Boolean
+        get() = data.dungeonMapDefaultGreenMarker
+        set(v) { data.dungeonMapDefaultGreenMarker = v; save() }
+
+    var dungeonMapWhiteRoomNames: Boolean
+        get() = data.dungeonMapWhiteRoomNames
+        set(v) { data.dungeonMapWhiteRoomNames = v; save() }
+
+    var autoArrowAlignEnabled: Boolean
+        get() = data.autoArrowAlignEnabled
+        set(v) { data.autoArrowAlignEnabled = v; save() }
+
+    var autoLampsEnabled: Boolean
+        get() = data.autoLampsEnabled
+        set(v) { data.autoLampsEnabled = v; save() }
+
+    var alertHudX: Int
+        get() = data.alertHudX
+        set(v) { data.alertHudX = v; save() }
+
+    var alertHudY: Int
+        get() = data.alertHudY
+        set(v) { data.alertHudY = v; save() }
+
+    var alertHudScale: Float
+        get() = data.alertHudScale
+        set(v) { data.alertHudScale = v.coerceIn(0.5f, 5.0f); save() }
+
+    var termProgressHudX: Int
+        get() = data.termProgressHudX
+        set(v) { data.termProgressHudX = v; save() }
+
+    var termProgressHudY: Int
+        get() = data.termProgressHudY
+        set(v) { data.termProgressHudY = v; save() }
+
+    var termProgressHudScale: Float
+        get() = data.termProgressHudScale
+        set(v) { data.termProgressHudScale = v.coerceIn(0.5f, 3.0f); save() }
+
+    var maskHudScale: Float
+        get() = data.maskHudScale
+        set(v) { data.maskHudScale = v.coerceIn(0.5f, 3.0f); save() }
+
+    var dragonHudScale: Float
+        get() = data.dragonHudScale
+        set(v) { data.dragonHudScale = v.coerceIn(0.5f, 3.0f); save() }
+
+    var dungeonTimerScale: Float
+        get() = data.dungeonTimerScale
+        set(v) { data.dungeonTimerScale = v.coerceIn(0.5f, 3.0f); save() }
 
     fun load() {
         if (!configDir.exists()) configDir.mkdirs()

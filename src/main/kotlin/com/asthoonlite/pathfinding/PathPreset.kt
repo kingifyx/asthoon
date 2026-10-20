@@ -66,6 +66,8 @@ enum class RouteNodeType(
     TERMINAL("Terminal", 0xFF06B6D4.toInt(), "Aims camera at terminal and opens with triggerbot"),
     SIMON_SAYS("Simon Says", 0xFF8B5CF6.toInt(), "Stands at waypoint until Simon Says device completes"),
     ARROWS_ALIGN("Arrows Align", 0xFF3B82F6.toInt(), "Stands at waypoint until Arrows Align completes"),
+    LAMPS("Lamps", 0xFFEAB308.toInt(), "Stands at waypoint until Lamps / Lights device completes"),
+    LEVER("Lever", 0xFF14B8A6.toInt(), "Aims at and activates lever automatically on approach"),
     TIMEOUT("Timeout", 0xFFF97316.toInt(), "Waits configured seconds standing still"),
     INTERACT("Interact", 0xFF38BDF8.toInt(), "Clicks or triggers lever, button, or device"),
     BREAK("Break", 0xFFE11D48.toInt(), "Equips Dungeon Breaker and breaks target block while running");
@@ -75,7 +77,7 @@ enum class RouteNodeType(
             entries.firstOrNull { it.name.equals(name, ignoreCase = true) || it.displayName.equals(name, ignoreCase = true) } ?: WALK
 
         fun allowedForCategory(category: RouteCategory): List<RouteNodeType> = when (category) {
-            RouteCategory.M7 -> listOf(WALK, BONZO_STAFF, JUMP, CROUCH, TERMINAL, SIMON_SAYS, ARROWS_ALIGN, TIMEOUT, INTERACT, BREAK)
+            RouteCategory.M7 -> listOf(WALK, BONZO_STAFF, JUMP, CROUCH, TERMINAL, SIMON_SAYS, ARROWS_ALIGN, LAMPS, LEVER, TIMEOUT, INTERACT, BREAK)
             else -> entries
         }
     }

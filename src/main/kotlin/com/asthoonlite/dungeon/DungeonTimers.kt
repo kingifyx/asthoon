@@ -148,11 +148,18 @@ object DungeonTimers : HudElement {
         if (secretTick > 0) lines += "Secret ${fmt(secretTick)}"
         if (lines.isEmpty()) return
 
-        val x = Config.dungeonTimerX
-        var y = Config.dungeonTimerY
+        val scale = Config.dungeonTimerScale.coerceIn(0.5f, 3.0f)
+        val pose = context.pose()
+        pose.pushMatrix()
+        pose.translate(Config.dungeonTimerX.toFloat(), Config.dungeonTimerY.toFloat())
+        pose.scale(scale, scale)
+
+        var y = 0
         for (line in lines.take(8)) {
-            context.text(mc.font, line, x, y, 0xFFE0EEFF.toInt())
+            context.text(mc.font, line, 0, y, 0xFFE0EEFF.toInt())
             y += mc.font.lineHeight + 2
         }
+
+        pose.popMatrix()
     }
 }

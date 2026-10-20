@@ -94,13 +94,14 @@ object AlertHud : HudElement {
 
         val w = mc.window.guiScaledWidth.toFloat()
         val h = mc.window.guiScaledHeight.toFloat()
-        val cx = w / 2f
-        val cy = h / 2f - (h * 0.056f)
+        val cx = if (com.asthoonlite.config.Config.alertHudX >= 0) com.asthoonlite.config.Config.alertHudX.toFloat() else (w / 2f)
+        val cy = if (com.asthoonlite.config.Config.alertHudY >= 0) com.asthoonlite.config.Config.alertHudY.toFloat() else (h / 2f - (h * 0.056f))
+        val scale = com.asthoonlite.config.Config.alertHudScale.coerceIn(0.5f, 5.0f)
 
         val pose = context.pose()
         pose.pushMatrix()
         pose.translate(cx, cy)
-        pose.scale(2.5f, 2.5f)
+        pose.scale(scale, scale)
 
         val textColor = (alpha shl 24) or (popup.color and 0x00FFFFFF)
         context.centeredText(font, popup.text, 0, -font.lineHeight / 2, textColor)

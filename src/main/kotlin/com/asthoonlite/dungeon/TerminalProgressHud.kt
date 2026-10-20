@@ -45,13 +45,21 @@ object TerminalProgressHud : HudElement {
         val progress = AutoTerminal.progress() ?: return
         val mc = Minecraft.getInstance()
         val font = mc.font
-        val centre = mc.window.guiScaledWidth / 2
         val name = "In Terminal (${progress.name})"
         val ratio = "[${progress.done}/${progress.goal}]"
-        // A tenth of the screen down: clear of the grid, which is centred, and
-        // clear of the title the custom GUI prints above that grid.
-        val y = mc.window.guiScaledHeight / 10
-        context.text(font, name, centre - font.width(name) / 2, y, 0xFF00AAAA.toInt())
-        context.text(font, ratio, centre - font.width(ratio) / 2, y + font.lineHeight + 1, 0xFF55FFFF.toInt())
+        val maxTextW = maxOf(font.width(name), font.width(ratio))
+        val centre = if (Config.termProgressHudX >= 0) Config.termProgressHudX + maxTextW / 2 else (mc.window.guiScaledWidth / 2)
+        val y = if (Config.termProgressHudY >= 0) Config.termProgressHudY else (mc.window.guiScaledHeight / 10)
+        val scale = Config.termProgressHudScale.coerceIn(0.5f, 3.0f)
+
+        val pose = context.pose()
+        pose.pushMatrix()
+        pose.translate(centre.toFloat(), y.toFloat())
+        pose.scale(scale, scale)
+
+        context.text(font, name, -font.width(name) / 2, 0, 0xFF00AAAA.toInt())
+        context.text(font, ratio, -font.width(ratio) / 2, font.lineHeight + 1, 0xFF55FFFF.toInt())
+
+        pose.popMatrix()
     }
 }

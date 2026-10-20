@@ -18,6 +18,7 @@ object ArrowAlignSolver {
     private val frameRotations = IntArray(25) { -1 }
     private val clicksRemaining = IntArray(25) { 0 }
     private var solution: List<Int>? = null
+    private var lastAutoClickTime = 0L
     private val possibleSolutions = listOf(
         listOf(7,7,-1,-1,-1,1,-1,-1,-1,-1,1,3,3,3,3,-1,-1,-1,-1,1,-1,-1,-1,7,1),
         listOf(-1,-1,7,7,5,-1,7,1,-1,5,-1,-1,-1,-1,-1,-1,7,5,-1,1,-1,-1,7,7,1),
@@ -58,6 +59,24 @@ object ArrowAlignSolver {
         }
         val sol = solution ?: return
         for (i in 0 until 25) clicksRemaining[i] = if (frameRotations[i] < 0) 0 else getClicks(frameRotations[i], sol[i])
+
+        if (Config.autoArrowAlignEnabled && !isSolved()) {
+            val now = System.currentTimeMillis()
+            if (now - lastAutoClickTime >= 140) { // human click cadence (~7 cps)
+                val targetIndex = (0 until 25).firstOrNull { clicksRemaining[it] > 0 }
+                if (targetIndex != null) {
+                    val framePos = BlockPos(gridCorner.x, gridCorner.y + (targetIndex % 5), gridCorner.z + (targetIndex / 5))
+                    val frame = level.getEntitiesOfClass(ItemFrame::class.java, net.minecraft.world.phys.AABB(framePos)).firstOrNull { it.item.`is`(Items.ARROW) }
+                    if (frame != null && player.distanceToSqr(frame) <= 25.0) {
+                        lastAutoClickTime = now
+                        val hitResult = net.minecraft.world.phys.EntityHitResult(frame)
+                        mc.gameMode?.interact(player, frame, hitResult, net.minecraft.world.InteractionHand.MAIN_HAND)
+                        player.swing(net.minecraft.world.InteractionHand.MAIN_HAND)
+                        onAllowedClick(frame)
+                    }
+                }
+            }
+        }
     }
 
     /** Return true when a right-click on this arrow frame should be rejected. */

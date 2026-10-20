@@ -174,11 +174,19 @@ object DragonPhase : HudElement {
             lines += "${dragon.display}: ${String.format("%.2fs", spawnTimer / 20.0)} $hp$flags"
         }
 
-        var y = Config.dragonHudY
+        val scale = Config.dragonHudScale.coerceIn(0.5f, 3.0f)
+        val pose = context.pose()
+        pose.pushMatrix()
+        pose.translate(Config.dragonHudX.toFloat(), Config.dragonHudY.toFloat())
+        pose.scale(scale, scale)
+
+        var y = 0
         for (line in lines.take(7)) {
-            context.text(mc.font, line, Config.dragonHudX, y, 0xFFE0EEFF.toInt())
+            context.text(mc.font, line, 0, y, 0xFFE0EEFF.toInt())
             y += mc.font.lineHeight + 2
         }
+
+        pose.popMatrix()
     }
 
     fun onDragonPacket(packet: ClientboundAddEntityPacket) {

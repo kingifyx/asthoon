@@ -77,7 +77,7 @@ object StarMobESP {
 
     fun register() {
         ClientTickEvents.END_CLIENT_TICK.register { tick() }
-        LevelRenderEvents.END_EXTRACTION.register { queueBoxes() }
+        LevelRenderEvents.END_EXTRACTION.register { context -> queueBoxes(context.deltaTracker()) }
         ClientPlayConnectionEvents.JOIN.register { _, _, _ -> resetRun("ClientPlayConnectionEvents.JOIN") }
         ClientPlayConnectionEvents.DISCONNECT.register { _, _ -> resetRun("ClientPlayConnectionEvents.DISCONNECT") }
     }
@@ -255,12 +255,16 @@ object StarMobESP {
     private fun isRoomCleared(pos: net.minecraft.world.phys.Vec3): Boolean {
         val comp = com.asthoonlite.dungeon.api.WorldPosition(pos.x.toInt(), pos.z.toInt()).toComponent()
         val mobRoom = if (comp.isInBounds()) com.asthoonlite.dungeon.map.DungeonScanner.rooms.getOrNull(comp.getRoomIdx()) else null
-        if (mobRoom != null && (mobRoom.checkmark == com.asthoonlite.dungeon.api.mapEnums.CheckmarkTypes.GREEN ||
-                mobRoom.checkmark == com.asthoonlite.dungeon.api.mapEnums.CheckmarkTypes.FAILED)) {
-            return true
+        if (mobRoom != null) {
+            if (mobRoom.checkmark == com.asthoonlite.dungeon.api.mapEnums.CheckmarkTypes.GREEN ||
+                mobRoom.checkmark == com.asthoonlite.dungeon.api.mapEnums.CheckmarkTypes.WHITE ||
+                mobRoom.checkmark == com.asthoonlite.dungeon.api.mapEnums.CheckmarkTypes.FAILED) {
+                return true
+            }
         }
         val currentRoom = com.asthoonlite.dungeon.map.DungeonScanner.currentRoom
         if (currentRoom != null && (currentRoom.checkmark == com.asthoonlite.dungeon.api.mapEnums.CheckmarkTypes.GREEN ||
+                currentRoom.checkmark == com.asthoonlite.dungeon.api.mapEnums.CheckmarkTypes.WHITE ||
                 currentRoom.checkmark == com.asthoonlite.dungeon.api.mapEnums.CheckmarkTypes.FAILED)) {
             val player = Minecraft.getInstance().player
             if (player != null && isInSameRoom(pos, player.position())) {
@@ -304,7 +308,7 @@ object StarMobESP {
         return playerComp.x / 2 == mobComp.x / 2 && playerComp.z / 2 == mobComp.z / 2
     }
 
-    private fun queueBoxes() {
+    private fun queueBoxes(deltaTracker: net.minecraft.client.DeltaTracker? = null) {
         queueCallbackCount++
         lastQueuedMobs = 0
         lastRejectedRoom = 0
@@ -320,16 +324,23 @@ object StarMobESP {
         lastQueueGate = if (starMobs.isEmpty()) "no_tracked_mobs" else "filtered"
 
         val phase = Config.starMobEspThroughWalls
+        val partialTick = deltaTracker?.getGameTimeDeltaPartialTick(true) ?: 1.0f
 
         for ((id, category) in starMobs) {
             if (Config.starMobRenderMode == 1 && id in extraBats) continue
             val entity = level.getEntity(id) ?: continue
             if (entity.isRemoved || (entity is LivingEntity && (entity.isDeadOrDying || entity.health <= 0f))) continue
-            val pos = entity.position()
-            if (isRoomCleared(pos)) { lastRejectedCleared++; continue }
+
+            // Smooth partial tick interpolated position to eliminate 20Hz jitter
+            val currentX = net.minecraft.util.Mth.lerp(partialTick.toDouble(), entity.xo, entity.x)
+            val currentY = net.minecraft.util.Mth.lerp(partialTick.toDouble(), entity.yo, entity.y)
+            val currentZ = net.minecraft.util.Mth.lerp(partialTick.toDouble(), entity.zo, entity.z)
+            val pos = Vec3(currentX, currentY, currentZ)
+
+            if (isRoomCleared(entity.position())) { lastRejectedCleared++; continue }
             // If through-walls is off, skip mobs blocked by geometry or outside the current room
             if (!phase) {
-                if (!isInSameRoom(pos, player.position())) { lastRejectedRoom++; continue }
+                if (!isInSameRoom(entity.position(), player.position())) { lastRejectedRoom++; continue }
                 if (!player.hasLineOfSight(entity)) { lastRejectedSight++; continue }
             }
 
@@ -338,7 +349,7 @@ object StarMobESP {
             val r = ((color shr 16) and 0xFF) / 255f
             val g = ((color shr 8) and 0xFF) / 255f
             val b = (color and 0xFF) / 255f
-            val bounds = renderBounds(Config.starMobRenderMode, entity.boundingBox, pos, height)
+            val bounds = renderBounds(Config.starMobRenderMode, entity.boundingBox.move(pos.subtract(entity.position())), pos, height)
             val minX = bounds.minX
             val maxX = bounds.maxX
             val minY = bounds.minY

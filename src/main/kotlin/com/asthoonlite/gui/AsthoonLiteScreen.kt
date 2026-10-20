@@ -573,8 +573,10 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                     }),
                 ToggleRow("  ↳ Always Show", "Show map without holding map item",
                     { Config.dungeonMapAlwaysShow }, { Config.dungeonMapAlwaysShow = it }),
-                ToggleRow("  ↳ Full Map Overlay", "Cover the HUD map with an external map showing unopened rooms",
+                ToggleRow("  ↳ Full Map (Cheater Grid)", "Show unopened rooms and full layout",
                     { Config.dungeonMapFullGrid }, { Config.dungeonMapFullGrid = it }),
+                ToggleRow("    ↳ Stream Proof Overlay", "Cover unopened rooms with an external transparent window rather than drawing directly to game HUD",
+                    { Config.dungeonMapStreamProof }, { Config.dungeonMapStreamProof = it }),
                 ToggleRow("  ↳ Legit Base", "Draw only what the held map item shows: explored rooms, cleared-room checkmarks, no names or counters",
                     { Config.dungeonMapLegitBase }, { Config.dungeonMapLegitBase = it }),
                 ToggleRow("  ↳ Hide Map in Boss", "Automatically hide map during boss fights",
@@ -592,6 +594,8 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                     Config.save()
                 }),
                 SectionHeader("Player Tracking"),
+                ToggleRow("  ↳ Default Green Minecraft Arrow", "Display yourself as the classic green Minecraft player marker",
+                    { Config.dungeonMapDefaultGreenMarker }, { Config.dungeonMapDefaultGreenMarker = it }),
                 ToggleRow("  ↳ Player Heads", "Render teammate heads on map",
                     { Config.dungeonMapPlayerHeads }, { Config.dungeonMapPlayerHeads = it }),
                 WidgetRow(IntSlider(subX, 0, subW, 24, 5, 30, (Config.dungeonMapPlayerHeadScale * 10).toInt(), "Player Head Scale: ", "0.1x") {
@@ -602,8 +606,10 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 WidgetRow(IntSlider(subX + 12, 0, subW - 12, 24, 5, 30, (Config.dungeonMapMarkerScale * 10).toInt(), "Marker Arrow Scale: ", "0.1x") {
                     Config.dungeonMapMarkerScale = it / 10.0f
                 }),
-                ToggleRow("  ↳ Player Names", "Show player name tags on map",
+                ToggleRow("  ↳ Show Player Labels", "Show player text labels on map",
                     { Config.dungeonMapPlayerNames }, { Config.dungeonMapPlayerNames = it }),
+                ToggleRow("    ↳ Show Correlating Class", "Display class role (Arch/Mage/Tank/Bers/Heal) instead of player username",
+                    { Config.dungeonMapShowClassNames }, { Config.dungeonMapShowClassNames = it }),
                 ToggleRow("    ↳ Only When Holding Leap", "Only show names while holding Spirit Leap",
                     { Config.dungeonMapNamesOnlyLeap }, { Config.dungeonMapNamesOnlyLeap = it }),
                 ToggleRow("  ↳ All Map Markers", "Draw every decoration from the map packet, including mob and waypoint markers (off = teammate markers only)",
@@ -611,6 +617,8 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 SectionHeader("Room Labels & Secrets"),
                 ToggleRow("  ↳ Show Room Names", "Display room titles on the map",
                     { Config.dungeonMapShowNames }, { Config.dungeonMapShowNames = it }),
+                ToggleRow("    ↳ White Room Names", "Render room names in crisp white color",
+                    { Config.dungeonMapWhiteRoomNames }, { Config.dungeonMapWhiteRoomNames = it }),
                 ToggleRow("    ↳ Hide Common Room Names", "Only show special, puzzle, and trap room names",
                     { Config.dungeonMapDontRenderCommonNames }, { Config.dungeonMapDontRenderCommonNames = it }),
                 ToggleRow("    ↳ Hide Yellow Room Name", "Don't render name on yellow room",
@@ -916,6 +924,10 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                         { Config.autoSimonSaysEnabled }, { Config.autoSimonSaysEnabled = it }),
                     ToggleRow("  ↳ Fast Mode", "Increases rotation speed and click cadence for Simon Says",
                         { Config.autoSimonSaysFast }, { Config.autoSimonSaysFast = it }),
+                    ToggleRow("Auto Arrows Align", "Automatically clicks the correct arrow frames to solve Arrows Align",
+                        { Config.autoArrowAlignEnabled }, { Config.autoArrowAlignEnabled = it }),
+                    ToggleRow("Auto Lamps Device", "Automatically toggles Section 2 (EE2) light levers to solve Lamps",
+                        { Config.autoLampsEnabled }, { Config.autoLampsEnabled = it }),
                     ToggleRow("Block Wrong Device Clicks", "Prevents clicking incorrect Simon Says buttons or completed/wrong arrows",
                         { Config.blockWrongDeviceClicks }, { Config.blockWrongDeviceClicks = it }),
                     ToggleRow("Mask Display", "Bonzo, Spirit, and Phoenix mask cooldown HUD",
@@ -1810,7 +1822,8 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
                 searchBox.isFocused = false
             }
         }
-        return super.keyPressed(event)
+        if (super.keyPressed(event)) return true
+        return false
     }
 
     private fun getNodeIndexAtY(mouseY: Double): Int {
@@ -1828,6 +1841,18 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
 
     override fun mouseClicked(screenEvent: MouseButtonEvent, doubleClick: Boolean): Boolean {
         val event = logicalEvent(screenEvent)
+        if (::searchBox.isInitialized) {
+            val mx = event.x().toInt()
+            val my = event.y().toInt()
+            val inSearch = mx in searchBox.x..(searchBox.x + searchBox.width) && my in searchBox.y..(searchBox.y + searchBox.height)
+            if (inSearch && doubleClick) {
+                // Double click selects word / all text in search box so user can highlight and backspace
+                searchBox.isFocused = true
+                searchBox.setCursorPosition(0)
+                searchBox.setHighlightPos(searchBox.value.length)
+                return true
+            }
+        }
         if (listeningForGoldorRouteKey && event.button() != 0) {
             Config.goldorRouteKey = event.button()
             listeningForGoldorRouteKey = false
@@ -1874,10 +1899,20 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
             val bottom = contentBottom()
             val mx = event.x().toInt()
             val my = event.y().toInt()
-            if (mx in (trackX - 6)..(trackX + 8) && my in top..bottom) {
+            if (mx in (trackX - 10)..(trackX + 10) && my in top..bottom) {
                 isDraggingScrollbar = true
                 scrollDragStartY = event.y()
                 scrollDragStartOffset = scrollOffset
+                // If clicked outside current thumb, jump immediately towards mouse
+                val trackH = (bottom - top).coerceAtLeast(1)
+                val thumbH = ((trackH.toFloat() / (trackH + maxScroll)) * trackH).toInt().coerceIn(16, trackH)
+                val thumbY = top + ((scrollOffset.toFloat() / maxScroll) * (trackH - thumbH)).toInt()
+                if (my < thumbY || my > thumbY + thumbH) {
+                    val clickFraction = (my - top - thumbH / 2).toFloat() / (trackH - thumbH).coerceAtLeast(1)
+                    scrollOffset = (clickFraction * maxScroll).toInt().coerceIn(0, maxScroll)
+                    scrollDragStartOffset = scrollOffset
+                    updateWidgetPositions()
+                }
                 return true
             }
         }
@@ -1957,8 +1992,10 @@ class AsthoonLiteScreen : Screen(Component.literal("AsthoonLite")) {
             val top = contentTop()
             val bottom = contentBottom()
             val trackH = (bottom - top).coerceAtLeast(1)
+            val thumbH = ((trackH.toFloat() / (trackH + maxScroll())) * trackH).toInt().coerceIn(16, trackH)
+            val effectiveRange = (trackH - thumbH).coerceAtLeast(1)
             val deltaY = event.y() - scrollDragStartY
-            scrollOffset = (scrollDragStartOffset + (deltaY / trackH * maxScroll()).toInt()).coerceIn(0, maxScroll())
+            scrollOffset = (scrollDragStartOffset + (deltaY / effectiveRange * maxScroll()).toInt()).coerceIn(0, maxScroll())
             updateWidgetPositions()
             return true
         }

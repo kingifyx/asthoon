@@ -427,7 +427,7 @@ object PathExecutor {
         val dz = target.z - player.z
         val distH = sqrt(dx * dx + dz * dz)
         val distY = abs(target.y - player.y)
-        val isDeviceNode = nodeType == RouteNodeType.SIMON_SAYS || nodeType == RouteNodeType.ARROWS_ALIGN
+        val isDeviceNode = nodeType == RouteNodeType.SIMON_SAYS || nodeType == RouteNodeType.ARROWS_ALIGN || nodeType == RouteNodeType.LAMPS
         val isFinalNode = currentNodeIndex == points.size - 1
         val isStationaryDest = isDeviceNode || nodeType == RouteNodeType.TIMEOUT || (isFinalNode && distH <= 4.0)
 
@@ -697,6 +697,19 @@ object PathExecutor {
             return
         }
 
+        if (nodeType == RouteNodeType.LAMPS && distY <= 1.5 && (isSettled || (player.onGround() && distH <= 1.2))) {
+            releaseAllMovementKeys()
+            player.setSprinting(false)
+            jumpTicksRemaining = 0
+            aimTowards(player, target, Vec3(60.0, 134.5, 142.0))
+            if (com.asthoonlite.dungeon.LampsDeviceSolver.isSolved()) {
+                currentNodeIndex++
+                resetSpecialNodeState()
+                if (currentNodeIndex >= points.size) finishRoute(preset)
+            }
+            return
+        }
+
         if (nodeType == RouteNodeType.TIMEOUT && distY <= 1.5 && (isSettled || (player.onGround() && distH <= 0.50))) {
             releaseAllMovementKeys()
             player.setSprinting(false)
@@ -768,6 +781,35 @@ object PathExecutor {
                     if (currentNodeIndex >= points.size) finishRoute(preset)
                 }
                 return
+            }
+        }
+
+        // 4b. Specialized Approach Node: Lever
+        if (nodeType == RouteNodeType.LEVER) {
+            val leverBlockPos = if (target.hasLookNode) {
+                BlockPos(target.lookX.toInt(), target.lookY.toInt(), target.lookZ.toInt())
+            } else {
+                BlockPos(target.x.toInt(), target.y.toInt(), target.z.toInt())
+            }
+            val leverTargetVec = Vec3.atCenterOf(leverBlockPos)
+
+            if (distH < 5.0) {
+                aimTowardsVec(player, leverTargetVec)
+            }
+
+            // In interaction range (~4.5m)
+            if (player.eyePosition.distanceTo(leverTargetVec) <= 4.2) {
+                val now = System.currentTimeMillis()
+                if (now - lastTerminalClickTime > 250L) {
+                    lastTerminalClickTime = now
+                    player.swing(InteractionHand.MAIN_HAND)
+                    val hitResult = BlockHitResult(leverTargetVec, Direction.UP, leverBlockPos, false)
+                    mc.gameMode?.useItemOn(player, InteractionHand.MAIN_HAND, hitResult)
+                    currentNodeIndex++
+                    resetSpecialNodeState()
+                    if (currentNodeIndex >= points.size) finishRoute(preset)
+                    return
+                }
             }
         }
 
@@ -1021,7 +1063,7 @@ object PathExecutor {
              KinematicTrajectory.shouldPredictiveLedgeJump(level, Vec3(player.x, player.y, player.z), player.deltaMovement, Vec3(target.x, target.y, target.z), player.onGround()))
 
         val isApproachingStationary = isStationaryDest || nextTarget?.nodeType() in setOf(
-            RouteNodeType.SIMON_SAYS, RouteNodeType.ARROWS_ALIGN, RouteNodeType.TERMINAL, RouteNodeType.TIMEOUT
+            RouteNodeType.SIMON_SAYS, RouteNodeType.ARROWS_ALIGN, RouteNodeType.LAMPS, RouteNodeType.TERMINAL, RouteNodeType.TIMEOUT
         )
         val isCrossingGapToStationary = isApproachingStationary && !isDeviceNode && hasGapToTarget && distH >= 1.2
         val isLedge = if (isApproachingStationary) {
@@ -1359,6 +1401,7 @@ object PathExecutor {
         // If at final node and landed/settled on ground, complete route cleanly (device nodes finish via solver completion)
         val isSpecialStationary = nodeType == RouteNodeType.SIMON_SAYS ||
             nodeType == RouteNodeType.ARROWS_ALIGN ||
+            nodeType == RouteNodeType.LAMPS ||
             nodeType == RouteNodeType.TERMINAL ||
             nodeType == RouteNodeType.TIMEOUT
         val settledDistThreshold = if (isHighSpeed) 2.2 else 0.35
@@ -1754,7 +1797,7 @@ object PathExecutor {
         // Retain the landing target until grounded before starting a crouched, break, or Bonzo traverse,
         // or when clearing a gap/chasm to a platform, unless descending/dropping to a lower level.
         val isNextStationary = when (nextType) {
-            RouteNodeType.SIMON_SAYS, RouteNodeType.ARROWS_ALIGN, RouteNodeType.TERMINAL, RouteNodeType.TIMEOUT -> true
+            RouteNodeType.SIMON_SAYS, RouteNodeType.ARROWS_ALIGN, RouteNodeType.LAMPS, RouteNodeType.TERMINAL, RouteNodeType.TIMEOUT -> true
             else -> false
         }
         val requiresTouchdown = stationaryDestination || isCrossingGap || (currentType == RouteNodeType.BREAK && !isDescending) ||
@@ -1824,7 +1867,7 @@ object PathExecutor {
         val prevNode = points.getOrNull(currentNodeIndex - 1)
         val nextTarget = points.getOrNull(currentNodeIndex + 1)
 
-        val isDeviceNode = nodeType == RouteNodeType.SIMON_SAYS || nodeType == RouteNodeType.ARROWS_ALIGN
+        val isDeviceNode = nodeType == RouteNodeType.SIMON_SAYS || nodeType == RouteNodeType.ARROWS_ALIGN || nodeType == RouteNodeType.LAMPS
         val isSettled = isSettledAtNode(player, target)
         if (nodeType == RouteNodeType.SIMON_SAYS && isSettled && F7Devices.isSimonAiming()) return
 
@@ -1998,6 +2041,16 @@ object PathExecutor {
                 val adistH = sqrt(adx * adx + adz * adz)
                 goalYaw = (-Math.toDegrees(atan2(adx, adz))).toFloat()
                 goalPitch = (-Math.toDegrees(atan2(ady, adistH))).toFloat().coerceIn(-89f, 89f)
+                isFastAim = false
+            }
+            nodeType == RouteNodeType.LAMPS && isSettled -> {
+                val lampPos = Vec3(60.0, 134.5, 142.0)
+                val ldx = lampPos.x - currentX
+                val ldy = lampPos.y - currentEyeY
+                val ldz = lampPos.z - currentZ
+                val ldistH = sqrt(ldx * ldx + ldz * ldz)
+                goalYaw = (-Math.toDegrees(atan2(ldx, ldz))).toFloat()
+                goalPitch = (-Math.toDegrees(atan2(ldy, ldistH))).toFloat().coerceIn(-89f, 89f)
                 isFastAim = false
             }
             currentNodeIndex == points.size - 1 && distH <= 2.0 -> {

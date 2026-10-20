@@ -29,11 +29,32 @@ object AslCommand {
         }.also { it.isDaemon = true }.start()
     }
 
+    private fun openHudEditorScreen() {
+        val mc = Minecraft.getInstance()
+        Thread {
+            Thread.sleep(50)
+            mc.execute {
+                try {
+                    mc.setScreen(com.asthoonlite.gui.HudEditorScreen())
+                } catch (e: Exception) {
+                    AsthoonLite.LOGGER.error("[AsthoonLite] Failed to open HUD editor", e)
+                }
+            }
+        }.also { it.isDaemon = true }.start()
+    }
+
     fun register() {
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             for (alias in listOf("asl", "asthoon")) {
                 dispatcher.register(
                     ClientCommands.literal(alias)
+                        .then(
+                            ClientCommands.literal("gui")
+                                .executes { _ ->
+                                    openHudEditorScreen()
+                                    1
+                                }
+                        )
                         .then(
                             ClientCommands.literal("diagnostics")
                                 .then(
